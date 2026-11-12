@@ -22,9 +22,30 @@ struct elfhubApp: App {
     var body: some Scene {
         // The main window and the menu bar panel are both managed from the
         // AppDelegate (see MainWindowPresenter); this empty Settings scene
-        // satisfies SwiftUI's requirement for at least one scene.
+        // satisfies SwiftUI's requirement for at least one scene, and carries
+        // the app menu's "Check for Updates…".
         Settings {
             EmptyView()
+        }
+        .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesMenuItem(appUpdateController: CompanionManager.shared.appUpdateController)
+            }
+        }
+    }
+}
+
+/// "Check for Updates…" in the app menu, under "About elfhub". Only the
+/// published app has it; Xcode and contributor builds never update.
+private struct CheckForUpdatesMenuItem: View {
+    @ObservedObject var appUpdateController: AppUpdateController
+
+    var body: some View {
+        if appUpdateController.isUpdatingAvailable {
+            Button("Check for Updates…") {
+                appUpdateController.checkForUpdates()
+            }
+            .disabled(!appUpdateController.canCheckForUpdates)
         }
     }
 }

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E1F05B000000000000000021 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E1F05B000000000000000011 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		28F22CCD2F56440300A0FC59 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -53,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E1F05B000000000000000021 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,6 +127,7 @@
 			);
 			name = elfhub;
 			packageProductDependencies = (
+				E1F05B000000000000000011 /* Sparkle */,
 			);
 			productName = elfhub;
 			productReference = 28F22CBF2F56440300A0FC59 /* elfhub.app */;
@@ -205,6 +211,9 @@
 			);
 			mainGroup = 28F22CB62F56440300A0FC59;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E1F05B000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 28F22CC02F56440300A0FC59 /* Products */;
 			projectDirPath = "";
@@ -595,6 +604,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E1F05B000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E1F05B000000000000000011 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1F05B000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 28F22CB72F56440300A0FC59 /* Project object */;
 }

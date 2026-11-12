@@ -44,3 +44,11 @@ Files that contain code from Clicky, in whole or in part, include:
 The MIT-licensed portions remain available under the MIT License; elfhub as
 a whole, including all changes and additions, is distributed under the
 GNU Affero General Public License v3.0.
+
+Sparkle
+-------
+elfhub embeds the Sparkle update framework 2.10.1
+(https://github.com/sparkle-project/Sparkle), Copyright (c) 2006-2013 Andy
+Matuschak and the other Sparkle contributors, used under the MIT License.
+Sparkle includes code from bsdiff, sais-lite and ed25519 under their own
+licenses. The full text of all of these is in LICENSES/sparkle-LICENSE.txt.

@@ -257,7 +257,85 @@ private struct GeneralSettingsContent: View {
         }
         .mainAppCard()
 
-        Text("elfhub v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")")
+        AppUpdatesSettingsSection(appUpdateController: companionManager.appUpdateController)
+    }
+}
+
+// MARK: - Updates
+
+/// Sparkle's settings for the published app, plus the app's version and when
+/// it last checked. Xcode and contributor builds never update themselves.
+private struct AppUpdatesSettingsSection: View {
+    @ObservedObject var appUpdateController: AppUpdateController
+
+    private var versionText: String {
+        let shortVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"
+        return "elfhub v\(shortVersion) (build \(buildNumber))"
+    }
+
+    private var lastCheckedText: String? {
+        guard appUpdateController.isUpdatingAvailable else { return nil }
+        guard let lastUpdateCheckDate = appUpdateController.lastUpdateCheckDate else { return "not checked yet" }
+        return "last checked \(lastUpdateCheckDate.formatted(.relative(presentation: .named)))"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if appUpdateController.isUpdatingAvailable {
+                SettingsToggleRow(
+                    iconName: "arrow.triangle.2.circlepath",
+                    title: "Check for updates automatically",
+                    detail: "Once a day, elfhub asks GitHub whether a newer version exists. Only the app's version is sent.",
+                    isOn: Binding(
+                        get: { appUpdateController.automaticallyChecksForUpdates },
+                        set: { appUpdateController.setAutomaticallyChecksForUpdates($0) }
+                    )
+                )
+                SettingsToggleRow(
+                    iconName: "arrow.down.circle",
+                    title: "Download and install updates automatically",
+                    detail: "Off: elfhub shows what's new and installs only when you click Install.",
+                    isOn: Binding(
+                        get: { appUpdateController.automaticallyDownloadsUpdates },
+                        set: { appUpdateController.setAutomaticallyDownloadsUpdates($0) }
+                    )
+                )
+
+                Button(action: { appUpdateController.checkForUpdates() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("Check for Updates…")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(DS.Colors.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .pointerCursor()
+                .disabled(!appUpdateController.canCheckForUpdates)
+                .padding(.vertical, 4)
+            } else {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(DS.Colors.textTertiary)
+                        .frame(width: 16)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Updates are off in development builds")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(DS.Colors.textSecondary)
+                        Text("Only the app published on GitHub Releases updates itself.")
+                            .font(.system(size: 11))
+                            .foregroundColor(DS.Colors.textTertiary)
+                    }
+                }
+            }
+        }
+        .mainAppCard()
+        .onAppear { appUpdateController.refreshUpdaterSettings() }
+
+        Text([versionText, lastCheckedText].compactMap { $0 }.joined(separator: " · "))
             .font(.system(size: 11))
             .foregroundColor(DS.Colors.textTertiary)
     }
