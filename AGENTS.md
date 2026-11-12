@@ -1,0 +1,229 @@
+# elfhub - Agent Instructions
+
+<!-- This is the single source of truth for all AI coding agents. CLAUDE.md is a symlink to this file. -->
+<!-- AGENTS.md spec: https://github.com/agentsmd/agents.md — supported by Claude Code, Cursor, Copilot, Gemini CLI, and others. -->
+
+## Overview
+
+macOS desktop companion app — **desktop-first and bring-your-own-key**. Shows a chat-first main window on launch (every saved chat in the sidebar; the three model layers, modes and everything else under Settings) plus a menu bar status item whose floating panel hosts the compact `CompanionPanelView` for quick access. Uses push-to-talk (ctrl+option by default, configurable) to capture voice, transcribes it with the user's chosen speech-to-text layer, and sends the transcript + a screenshot of the display the mouse cursor is on (when the model can see images) to the user's chosen language model. Replies stream as text and are spoken sentence by sentence with the chosen voice. A click-through overlay shows a pointer directly at UI elements the model references, draws annotations (boxes, circles, arrows, underlines, handwritten notes), and shows a top-center status pill — on any connected monitor. There is no mouse-following cursor.
+
+There is no elfhub server, account, analytics or update feed. The only network requests the app makes are API calls to the services the user configures (or to model servers on their own Mac). Keys live in the Keychain; chats are saved only on the Mac.
+
+## Architecture
+
+- **App Type**: Full macOS app with a native main window (`MainAppView` — chat first: the sidebar lists every chat (`ChatConversationSidebarList`, plus a Tutorial row while it runs) with a bottom hover menu for Settings and Quit; no home page; Settings swaps the sidebar to its categories (Models, Modes, Shortcuts, Permissions, Privacy, General) with Back; hosted by the `WindowGroup` in `elfhubApp.swift`, which has a fixed `defaultSize` and `.contentMinSize` resizability so pages never resize the window) AND a menu bar status item whose floating panel hosts the compact `CompanionPanelView`. The main window is the management surface (and where onboarding happens); the menu bar panel is the quick-access surface. Both share row-level components from `CompanionPanelComponents.swift` and `ModelLayerComponents.swift`.
+- **Framework**: SwiftUI (macOS native) with AppKit bridging for panels, overlay, and secondary windows
+- **Pattern**: MVVM with `@StateObject` / `@Published` state management
+- **Three Model Layers** (each configured independently in Settings › Models, and in onboarding step 1): speech-to-text (`TranscriptionProviderChoice`), language model (`ProviderConfigurationStore`), text-to-speech (`SpeechOutputMode`). Multimodal is optional — a text-only model still talks and chats; `ProviderConfiguration.supportsVision` decides whether screenshots are sent.
+- **Onboarding**: step 1 Models (the three layers) → step 2 Shortcuts & permissions (input mode, push-to-talk shortcut, Esc info, permissions, "Your data on this Mac" — `OnboardingDataOnThisMacCard`: save chats (on), save screenshots (off), action log (on), the same settings as Settings › Privacy — and a "Start tutorial" checkbox checked by default) → `CompanionManager.completeOnboarding(startTutorial:)`. The optional `GuidedTutorialController` walkthrough (talk → point → Esc → chat → actions) advances itself from `CompanionEvent`s and voice/chat signals; every step is skippable; while it runs it has a Tutorial row in the sidebar; replay from Settings › General.
+- **AI Chat**: Provider-agnostic `LanguageModelProvider` (capabilities: vision, tool calling, `ModelVisionProfile`; content-block messages; delta-only streaming; structured tool calls). Claude with your key (direct `/v1/messages`, `fallbacks: "default"` for refusals; on anthropic.com also prompt-cache breakpoints after tools + system and after the earlier conversation, and `output_config.effort` per turn — low for spoken questions, medium when acting — via `CompanionTurnPipeline.reasoningEffort`), any OpenAI-compatible endpoint, or Gemini. Every provider retries 408/409/429/5xx/529 and dropped connections only before anything has streamed (`LanguageModelRetryPolicy`, `LanguageModelHTTPStreaming.openStream`), reports a normalized `LanguageModelStopReason` (output-limit cut-offs are logged, mid-stream Claude `error` events throw `streamFailed`), and sends each image's label (screen + coordinate space) next to the image; requests default to 8192 output tokens so thinking never truncates a reply. `LanguageModelProviderCatalog` presets (Anthropic, OpenAI, Gemini, OpenRouter, Mistral, xAI, Groq, DeepSeek, Together, Ollama, LM Studio, llama.cpp, custom) fill in base URL / format / defaults; "Detect models" lists models per kind (`LocalModelServerDiscovery`).
+- **On-device models**: `OnDeviceModelAssistant` talks only to Ollama on localhost (`/api/version`, `/api/tags`, `/api/pull` NDJSON progress via `OllamaPullProgressAccumulator`, `/api/show` capabilities, `/api/delete`) to download recommended models (`OnDeviceModelCatalog`) and make one active; also pre-downloads Apple's SpeechTranscriber model (`AppleOnDeviceSpeechModelInstaller`, macOS 26+).
+- **Guidance Encoding**: models with tool calling get `point_at` / `annotate` / `perform_screen_action` function tools (`GuidanceToolDefinitions`, `ToolCallGuidanceDecoder`); others use text tags (`TagGuidanceDecoder`). If a model calls tools without speaking, `CompanionTurnPipeline` returns "shown" tool results and asks once more, replaying the assistant turn verbatim (Claude thinking blocks preserved via `anthropicRawBlock`).
+- **Turn Pipeline**: `CompanionTurnPipeline` runs capture → model → decode → normalize → consent → placement → history for both voice and chat; `CompanionPromptBuilder` builds the prompt per coordinate convention and guidance encoding. Screenshots are prefetched at push-to-talk key-down and retaken if the cursor moved to another display before the turn is sent (`shouldReusePrefetchedScreenCaptures`). Reopening a saved chat replaces the pipeline history with that chat's recent exchanges (`replaceConversationHistory`).
+- **Speech-to-Text**: runtime-switchable `TranscriptionProviderChoice` — on-device Apple (`SpeechAnalyzerTranscriptionProvider` on macOS 26+, `AppleSpeechTranscriptionProvider` before; the default), AssemblyAI with your key, or any OpenAI-compatible `/audio/transcriptions` endpoint (`WhisperTranscriptionEndpointPreset`: OpenAI, Groq, local faster-whisper).
+- **Text-to-Speech**: streaming and sentence-by-sentence — `StreamingReplyPresenter` feeds `SpokenSentenceSegmenter` (strips guidance tags, holds back half-written ones) into `StreamingSpeechPlayer`, which prepares the next sentence while the current one plays and falls back to the on-device voice on failure. Voices: Apple on-device (`AVSpeechSynthesizer`, voice picked in the `SystemVoiceChooserSheet` and stored in `SystemVoiceSettings`; the default), ElevenLabs with your key, any OpenAI-compatible `/audio/speech` endpoint (`SpeechSynthesisEndpointPreset`: OpenAI, local Kokoro), or off. Network voices play through `NetworkAudioSpeechSynthesisProvider`. Earcons (`CompanionEarcon`) mark accepted / needs-confirmation / failed.
+- **Chat history**: `ChatConversationStore` saves each conversation as JSON in `~/Library/Application Support/elfhub/Conversations` — typed messages and push-to-talk turns alike (`StoredChatMessage.inputSource`); a voice turn after 30 quiet minutes starts a new conversation. Typed and spoken turns are recorded through the same `TextChatViewModel` exchange API (`beginExchange` → `showStreamingReply` → `completeExchange` / `failExchange` / `saveInterruptedExchange`). Optional, off by default: "Save screenshots with chats" keeps the screenshot each turn sent to the model (`TurnResult.originalScreenshotJPEGData`, before the user's ink) under `Conversations/Screenshots/<conversation id>/<message id>.jpg`. Only one image is stored per question: the pointer and marks a reply drew are saved as vector data on the reply (`SavedScreenGuidance`, display-local AppKit points from `TurnResult.shownScreenGuidance`) and redrawn over that image with the overlay's own views in static mode (`animatesAppearance: false`). The user's own drawing is stored the same way (`SavedUserInk` on the question). In chat, the question gets a collapsed "Screenshot" row (after = the user's drawing) and a reply with marks a collapsed "Screenshot with marks" row (after = drawing + elfhub's marks); both have a Before / After switch (`BeforeAfterPicker`), and clicking opens `ScreenshotViewerSheet` over the chat with the same switch. Saving, screenshots and deletion are in Settings › Privacy. One `TextChatViewModel` (owned by `CompanionManager`) backs both the main window's Chat section (with a conversation list) and the compact chat window.
+- **Screen Capture**: ScreenCaptureKit (macOS 14.2+). Only the display under the mouse cursor is captured (`indexOfScreenFrame(containingCursorLocation:in:)` — edges and gaps fall to the nearest screen), so the model sees one image and is never asked for a screen number; the overlay still works on every monitor
+- **Drawing while talking**: while push-to-talk is held, `UserScreenInkRecorder` installs an active mouse tap (only between key-down and key-up) that swallows press/drag/up and records `UserInkStroke`s; the overlay draws them live as a solid orange trailing line (`UserInkStrokesView`, `.userInkChanged` / `.userInkFinished` events). On send, `CompanionTurnPipeline` burns the strokes into the screenshot the model receives (`UserInkScreenshotRenderer`); chat history saves the original image plus the strokes as data (`SavedUserInk` on the question, `TurnResult.originalScreenshotJPEGData` / `shownUserInk`) and appends a note to the user's message from `UserInkDescriber` (circled area / line / clicked spot, in the model's coordinate convention). Safety net: a mouse event without the shortcut's modifiers (`BuddyPushToTalkShortcut.areShortcutModifiersHeld`) ends drawing and passes through.
+- **Notepad**: the model can write an explanation (steps, commands, code) into a floating window with silent text tags — `[NOTEPAD:title]` then `[NOTEPAD_LINE:markdown]`, strictly alternating with speech (text, line, text, line; each line appears when the sentence before it ends). Every model uses tags for this, even tool-calling ones, because tool calls only arrive after the stream and lines must appear while elfhub talks. `SpokenSentenceSegmenter` attaches each notepad item to the sentence after it (`SpokenSentenceSegment.notepadItemsToShowFirst`) and never joins short sentences across a notepad line; `StreamingSpeechPlayer.enqueue(sentence:onSentenceStarted:)` runs it as that sentence starts (empty sentences only run the action; stopping runs the pending ones so written lines never go missing); with the voice off `StreamingReplyPresenter` shows lines as they arrive. `NotepadItemRevealer` emits `.notepadOpened` / `.notepadLineWritten`, applying the same rules as `NotepadTagParser.notepad(fromResponseText:)` (title only before the first line, at most 40 lines). `NotepadPanelManager` shows a non-activating, key-able `NSPanel` at the top right of the cursor's screen that stays until its X is clicked (turns, Esc and overlay timers don't touch it; a new notepad replaces it), with selectable text and a copy button (plain text; "Copy as Markdown" in its menu); its header is a drag handle (`NotepadWindowDragArea`, since SwiftUI content can't move a borderless window), and `NotepadPanelModel` paces lines that arrive together so they still appear one at a time. The pipeline strips notepad tags before guidance decoding, returns `TurnResult.shownNotepad`, and appends the notepad to the model's history (the window is never in screenshots); chat saves it on the reply (`StoredChatMessage.notepad`, also from interrupted replies) and shows it whole as `SavedNotepadCard`.
+- **Voice Input**: Push-to-talk via `AVAudioEngine` + pluggable transcription-provider layer. System-wide keyboard shortcut via listen-only CGEvent tap; the shortcut (`BuddyPushToTalkShortcut.ShortcutOption`) is user-selectable and persisted.
+- **Point · Annotate · Act**: The model embeds `[POINT:...]`, annotation (`[HIGHLIGHT|CIRCLE|ARROW|UNDERLINE|NOTE:...]`) and, in action mode, action (`[CLICK|DOUBLECLICK|SCROLL|TYPE|KEY:...]`) tags. `TagGuidanceDecoder` turns them into `ScreenGuidanceCommand`s; `ScreenGuidanceCoordinateNormalizer` converts the model's coordinate convention (pixels / 0–999 / 0–1000) to screenshot pixels; `ScreenGuidancePlacement` maps them to screen points and refines them with Accessibility (`AccessibilityElementLocator`). Actions go through `ScreenActionCoordinator` → `ConsentPolicy` → `ScreenActionSynthesizer`.
+- **Screenshot Geometry**: `ScreenshotGeometry` sizes every capture to the active model's image limits (`ModelVisionProfile`, derived from `ProviderConfiguration`) — never larger, since oversized images are silently resized by providers and coordinates drift.
+- **Event Bus**: `CompanionEventBus` carries turn/speech/guidance/action events from `CompanionManager` and `ScreenActionCoordinator` to `ScreenGuidanceOverlayModel`, which owns all on-screen timing (and to `GuidedTutorialController`, and the notepad events to `NotepadPanelManager`). The overlay never reads `CompanionManager` state directly — a future agent loop can drive it by emitting the same events.
+- **Concurrency**: `@MainActor` isolation (default actor isolation is MainActor), async/await throughout
+- **Build configuration**: `Config/Shared.xcconfig` (committed) includes optional gitignored `Config/Local.xcconfig` for signing team and bundle id. No third-party Swift packages.
+- **License**: AGPL-3.0 (`LICENSE`). Parts of the code come from Clicky (MIT, Copyright (c) 2026 Farza): keep the third-party section in `NOTICE`, `LICENSES/clicky-MIT.txt`, and `elfhub/ThirdPartyNotices.txt` (bundled into the app's Resources by the synchronized `elfhub` folder) — never remove them
+
+### Key Architecture Decisions
+
+**Desktop-first, no server**: Every request goes from the app straight to the user's chosen API (with their key from the Keychain) or to a server on their Mac. Nothing else is contacted — no account, analytics, or update checks. "Get a key" / "Get Ollama" links open in the user's browser; the app never fetches them.
+
+**Menu Bar Panel Pattern**: The companion panel uses `NSStatusItem` for the menu bar icon and a custom borderless `NSPanel` for the floating control panel. This gives full control over appearance (dark, rounded corners, custom shadow) and avoids the standard macOS menu/popover chrome. The panel is non-activating so it doesn't steal focus. A global event monitor auto-dismisses it on outside clicks. Until setup is complete it only offers "Finish setup", which opens the main window (`MainWindowPresenter`, which "reopens" the app if the SwiftUI window was closed).
+
+**Guidance Overlay**: One full-screen, transparent, click-through `OverlayWindow` per screen hosts `ScreenGuidanceOverlayView` (pointer at target, annotations, status pill). It's non-activating, joins all Spaces, is hidden from Accessibility, never steals focus, and is mounted whenever the app is ready (onboarded + required permissions) so pointing works from voice and text chat alike. It draws nothing when there is no guidance. Windows rebuild on display changes.
+
+**Global Push-To-Talk Shortcut**: Background push-to-talk uses a listen-only `CGEvent` tap instead of an AppKit global monitor so modifier-based shortcuts like `ctrl + option` are detected more reliably while the app is running in the background. The chosen shortcut is cached in memory (`BuddyPushToTalkShortcut.currentShortcutOption`) because the tap reads it on every key event.
+
+**Shared URLSession for AssemblyAI**: A single long-lived `URLSession` is shared across all AssemblyAI streaming sessions (owned by the provider, not the session). Creating and invalidating a URLSession per session corrupts the OS connection pool and causes "Socket is not connected" errors after a few rapid reconnections.
+
+**Guidance Lifetime**: `ScreenGuidanceOverlayModel` keeps the pointer up ≥3 s and until speech ends + 1 s; annotations linger 8 s after speech; everything clears on the next turn or Esc. Esc stops everything, not just marks (`CompanionManager.stopEverythingOnEscape`): a push-to-talk recording is dropped unsent, a voice or typed reply that is thinking or streaming is cancelled (saved as interrupted), speech stops and the pill clears; the listen-only Esc tap runs only while something can be stopped (`shouldListenForEscape`: guidance visible, voice state not idle, or a typed reply streaming) (`UserInterruptionMonitor`, listen-only while only marks are visible).
+
+**Action Safety**: Actions are resolved against the real UI before firing (Accessibility title/role, password fields, default buttons, the web page host inside browsers; keystrokes are judged by the focused element), judged by pure `ConsentPolicy` (scoped to the user's words — negated ("don't send it") and noun ("draft a reply") uses don't authorize; a typed newline counts as Return; the model's label can only add caution; secrets, Secure Event Input and privacy-blocked apps are always the user's step), previewed with the pointer for ~350 ms, and stoppable instantly: while acting, `UserInterruptionMonitor` runs an active tap that consumes Esc and treats any untagged physical input as the user taking over. Approval is bound to what was shown: every action is re-resolved right before it fires; if the first target is no longer the approved element nothing fires, and if a later action became riskier (`ConsentPolicy.requiresFreshApproval`) the chain pauses and re-arms the card. Only the newest turn may act (`ScreenActionCoordinator.beginTurn` token, called by `CompanionTurnPipeline.runTurn`; a new chain waits for a stopped one to unwind). A spoken answer to a card goes through `SpokenConfirmationParser` (any "no" wins; a consequential action needs its verb said back, "yes, send it"). Most precise channel first: native buttons are pressed with `AXPress` and long plain text is inserted with Accessibility (`AccessibilityElementActions`, never in web content), else tagged synthetic events; key combos are strict (unknown keys refused), follow the current keyboard layout (`UCKeyTranslate`) and press real modifier keys; the pointer returns where the user left it if they didn't move it. Every decision and outcome goes to the local action log (`ComputerUseAuditLog`, `ActionLog.jsonl`, never typed text; Settings › Privacy). Typing clears modifier flags and yields between characters.
+
+**Dual-Hosted UI, Shared Components**: The main window hosts `MainAppView` (chat first: the sidebar is the chat list, with a Tutorial row while it runs, and the detail pane the active chat; a banner in the chat links to Settings › Models while no model is ready; `SidebarBottomMenu` opens on hover into Settings and Quit; Settings swaps the sidebar to `SettingsCategory` pages with Back to the chat or tutorial via `MainAppNavigation`; every page except the chat uses `MainAppPage`, one fixed reading column centered in the pane, so content never shifts; onboarding takes over the detail pane until setup completes), while the menu bar panel hosts compact `CompanionPanelView` via `NSHostingView`. Both share row-level components from `CompanionPanelComponents.swift`; the model-layer UI (`ModelLayerCard`, `SpeechToTextLayerSection`, `LanguageModelLayerSection`, `TextToSpeechLayerSection`, `OnDeviceLanguageModelAssistantView`, `PushToTalkShortcutPicker`) lives in `ModelLayerComponents.swift` and is shared by onboarding and the Models section. Other surfaces deep-link into the main window via `CompanionManager.showMainWindow(section:)`.
+
+**Provider Configuration**: `LanguageModelProvider` protocol decouples `CompanionManager` from any specific LLM. `ProviderConfiguration` models a user-editable endpoint (optionally tagged with its catalog `presetIdentifier`); secrets live in the Keychain (`KeychainSecretStore`) keyed by config id — never in UserDefaults or the bundle. Saved choices from earlier builds keep loading (legacy raw values / ignored hosted fields).
+
+**Screen Action Consent**: CLICK/KEY actions parsed from replies only execute through `ScreenActionCoordinator`'s per-turn consent gate — context alone is never consent; the user's own words must ask elfhub to *do* something. Parsing lives in pure, unit-testable `ScreenActionParsing`; how much consent each action needs is decided only by `ConsentPolicy` from the real target.
+
+## Key Files
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `elfhubApp.swift` | ~98 | App entry point. `WindowGroup("elfhub")` hosts `MainAppView` as the main window; `@NSApplicationDelegateAdaptor` with `CompanionAppDelegate` creates `MenuBarPanelManager` and starts `CompanionManager`. `MainWindowPresenter` brings the main window forward from AppKit. `LaunchAtLoginSetting` handles opt-in launch at login (`SMAppService`). |
+| `CompanionManager.swift` | ~900 | Central state machine and router. Owns dictation, the push-to-talk shortcut setting, overlay mounting, the event bus, the model store, chat store + shared `TextChatViewModel`, `OnDeviceModelAssistant`, `GuidedTutorialController`, speech output (`StreamingSpeechPlayer`), the speech-recognition choice, and onboarding completion; delegates each turn to `CompanionTurnPipeline`. |
+| `MenuBarPanelManager.swift` | ~233 | NSStatusItem + custom NSPanel lifecycle. Creates the menu bar icon, hosts `CompanionPanelView` via `NSHostingView`, manages the floating panel (show/hide/position), installs click-outside-to-dismiss monitor. |
+| `MainAppView.swift` | ~545 | Chat-first main-window shell: `MainAppSection` (chat, tutorial, settings(category)) and `MainAppNavigation` (Back from Settings returns to the chat or tutorial), the sidebar (chat list + Tutorial row, or Settings categories) with `SidebarBottomMenu` (hover → Settings, Quit), `MainAppPage` (the shared fixed reading column) and the card modifier. |
+| `MainAppOnboardingViews.swift` | ~410 | Two-step onboarding (models → shortcuts & permissions with the "Start tutorial" checkbox), the revoked-permissions checklist, and `GuidedTutorialPane`. |
+| `MainAppSettingsViews.swift` | ~360 | `SettingsCategory` (Models, Modes, Shortcuts, Permissions, Privacy, General) and `SettingsCategoryPage`, reusing the model-layer, modes, permission and privacy components; `ChatHistorySettingsSection`; `ComputerUseAuditLogSettingsSection`. |
+| `CompanionPanelView.swift` | ~270 | Compact floating-panel content hosted by the menu bar `NSPanel`. Composes the shared components plus panel-specific header/footer/status; points to the main window until setup is complete. |
+| `CompanionPanelComponents.swift` | ~485 | Shared rows for panel and main window: `InputModePicker`, `ProviderSettingsRow` (model layers summary), `VoiceOutputPicker`, `SoundCuesToggleRow`, `SettingsToggleRow`, `LaunchAtLoginToggleRow`, `OpenTextChatButton`, permission rows. |
+| `ModelLayerComponents.swift` | ~880 | The three model-layer sections (speech-to-text, language model, text-to-speech) with key fields and endpoint presets, the on-device model assistant view (Ollama downloads), Apple speech model status, `PushToTalkShortcutPicker`, `EscapeShortcutInfoRow`, `KeyCapsule`. |
+| `LanguageModelProviderCatalog.swift` | ~245 | Language-model provider presets (cloud APIs with key pages, on-this-Mac servers) that build `ProviderConfiguration`s. |
+| `OnDeviceModelAssistant.swift` | ~495 | Ollama status / list / pull (with progress) / delete / use, `OnDeviceModelCatalog` of recommended models, Ollama wire-format parsing, and Apple speech-model pre-download. |
+| `ChatConversationStore.swift` | ~440 | `ChatConversation` / `StoredChatMessage` (typed or spoken, optional screenshot) and the on-device JSON store (save, delete, delete all, saving and screenshot toggles, screenshot files and size, reveal in Finder, history turns for the model). |
+| `GuidedTutorialController.swift` | ~181 | `GuidedTutorialStep`s and the controller that starts, advances (from events), skips and ends the optional walkthrough. |
+| `OverlayWindow.swift` | ~305 | `OverlayWindow` (click-through, per screen), `OverlayWindowManager` (mount/unmount, rebuild on display changes), `ScreenGuidanceOverlayView`, and `PointerAtTargetView` (pointer appears at its target with a pulse, element ring and label). |
+| `CompanionTurnPipeline.swift` | ~455 | One turn shared by voice and chat (capture → model w/ tools or tags → decode → normalize → consent → placement → history) + `CompanionPromptBuilder`. |
+| `StreamingSpeechPlayer.swift` | ~365 | Sentence-queue speech player with next-sentence prefetch, on-device fallback, follow-up utterances and per-sentence start actions; `StreamingReplyPresenter` (live captions + speech + notepad lines while streaming) and `NotepadItemRevealer`. |
+| `SpokenSentenceSegmenter.swift` | ~195 | Pure streaming text → speakable sentences (tag stripping, held-back partial tags, short-sentence joining), each carrying the notepad items to show as it starts. |
+| `SpeechAnalyzerTranscriptionProvider.swift` | ~214 | On-device transcription with SpeechAnalyzer/SpeechTranscriber (macOS 26+), incl. model download and format conversion. |
+| `CompanionStatusPillView.swift` | ~163 | Top-center status pill (listening waveform → thinking spinner → caption / acting + "esc to stop" / hints). |
+| `ScreenAnnotationLayerView.swift` | ~170 | Draws annotations with animated strokes and a write-on handwritten note. |
+| `CompanionEventBus.swift` | ~265 | `CompanionEvent`, `CompanionEventBus`, and `ScreenGuidanceOverlayModel` (overlay state + display-timing rules). |
+| `ScreenGuidanceCommand.swift` | ~163 | Internal guidance vocabulary (`ScreenGuidanceCommand`, `ScreenAnnotation`), coordinate normalizer, and placed (screen-point) types. |
+| `GuidanceDecoders.swift` | ~341 | `PointTagParser`, `TagGuidanceDecoder`, `GuidanceToolDefinitions` (native guidance tools) and `ToolCallGuidanceDecoder`. |
+| `ScreenAnnotationParsing.swift` | ~197 | Pure parser for annotation tags. |
+| `ScreenshotGeometry.swift` | ~190 | `ModelCoordinateConvention`, `ModelVisionProfile`, per-model capture sizing and coordinate conversion. |
+| `ScreenGuidancePlacement.swift` | ~116 | Places pointer/annotations on real screens with Accessibility refinement (element ring, highlight snapping). |
+| `AccessibilityElementLocator.swift` | ~490 | AX hit-test/focused-element facts (off main thread, 50 ms timeout; web page host and web-content flag from the enclosing `AXWebArea`), pure `AccessibilitySnapping` rules, `AccessibilityElementActions` (`AXPress` for native buttons, verified text insertion for long plain text), CG↔AppKit global conversion. |
+| `ConsentPolicy.swift` | ~345 | Pure consent decision per action (proceed / explicit confirmation / user's step): negation- and noun-aware authorization, typed newline = Return, sensitive apps and web pages (`isSensitiveWebPage`), Secure Event Input, `requiresFreshApproval`, `consequentialEffect`; `UtteranceWords` tokenizer. |
+| `SpokenConfirmationParser.swift` | ~95 | Pure reading of a spoken answer to a pending action: confirmed / declined / needs the verb said back / unrelated (a new request). |
+| `ComputerUseAuditLog.swift` | ~210 | Local JSONL log of every screen action decision and outcome (target, consent decision, approval provenance; typed text only as a length), size-capped, toggle/reveal/delete in Settings › Privacy. |
+| `CompanionTurnLatencyTimeline.swift` | ~70 | `companionLogger` (unified log, private user text) and per-turn latency milestones (transcript, first reply text, first speech, first screen action) as log lines and signposts. |
+| `UserInterruptionMonitor.swift` | ~168 | Esc kill switch + physical-input takeover detection (active tap while acting; listen-only Esc while listening, thinking, talking or marks are visible). |
+| `CompanionScreenCaptureUtility.swift` | ~250 | ScreenCaptureKit capture of the display under the cursor, sized by `ModelVisionProfile`, excluding elfhub and privacy-blocklisted windows; pixel→AppKit/CG mapping; shared `targetCapture(screenNumber:in:)`. |
+| `BuddyDictationManager.swift` | ~900 | Push-to-talk voice pipeline. Handles microphone capture via `AVAudioEngine`, provider-aware permission checks, keyboard/button dictation sessions, transcript finalization, the persisted shortcut choice and shortcut parsing, contextual keyterms, and live audio-level reporting for waveform feedback. |
+| `BuddyTranscriptionProvider.swift` | ~165 | Transcription protocol, `TranscriptionProviderChoice`, `WhisperTranscriptionEndpointPreset`, `WhisperTranscriptionSettings`, and the factory. |
+| `AssemblyAIStreamingTranscriptionProvider.swift` | ~448 | AssemblyAI v3 websocket streaming with the user's own key. Shares one URLSession across sessions. |
+| `OpenAIAudioTranscriptionProvider.swift` | ~332 | Upload-based transcription for any OpenAI-compatible `/audio/transcriptions` endpoint (OpenAI, Groq or local Whisper servers); key optional for local. |
+| `AppleSpeechTranscriptionProvider.swift` | ~147 | Local fallback transcription provider backed by Apple's Speech framework. |
+| `BuddyAudioConversionSupport.swift` | ~108 | Audio conversion helpers. Converts live mic buffers to PCM16 mono audio and builds WAV payloads for upload-based providers. |
+| `GlobalPushToTalkShortcutMonitor.swift` | ~132 | System-wide push-to-talk monitor. Owns the listen-only `CGEvent` tap and publishes press/release transitions. |
+| `ClaudeAPI.swift` | ~515 | Claude Messages client (direct with the user's key), SSE streaming, prompt-cache breakpoints and effort (direct only), joined `anthropic-beta` values, `AnthropicStreamAccumulator` (text deltas, tool calls, verbatim content blocks, usage, stream errors, refusal / fallback handling), TLS warmup. |
+| `LanguageModelProvider.swift` | ~365 | Provider-agnostic protocol + normalized request/response model (capabilities, content blocks, tool definitions/calls, delta stream events, reasoning effort, stop reason, usage), `LanguageModelRetryPolicy` and `LanguageModelHTTPStreaming.openStream` (retries before anything streams). |
+| `AnthropicLanguageModelProvider.swift` | ~29 | Adapts `ClaudeAPI` to `LanguageModelProvider`. |
+| `OpenAICompatibleLanguageModelProvider.swift` | ~266 | `/chat/completions` provider (OpenAI, OpenRouter, Groq, Mistral, xAI, Ollama, LM Studio, llama.cpp, vLLM…) with tools; `OpenAIStreamAccumulator` stitches streamed tool calls. |
+| `GeminiLanguageModelProvider.swift` | ~187 | Gemini `streamGenerateContent` provider with function declarations / calls / responses. |
+| `ProviderConfiguration.swift` | ~204 | One LLM endpoint (kind, base URL, model, vision, tool calling, coordinate convention, preset id → `visionProfile` / capabilities); `LocalModelServerPreset`. |
+| `ProviderConfigurationStore.swift` | ~274 | The user's persisted model configs and the active one; builds providers; `LocalModelServerDiscovery` (per-kind model detection incl. Anthropic and Gemini, test connection). |
+| `KeychainSecretStore.swift` | ~108 | Keychain wrapper for provider keys and `ServiceSecretAccount` speech/voice-service keys. |
+| `ProviderSettingsView.swift` | ~520 | Language-model layer UI: configured models (active / sees screen / needs key), catalog preset picker, editor (key + "Get an API key", model detection, multimodal toggle, Advanced: name, format, base URL, tool calling, coordinates), test connection. |
+| `ChatScreenshotViews.swift` | ~260 | Saved screenshots in chat: off-main image loading, `ScreenshotWithGuidanceView` (marks redrawn at display size, scaled to fit), `CollapsibleScreenshotRow`, `ScreenshotViewerSheet` (Original / With marks). |
+| `Notepad.swift` | ~245 | Pure notepad model: `NotepadTagParser` (`[NOTEPAD:...]` / `[NOTEPAD_LINE:...]`), `SavedNotepad` (plain-text and markdown copies, history text), `NotepadBlock` (markdown lines → headings, lists, quotes, code, rules). |
+| `NotepadViews.swift` | ~305 | `NotepadContentView` (rendered, selectable lines), `NotepadCopyButton` (Copy / Copy as Markdown), `FloatingNotepadView` (the window's content: close, title, copy, scrolling lines), `SavedNotepadCard` (the notepad in chat). |
+| `NotepadPanelManager.swift` | ~155 | The floating notepad `NSPanel` driven by `.notepadOpened` / `.notepadLineWritten`; placement, growth and closing. |
+| `UserScreenInk.swift` | ~350 | Drawing on screen while holding push-to-talk: `UserInkStroke`, `UserScreenInkRecorder` (active mouse tap while the keys are held), `UserInkScreenshotRenderer` (burns ink into the sent screenshot), `UserInkDescriber` (circle / line / spot note in model coordinates). |
+| `SavedScreenGuidance.swift` | ~160 | A reply's pointer and marks (`SavedScreenGuidance`) and the user's own drawing (`SavedUserInk`) saved as display-local vector data — never a second image — and rebuilt for the overlay's views. |
+| `TextChatView.swift` | ~590 | `TextChatViewModel` (active conversation, exchange recording for typed and voice turns, open/new/delete via `ChatConversationStore`), the chat UI (recent-chats menu in the compact window, model-setup banner in the main window), `ChatConversationSidebarList` (the main window's sidebar), spoken-question markers and collapsible saved-screenshot rows with the in-app viewer sheet. |
+| `TextChatWindowManager.swift` | ~53 | Owns the compact chat `NSWindow`, sharing the app's single `TextChatViewModel`. |
+| `SpeechSynthesisProvider.swift` | ~335 | `SpeechOutputMode`, `SpeechSynthesisEndpointPreset`, `OpenAICompatibleSpeechSettings`, `SystemVoiceSettings`, prepare/play speech providers (`NetworkAudioSpeechSynthesisProvider`, on-device `AVSpeechSynthesizer`), `CompanionEarcon`. |
+| `SystemVoiceChooser.swift` | ~480 | The Apple voice chooser: `SystemVoiceOption` / `SystemVoiceCatalog` (installed voices for the user's language, most natural → standard → novelty (hidden unless asked), one entry per name and region, search, selected voice always listed), `SystemVoicePreviewPlayer` (per-voice sample), and `SystemVoiceChooserSheet` (refreshes when voices finish downloading). |
+| `ElevenLabsTTSClient.swift` | ~136 | Per-sentence network TTS: ElevenLabs with the user's key and voice, and `OpenAICompatibleSpeechClient` for `/audio/speech`. |
+| `ScreenActionCoordinator.swift` | ~760 | Owns screen-action preferences and the newest-turn token (`beginTurn`); resolves actions against real UI (`ResolvedScreenAction`), applies `ConsentPolicy`, re-resolves each action right before it fires (approval bound to the shown target, fresh approval when riskier), previews then fires (AX first, then events) with stop support, restores the pointer, logs to `ComputerUseAuditLog`, and emits acting events. |
+| `ScreenActionParsing.swift` | ~235 | Pure parsing of `[CLICK:...]`/`[KEY:...]` tags into ordered actions. Unit-testable; covered by `elfhubTests`. |
+| `ScreenActionSynthesizer.swift` | ~490 | Posts tagged synthetic mouse/keyboard events (click, async flag-safe typing, shortcuts with real modifier presses, scroll) with Accessibility permission; strict, layout-aware key-combo parsing (`resolveKeyCombo`, `UCKeyTranslate`); pointer restore. Pauses are async, never blocking. |
+| `ScreenActionPanelControls.swift` | ~187 | Small SwiftUI controls (action mode toggles + consent card) embedded in `CompanionPanelView`. |
+| `DesignSystem.swift` | ~880 | Design system tokens — colors, corner radii, shared styles. All UI references `DS.Colors`, `DS.CornerRadius`, etc. |
+| `ScreenCapturePrivacyBlocklist.swift` | ~179 | Apps (password managers, Keychain, Passwords) whose windows are excluded from every screenshot at capture time; editable in Settings › Privacy. |
+| `WindowPositionManager.swift` | ~262 | Window placement logic, Screen Recording permission flow, and accessibility permission helpers. |
+| `elfhubTests/` | — | Unit tests: `LanguageModelProviderTests`, `ProviderConfigurationTests`, `ScreenActionParsingTests`, `ScreenshotGeometryTests`, `ScreenAnnotationParsingTests`, `ConsentPolicyTests`, `EscapeStopTests` (when the Esc tap runs), `SystemVoiceCatalogTests` (voice chooser sections, dedupe, search), `GuidanceToolAndSpeechTests`, `DesktopFirstTests` (chat storage, catalog, Ollama parsing, shortcut, tutorial), `CursorScreenCaptureTests` (cursor-screen selection, prefetch reuse), `ChatHistoryTests` (voice turns, quiet-period split, screenshot storage, saved marks, exchange lookup), `UserScreenInkTests` (stroke recording, ink into screenshot pixels and image, mark description, modifier safety net), `MainAppNavigationTests` (Settings and Back), `NotepadTests` (notepad tags, blocks, copies, lines in step with speech, prompt, chat history), `SpokenConfirmationParserTests` (any no wins, verb restatement), `ScreenActionExecutionTests` (strict/layout-aware key combos, approved-target matching, confirmation verbs, AX channel choice), `ComputerUseAuditLogTests` (round trip, no typed text, off/delete, latency timeline), `LanguageModelReliabilityTests` (retry policy, cache breakpoints, effort gating, image labels, stop reasons, stream errors). |
+
+### Interaction Modes
+
+`CompanionManager.InteractionInputMode` — Voice / Text / Both (persisted, defaults to Both). Text-only removes the push-to-talk event tap entirely (`updatePushToTalkMonitorActivation`) and cancels in-flight dictation; `hasPermissionsRequiredForActiveModes` drops the mic requirement in text-only so readiness doesn't falsely block. The pipeline (`respondToChatMessage`) is shared by both inputs.
+
+## Build & Run
+
+```bash
+# Open in Xcode
+open elfhub.xcodeproj
+
+# One-time: copy Config/Local.xcconfig.example to Config/Local.xcconfig and set
+# DEVELOPMENT_TEAM + ELFHUB_BUNDLE_IDENTIFIER (a free Personal Team works).
+# Select the elfhub scheme, Cmd+R to build and run
+
+# Known non-blocking warnings: Swift 6 concurrency warnings,
+# deprecated onChange warning in TextChatView.swift. Do NOT attempt to fix these.
+```
+
+**Do NOT run `xcodebuild` from the terminal** — it invalidates TCC (Transparency, Consent, and Control) permissions and the app will need to re-request screen recording, accessibility, etc.
+
+**Bundle ids and releases**: the published app is `com.elfhub.os` (final — never change it; `Config/Shared.xcconfig`, and `scripts/release.sh` passes it on the command line). Xcode builds on the maintainer's Mac use `com.elfhub.os.dev` from the gitignored `Config/Local.xcconfig`, so the installed release and the dev build keep separate permissions. Releases are Developer ID signed, notarized DMGs on GitHub Releases, made by the maintainer with `scripts/release.sh` — see `scripts/README.md` (the maintainer's full walkthrough lives in the gitignored `private-notes/session_docs/build-sign-notarize-release.md`, present only on their Mac).
+
+**Private notes**: research (`learnings/`), session docs and plans live in the gitignored `private-notes/` folder and are never published. Put new private docs there; planning tools that write to `docs/superpowers/` are gitignored too, so move anything worth keeping into `private-notes/`.
+
+## Code Style & Conventions
+
+### Variable and Method Naming
+
+IMPORTANT: Follow these naming rules strictly. Clarity is the top priority.
+
+- Be as clear and specific with variable and method names as possible
+- **Optimize for clarity over concision.** A developer with zero context on the codebase should immediately understand what a variable or method does just from reading its name
+- Use longer names when it improves clarity. Do NOT use single-character variable names
+- Example: use `originalQuestionLastAnsweredDate` instead of `originalAnswered`
+- When passing props or arguments to functions, keep the same names as the original variable. Do not shorten or abbreviate parameter names. If you have `currentCardData`, pass it as `currentCardData`, not `card` or `cardData`
+
+### Code Clarity
+
+- **Clear is better than clever.** Do not write functionality in fewer lines if it makes the code harder to understand
+- Write more lines of code if additional lines improve readability and comprehension
+- Make things so clear that someone with zero context would completely understand the variable names, method names, what things do, and why they exist
+- When a variable or method name alone cannot fully explain something, add a comment explaining what is happening and why
+
+### Swift/SwiftUI Conventions
+
+- Use SwiftUI for all UI unless a feature is only supported in AppKit (e.g., `NSPanel` for floating windows)
+- All UI state updates must be on `@MainActor`
+- Use async/await for all asynchronous operations
+- Comments should explain "why" not just "what", especially for non-obvious AppKit bridging
+- AppKit `NSPanel`/`NSWindow` bridged into SwiftUI via `NSHostingView`
+- All buttons must show a pointer cursor on hover
+- For any interactive element, explicitly think through its hover behavior (cursor, visual feedback, and whether hover should communicate clickability)
+
+### Do NOT
+
+- Do not add features, refactor code, or make "improvements" beyond what was asked
+- Do not add docstrings, comments, or type annotations to code you did not change
+- Do not try to fix the known non-blocking warnings (Swift 6 concurrency, deprecated onChange)
+- The project is named `elfhub` everywhere (directory, scheme, targets, module). `PRODUCT_NAME` stays `elfhub` — that's the user-facing app brand, not the internal project name.
+- Do not run `xcodebuild` from the terminal — it invalidates TCC permissions
+
+## Git Workflow
+
+- Branch naming: `feature/description` or `fix/description`
+- Commit messages: imperative mood, concise, explain the "why" not the "what"
+- Do not force-push to main
+
+## Self-Update Instructions
+
+<!-- AI agents: follow these instructions to keep this file accurate. -->
+
+When you make changes to this project that affect the information in this file, update this file to reflect those changes. Specifically:
+
+1. **New files**: Add new source files to the "Key Files" table with their purpose and approximate line count
+2. **Deleted files**: Remove entries for files that no longer exist
+3. **Architecture changes**: Update the architecture section if you introduce new patterns, frameworks, or significant structural changes
+4. **Build changes**: Update build commands if the build process changes
+5. **New conventions**: If the user establishes a new coding convention during a session, add it to the appropriate conventions section
+6. **Line count drift**: If a file's line count changes significantly (>50 lines), update the approximate count in the Key Files table
+
+Do NOT update this file for minor edits, bug fixes, or changes that don't affect the documented architecture or conventions.
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+This repository has a generated `openwiki/` evidence index. It is optional just-in-time context, not required startup reading.
+
+- Do not enumerate, preload, or search wikis at task start. Use retrieval when the user asks for it, when unfamiliar architecture or dependency behavior materially affects the task, or when source inspection leaves an important uncertainty. Stop once the question is grounded.
+- When those conditions apply and OpenWiki retrieval tools are available, use `openwiki_search` for just-in-time context and `openwiki_read` for the relevant complete sections. If search returns `workspace_required`, ask which listed workspace to use and retry with its ID.
+- Use `openwiki_list_workspaces` or `openwiki_list_wikis` when workspace membership itself needs to be discovered.
+- If the retrieval tools are unavailable, read `openwiki/quickstart.md` and follow its links to the relevant pages.
+- Treat source code and tests as authoritative. A brief's unknowns and review items are verification gaps, not automatic requirements.
+- Prefer the narrowest quiet validation that proves the changed behavior. Preserve complete failure output.
+
+The scheduled OpenWiki GitHub Actions workflow refreshes the repository wiki. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
+
+<!-- OPENWIKI:END -->

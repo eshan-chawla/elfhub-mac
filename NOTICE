@@ -1,0 +1,36 @@
+elfhub
+Copyright (c) 2026 Eshan Chawla and elfhub contributors
+
+elfhub is licensed under the GNU Affero General Public License v3.0 (see LICENSE).
+
+
+Third-party code
+================
+
+Clicky
+------
+Parts of elfhub are based on Clicky (https://github.com/farzaa/clicky),
+Copyright (c) 2026 Farza, used under the MIT License. The full license text
+is in LICENSES/clicky-MIT.txt.
+
+Files that contain code from Clicky, in whole or in part, include:
+  elfhub/DesignSystem.swift
+  elfhub/WindowPositionManager.swift
+  elfhub/AppleSpeechTranscriptionProvider.swift
+  elfhub/GlobalPushToTalkShortcutMonitor.swift
+  elfhub/BuddyAudioConversionSupport.swift
+  elfhub/BuddyDictationManager.swift
+  elfhub/BuddyTranscriptionProvider.swift
+  elfhub/AssemblyAIStreamingTranscriptionProvider.swift
+  elfhub/OpenAIAudioTranscriptionProvider.swift
+  elfhub/MenuBarPanelManager.swift
+  elfhub/CompanionManager.swift
+  elfhub/CompanionPanelView.swift
+  elfhub/CompanionScreenCaptureUtility.swift
+  elfhub/ClaudeAPI.swift
+  elfhub/ElevenLabsTTSClient.swift
+  scripts/release.sh
+
+The MIT-licensed portions remain available under the MIT License; elfhub as
+a whole, including all changes and additions, is distributed under the
+GNU Affero General Public License v3.0.

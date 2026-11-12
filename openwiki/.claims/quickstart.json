@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:e8224e6b633401fb916272c5a5617efdb743a1c2cb71c9219da60cbf6296aafb",
+  "claims": [
+    {
+      "id": "claim_1ab9c94ae36949f5b59d12f105443207",
+      "statement": "The project is named elfhub everywhere (directory, scheme, targets, module), and PRODUCT_NAME stays elfhub as the user-facing app brand.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L182-L182",
+          "version": "repo-lines-v1:sha256:e31e8ffdda0df78913f6e8e7090451a03fd65c4835451270a2553c3367f57dad:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTMxZThmZmRkYTBkZjc4OTEzZjZlOGU3MDkwNDUxYTAzZmQ2NWM0ODM1NDUxMjcwYTI1NTNjMzM2N2Y1N2RhZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTMxZThmZmRkYTBkZjc4OTEzZjZlOGU3MDkwNDUxYTAzZmQ2NWM0ODM1NDUxMjcwYTI1NTNjMzM2N2Y1N2RhZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjYxMzJjMTU2MjQwMTkxYjg1OTI5MDFkMjQ2OWRlYzY5Yzk0NWM2YTdjOTVkZGUyOGJiNGY1M2M3NmI1ZDkwZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTBmYjQ5OGNjOTE4ODM5NzE5MWEyYjRiNTI5YWE2MDlkZTgyOTI3MDBkN2E0MDc3MTRlMTAxMmNlNDE4YWVmYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_5f9ca9ee53ff43debd883639907eb393",
+      "statement": "Agents must not run terminal xcodebuild because it invalidates TCC permissions and the app must re-request screen recording, accessibility and other grants; building and testing happen in Xcode with the elfhub scheme, with scripts/release.sh as the release-only exception.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L146-L146",
+          "version": "repo-lines-v1:sha256:6d3f4e716db36164127a32d9073ad824036fbddd4d05a81e5b35770de8f1674b:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQzZjRlNzE2ZGIzNjE2NDEyN2EzMmQ5MDczYWQ4MjQwMzZmYmRkZDRkMDVhODFlNWIzNTc3MGRlOGYxNjc0YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQzZjRlNzE2ZGIzNjE2NDEyN2EzMmQ5MDczYWQ4MjQwMzZmYmRkZDRkMDVhODFlNWIzNTc3MGRlOGYxNjc0YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjU0NWY3NGRiYzI3ZmJjY2Y5N2I1NzIwYjY2ZTVjY2NjYTk2NTMzMDhmYWZkYTY2YWExMjEyMDlkNDc3OWI3OCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWI1YTNhNWI2MDVlMDI3Y2QzZGM2NDgxNjZlY2I4ZDUzNTc3MzI1NWVmYzZkMzU0ZGQ3NmY0ODc0ZDNlZGUwNCJ9"
+        },
+        {
+          "resource": "repo://scripts/release.sh#L146-L154",
+          "version": "repo-lines-v1:sha256:2ed93ae56178786e72d4cde4ec74d6cd512472aea2f7a98d9ed94f9e1a670138:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjM4MTBiY2E3ZDE0YTcxMDQwZGYwZWZhNmM4YTVlOWU5YzI0NzdkYTI2NmZlMWZlYWNiM2JhOTNhNDZkYzdlNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNWI0YWFhN2QwMjQ0YzUzY2JmNzdjMzY2NTJhOWVhZjM4NDZhYzZhN2U3ZGMyZTkzZDI5ZTE1ZjhlZDlmN2NhZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDBiMTkwZWU2YWQyMjc1OWZjNzgyMmVlYjdiN2JhNTcyNzU2YzBmN2M0NmJhODdjNGNhMDVlMjMxODk0ODk5YiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTcxMzI0ODhhOTMwMDVhMzU2ZjVkNTU4NTdkMTc0NmQ5Njk4ZTE3ZmUxZjM2NmZhYjEyYTEyMTQwYzFmZTgzZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_013aae7c50224461ba492f936187f6b4",
+      "statement": "The Swift 6 concurrency warnings and the deprecated onChange warning are documented as known and non-blocking and must not be fixed incidentally.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md#L142-L144",
+          "version": "repo-lines-v1:sha256:7028a15ea7d174b88504eb4f68fae2314f61bbf16faf1b1a1d5e21157a3aea2b:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTgwZTI2NmIxNGMyOTg4Njk3N2E0ZDI1OTMxMmJkN2I2NWIxMGU0YjBhYTdkNzNlMmJjNzQ0NTYyZDg4MWI5ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDdjMDZjNTYxZDVjMzI3MzQzNjg1MjY4YTQ2YjMzOTFmMzk5OGVlZTg5MGQyYmU1MWYwZDIxY2M0YTUzYWU2ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTg0OTU3YTM2ZjUyM2Y5OGFhN2Y4NzI4N2Q5YzFjNzU4MGI0MGIzYThiNjQ5OTBlZjZiZGRlNGZmZTQ2NGRlNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWFjY2YwMjZmMGRlOWU4NGIxMDZlYTUwOGFjNjI3NDVkNDBkMzBkOTkwOWFkOTM4ZWFjOWVmOTAzYzI4ODZjMSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_8be3b5e475bf4d0189425592f811b3a1",
+      "statement": "Local setup needs only macOS 14.2+, Xcode 16+ and a Config/Local.xcconfig with the developer's team and bundle id; model, speech and voice keys are entered in the app's onboarding rather than in code or a server.",
+      "evidence": [
+        {
+          "resource": "repo://Config/Shared.xcconfig#L5-L22",
+          "version": "repo-lines-v1:sha256:0979db6b91fb50ce95e8e27f4086a6509ec5548e223e8d2c5b332532c092c622:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3NDE4ZWMxYWY1MWYxZWI1YWIwYWU1NWU3ODRhNzhmNDk4ZTgyOGM1YTViNTIxNWI0ZmY1ZTJmODEzYzBlNzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlM2RiMmM5YTZiOWVkMWI4ZmEwNmFkOGU2NjQxNzhjOTY0MWZmMTlmZTI0NTI5NzIxN2IyNDcwMTliODgwOTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQyNjZkZDNkMTJlNjYzNzAzYTVkMTQxMTEwYmVjOTYxMjA2ZjY3MTdjN2I3NDJlN2FmODkzNmEwMjljNTNkYzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://README.md#L27-L45",
+          "version": "repo-lines-v1:sha256:84ffe366c94b895a30ca764d1ed90cb353199267b9881e33c6548d422d60339b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0MDIzMGZjYTYwZTExMTI1ZmIzNjhiMzlmM2RiMWY5ODc0ODIyMGRmZTYxMTNlMTlmOTMwYzRmNTQ3MDE5NjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwMGMzZTgzOTc2NWJjNTA2NGJiODg3MWEwNWYwMDc5MTFmOTI5MTEzMDI4YWI2MWY2MTI1YTIxMWE4NzEyY2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU3NzYyOTc4YjJhMWUwYWNiMzczNmEzNTZkNDQ5ZTQyM2U4YmJkNjkyNmM4Y2YzNTU0MWQzNmMwOWEyYmU3Y2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmYjYyN2E0ODdmYTVjYjEyYTIzMDQ4ZWIyZjdhOGJkMzBlMzBhOWU2YjA2MWRlN2NhNWYxYTM3N2ZjMjczMmYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

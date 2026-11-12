@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:26d6a2411e55201e1209ccdc8a1453b1808de355ddfad0593665b7c259b56a6c",
+  "claims": [
+    {
+      "id": "claim_f51a18b4c7ca4778ab6c7ebd6b1452b3",
+      "statement": "The unit tests concentrate on pure, decision-bearing seams extracted from AppKit-heavy code; the screen-action test header states that parsing and risk classification are the highest-value pieces to verify because the event-posting layer can only be exercised by a real build.",
+      "evidence": [
+        {
+          "resource": "repo://elfhubTests/ScreenActionParsingTests.swift#L1-L15",
+          "version": "repo-lines-v1:sha256:ff4a9030947c37552eca06c8fec5bbc50208bb1921d55e373924613f11f405b5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwMWVhZDkzNmEyMjgxZDUzZGNjMDY0YjdlMmEyYWIwZDUzYjkyZWYzZWY3YjM0YjY2ODY3MzAwNzg5NWM4NjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxZTRiNDgyZmUwZmQ2YjhjMzc4ZWQ2ZDQ0MGY4YTAyMWI3NzNjY2RkMzc4MGQ5YWVkMzU2NTRiYzBjOWNjOGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFkNmYwMTc5MmMxMDQ0YWE2NjA2YzZmYzRlMTc3YmNiZTM3NWZmNTEzZGVmMTgyMjEyNDk1NjUyZmZhY2E0YTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2758e105bf9a49538b18ce2e1ed0f712",
+      "statement": "ScreenActionParsingTests verify parsing of the action-tag families ([CLICK]/[DOUBLECLICK]/[TYPE]/[KEY]/[SCROLL], labels and :screenN qualifiers), cross-family emission order, the per-response action cap, no-tag passthrough, empty [TYPE:] rejection, and that [POINT:...] tags are left untouched for downstream pointing parsing.",
+      "evidence": [
+        {
+          "resource": "repo://elfhubTests/ScreenActionParsingTests.swift#L19-L113",
+          "version": "repo-lines-v1:sha256:69e25dcee16aa3173894d00558d587ae762c343a4697e19638f8d2d67b5e736c:eyJzZWxlY3RlZExpbmVDb3VudCI6OTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIwZmM4NjU1YTkxMDI3YjRlZjZhODMwNWY4MWIzY2NjY2IzN2QzZGVhMWFlODliZThjMDllOWI3OGVmZDY3MGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4M2YwZWUwYjZjZGVjYTVkMjA3YjM1MDgxYzA1ZWY5YzAzZWViOWQ1Y2QyNDQ2YWZkNGEyODY2MzA4NGVkMjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkNmYwMTc5MmMxMDQ0YWE2NjA2YzZmYzRlMTc3YmNiZTM3NWZmNTEzZGVmMTgyMjEyNDk1NjUyZmZhY2E0YTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYxMWIzYmJiNjhmMzhlYTczOThhNDY4YjExYmZjZDU3MzdhZGJkMmRiYTk4YTQyMmY1Y2YyMjI3ZjdmNGZlOTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c8a2f11da7194542ac927dfb17e99792",
+      "statement": "Screen-action risk classification is tested: ordinary clicks and benign key combos (cmd+c, return) classify as .instructionIsApproval, while clicks labeled delete/send and destructive combos (cmd+delete, cmd+q) classify as .requiresExplicitConfirmation.",
+      "evidence": [
+        {
+          "resource": "repo://elfhubTests/ScreenActionParsingTests.swift#L113-L149",
+          "version": "repo-lines-v1:sha256:3114de8c59c39b8f3355d09a4521fb86de07eef66e1d935ca4ba9e0e2b865857:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4M2YwZWUwYjZjZGVjYTVkMjA3YjM1MDgxYzA1ZWY5YzAzZWViOWQ1Y2QyNDQ2YWZkNGEyODY2MzA4NGVkMjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwMjE2OWM5OTg0YTlhYjgzOWE3NTc4Yzk2MDhlZmE5YWY3MzhhMGIwNTNmNTJjMmRiZTJjYjdiNmU1YzQ3MTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f6b285b4fdaf4946adcda85ea987de3b",
+      "statement": "Permission routing is covered by pure tests of WindowPositionManager.permissionRequestPresentationDestination (first missing-permission attempt returns .systemPrompt, repeated attempts .systemSettings) and of the persisted screen-recording hint fallback (shouldTreatScreenRecordingPermissionAsGrantedForSessionLaunch granting when previous confirmation exists despite a false-negative preflight).",
+      "evidence": [
+        {
+          "resource": "repo://elfhubTests/elfhubTests.swift",
+          "version": "repo-file-v1:sha256:37bc9a758f1584dbf9d4cba08d99c995a67b3cc37ee0ceab4603a98b73bda1e2"
+        }
+      ]
+    },
+    {
+      "id": "claim_66e864eb6f9c437a887d254d7ed0fae1",
+      "statement": "The UI test target contains only Xcode template scaffolding — a launch smoke test with no assertions and a launch-performance measure — and provides no product-behavior verification.",
+      "evidence": [
+        {
+          "resource": "repo://elfhubUITests/elfhubUITests.swift",
+          "version": "repo-file-v1:sha256:391cd056cd333f51c417a12a79c80de693ea93190ffa786be251ecaa25716044"
+        }
+      ]
+    },
+    {
+      "id": "claim_e2c4aa2d0c4c4b38a5d4995a686f6893",
+      "statement": "Runtime behavior with no automated coverage includes the ScreenActionCoordinator consent card, timeout and stop flow, ScreenActionSynthesizer event posting, the interruption and push-to-talk event taps, real ScreenCaptureKit captures, AssemblyAI websocket sessions and voice playback/fallback; these are verified manually in a running build.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ScreenActionCoordinator.swift#L150-L299",
+          "version": "repo-lines-v1:sha256:e1a89f891ef0a66c8ba47b0e76cf0f78d58324a0c98e5775d18063c168089e4a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiMjFiMGQ3ZTQyNGY1YjFjZjg0Zjk3MDBmZjZhMTA2YzZlZjgwNjgyY2JlNWRiZDBkMDI1MWYxYjBjZjVkOWJmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmNTU0NDRhZTAyZmVjYTQ3Mjg5YmI4YjU5OWVkMzdiYzA3OGFmYzU0MzQ3NGE5ZTdmYzNlMzg4ZGUzMzU2NzgzIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI1NzlhMDhiMWQ2M2RkYzQwMWIyYmJjZmRiNzQxMWQ1MmFhMGE4MjE4NGI4NzUwNWQzOGQ0ODA2OGE2ZWM1OTA3In0"
+        },
+        {
+          "resource": "repo://elfhub/ScreenActionSynthesizer.swift",
+          "version": "repo-file-v1:sha256:b002211c0bc51b54078811b314920d86a722e0868db10538a9f5cf05b60adbb1"
+        }
+      ]
+    },
+    {
+      "id": "claim_5516ca6558d248b48497e667d58b9273",
+      "statement": "Tests run from Xcode (the elfhub scheme or the elfhub-OnlyUnitTest scheme), never terminal xcodebuild, because terminal builds invalidate the app's TCC permission grants; the known Swift 6 concurrency and deprecated onChange warnings are not to be fixed incidentally.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md",
+          "version": "repo-file-v1:sha256:1670b1e5d65c3ca164b569c031dcc42a37e18ef9052e3132e9575bc8f6fa51ef"
+        },
+        {
+          "resource": "repo://elfhub.xcodeproj/xcshareddata/xcschemes/elfhub-OnlyUnitTest.xcscheme",
+          "version": "repo-file-v1:sha256:3e4c3f8330ec05702c22aa5ef5196ad5092627e833f1c5a6ffeae834bd9512a2"
+        }
+      ]
+    },
+    {
+      "id": "claim_2b753618039f41ab9cfb5e1d6a14d6c9",
+      "statement": "LanguageModelProviderTests check the provider wire formats without network access: Anthropic bodies including tool use/results and verbatim raw-block replay, the direct /v1/messages path and server-side fallback rules, stream assembly and refusal handling, OpenAI-compatible bodies with and without images and tool-call stitching, and Gemini bodies and parsing.",
+      "evidence": [
+        {
+          "resource": "repo://elfhubTests/LanguageModelProviderTests.swift#L35-L268",
+          "version": "repo-lines-v1:sha256:831d9fbff52d2ec35811d74ede7b486479372c065a432a29cda3f8bb31e51c50:eyJzZWxlY3RlZExpbmVDb3VudCI6MjM0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmNDZjNGFjODg0NTNmZTE2ZTQ1OGFiODViYzUxZWNhNzU0MGMwY2E5ZWNiOTZiZDNhMDRiOGIzZWU1NGI5N2NlIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI3ZmRkN2QzMGQ5NGJlNjdkZGM3YmFjODBlNTY0MDMzY2JiNDAzZDY2NTI5Y2RiM2YyYzNiOTJiYTA5NWEwYzE4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_721f61141af14988b305158aed2eae52",
+      "statement": "NotepadTests cover notepad tag parsing and the 40-line cap, markdown block building, plain-text and Markdown copies, tying each line to the sentence after it without joining across lines, pacing of lines that arrive together, the prompt text, and saving the notepad on the reply and in model history.",
+      "evidence": [
+        {
+          "resource": "repo://elfhubTests/NotepadTests.swift#L19-L275",
+          "version": "repo-lines-v1:sha256:37d05370bd077d68cfb3fd9773420dd50ece26f38966eaae406d1acad5ee651f:eyJzZWxlY3RlZExpbmVDb3VudCI6MjU3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0OTUxM2NkZTJjZjNlMzk3Y2FiODI2N2ZjMjBkNDJhMTVjMWM1OWJkMjdiNWRlM2NhNTE5MTBlMmU0ZGYzM2EyIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmNjEwNGJhNGIyNDU0Zjc4N2MzOWVjN2Y2MjA3OGY5OGRlOTg2YmJlMzQ3ZjkxZjU5YTc3OWRjYzYyMDlkZDczIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

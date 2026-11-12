@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:a2bacfd235ea1907e99e13d3ca411a0c80069f23dd442445613ce15d056fad9c",
+  "claims": [
+    {
+      "id": "claim_2adfedfca8cb4658abc15f97e034fa77",
+      "statement": "The menu bar panel is a KeyablePanel (NSPanel subclass whose canBecomeKey is true) with .borderless plus .nonactivatingPanel style so its text fields can take focus without the panel activating above the user's current app; it is floating-level, transparent, shadowless, excluded from the Windows menu, joins all Spaces, hosts CompanionPanelView through NSHostingView at the fitting size of the SwiftUI content, and is positioned below the status-item button.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/MenuBarPanelManager.swift#L136-L188",
+          "version": "repo-lines-v1:sha256:c1c453cf56ff7d43da8a903467f23c511f7cabf75750e66e6892fefdf20e102f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI5OThkNGMyZTkwNmZkYjAxMmJiODdlZWZiYjZiODc1OGI0OTBjYjkzNDM2YzJkNTU2MzgxM2VmMjM3YzRkYzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc3MjBjNjA1NDgxOWM3MzZjODlkMjRhMjNjMTk0ODAwZmYyNjA5Y2E5MGMwZWY2NzMxYzJkYzQ3MTAzZTE5NWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwYjVmYzU5MzYxZGNkNDhhZjI2N2IyYTI1YjRkZDNhY2RkMDQzOTQ2M2NiY2YyYWE2M2JhZjMyMGFjZmU0NDcifQ"
+        },
+        {
+          "resource": "repo://elfhub/MenuBarPanelManager.swift#L23-L26",
+          "version": "repo-lines-v1:sha256:39676e755e46f7710a8259294e0099e60454aa60c5feb019bf22cb846548260e:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTY2MDIzOTI1ZTM0YmU5OWZiZjc5ZTExMjFlN2U1MDk3ODBmZGIzNjEwODY2NTgyODJhMmY3ZjE5ZDA5NTA0NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2M3OGRkNWEyMDFhMzQ4ZjY5MDk2NTIzYWZlNDU4YWQyYWQzODUxNThmODU0ZWVjNDdjMjcwMzY2Yjc1Nzc0MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTU3OTAyOWY2YTk1MmNkYzE2NjMwZDk0MjQwNGI4ZDdlZGZlYjk4M2MzYzAzNGY0N2U4NTczNGYyMWJkZTJkMCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_98419d36b8b7452185ac4ed5708952b7",
+      "statement": "The menu bar panel is dismissed by a global mouse-down monitor for clicks outside the panel (delayed 0.3 s and skipped while permissions are incomplete and the app is inactive, so system permission dialogs don't close it) and by the .dismissCompanionPanel notification, which CompanionManager posts on push-to-talk press, showMainWindow and completeOnboarding.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L104-L110",
+          "version": "repo-lines-v1:sha256:9938460607233bb4c1c775570ae6f574f9c9752aac00f04c58b73cba0faf1051:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMWM3Yzg0OGYwMWI4ZWUyMjFjYjE1NTNiNmY5NzA0NzM1MzRlOTI1MDI3YjkzMzg1ZGIyZDNjMGNmYzBmZDU0NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTQ3ZWVkOWM3Y2I0ZjY1NzVjYzRiZjEwNzNjODc1YjhlMGNlOTk2NjZjZTczNGQ5MmExMjFlODFmNmE2MmNjMSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzIwMmUwMGY3OWYxY2I3ODk4N2Q1NWEzODEwMThmNzVkNmI1MzI5NzhhYTFmNzE5ZjljOGQ0MzMxMmE4NDcxMyJ9"
+        },
+        {
+          "resource": "repo://elfhub/MenuBarPanelManager.swift#L17-L19",
+          "version": "repo-lines-v1:sha256:85a500bbf2753f9b33fcf6a5badf7e8694d9e9f0b3aab7c375773f2c493e3723:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjg2NzEwZmNhMTU1OTY2YjA2Y2ZlNWM2OWIzNDY5NGYyZjk0NmRhZDdiZDdjOWM3NGY1ZmI4YWMxYzdiZmJmOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiN2FjNTJhZTZjNTg4ODI1OTIyY2UwYjllNDc3NTljZDEwODk1MjUzMmJiZmY0ZTU0MzQ5ZTU2NDI0NjIyZDFjMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2M3OGRkNWEyMDFhMzQ4ZjY5MDk2NTIzYWZlNDU4YWQyYWQzODUxNThmODU0ZWVjNDdjMjcwMzY2Yjc1Nzc0MiJ9"
+        },
+        {
+          "resource": "repo://elfhub/MenuBarPanelManager.swift#L196-L225",
+          "version": "repo-lines-v1:sha256:ed45b12982c1fd5333c079911420da3da744633e55a04d998fd8f7c7db4dcf8b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM0N2UxODJmMjUyNjU0N2QxZWFlNDllZDUwZTRmZGQzNjdkMzFkN2U1OWViNjcwMjEwMmIyNTMyM2M0YmVlNjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE3YWY4YzY4M2ZmNDFjYTc2M2RlM2IwMmQzNTE1NDM4OWNjZGI5ZmQwOGM2YzlhMTJmMDhmMDVlZWVkYWZmYTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjliOTFhZjdmYWYyOGUxNjBmMTBkM2JiMjkwMzgyZTc4MGNhNDU5OGU0MDcwMzU2ZWQzMzZkNzJlZjE1MDNmMTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0851a8a17fb544bfb174e0612950b667",
+      "statement": "CompanionAppDelegate's launch does only three things — sets a zero tooltip delay, creates MenuBarPanelManager, and calls CompanionManager.start() — and termination calls CompanionManager.stop(); there is no analytics, update check or automatic login item, and launch at login is an opt-in SMAppService toggle.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/elfhubApp.swift#L49-L61",
+          "version": "repo-lines-v1:sha256:cf9f61cebf1635a18f34e843803833f2142a324e6023dc7c4952f271b3840ff7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZTE0MTQ2YThhNWI3NDY2ZWY1MGM4NGRhODYzYTM5ODFmYjgwOWZhNDE0MzIzZjQzYWIyMjExNzI4YWZiY2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkN2FmOGRlNzYxYmE1MWE4Y2FjNTUwMjUyOGZhOTlmN2RlOWNkZTIzYzZkYzY2YmI0MWRhODFlZjcxZGYzMTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAyYWRhNjIyMTcyMzM1NGQ1ZGIzODY0ODZmY2NjZWMwNzRiYjAyMWJiOGM1NmUyMTc2M2QyYThlZDFkNDE3OWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVlN2NkYzcxM2Y4YzUyZDYyMjk3ODJiMGY5ZWY3NDU0YTY4ZTYyNTU4ZGJlMjQwZmQxNmRkZTk1NjVkZjI4ZmIifQ"
+        },
+        {
+          "resource": "repo://elfhub/elfhubApp.swift#L85-L104",
+          "version": "repo-lines-v1:sha256:fa595a14c41694a6a386b8091297ee45a76c9da43110a6328870f0d703eb2909:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ0YTlhYzZiMmI3Yzc1OWViYTZmZDdlZDJmMjVlZTdlN2Y2Yzg5ZWNjZTdjMjQzNDQ1ZWY1MzU1ZjlkZWVhMmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwMGVjMGMzMTk2MTdhYmI5ZWU3MGIxMWMyYzJmNDQ1OTc4NGQ1YThmZTIwZWE5Y2M3Y2I1MzIxYWFkZjAzYjQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0a3596d5ecd24bc1ad50b1af9bcfef7f",
+      "statement": "CompanionManager.start() refreshes and polls permissions every 1.5 s, binds voice state, audio level and shortcut transitions, wires the screen-action coordinator, binds Esc guidance dismissal, starts the notepad panel's event subscription, applies the speech-to-text choice, refreshes Ollama status, and mounts the overlay; stop() also closes the notepad and stops running actions.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L416-L435",
+          "version": "repo-lines-v1:sha256:f3084545ee5577abf3a791c110ced25055bc6c0672b4a4c4315c80f2f0d0fd17:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyNWY5NTU5NTVhYTljMWUyMGU4ZjZlMjk4ZTQ0MzM3ZTI0ZjY2YzNhODI2ZGIwYTRlNDZkMjFmMDlkZjViZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI2NzI2NDU5YzQ5ZGExZjViYTJmYWIxZDViY2M0ODFkMzhlMzAyYjBmMWM0ZWM1NjA3ZWE1YmE5ZDlhMTc3ZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQwNDhlZTgzZDFhYWE1NDk3YmU3NTczN2Y5Zjk3ZDE5ZWRmMjBiYzE5ODEwODU2N2NmNTAwMTMwZDE4NDY5NjYifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L519-L536",
+          "version": "repo-lines-v1:sha256:aaef8dbe9b3f821c00e626b15cf4d4f90279a7a9133f8caf108a775827b26291:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYTRmNWYxZTYwOGM5NDNkNzc3Y2JkNzgzZTlkMWI2OGMzNzAyZDgwMzlhYzA0ODQ0NTI1MjA3YjlmMzdhZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYzZTZlMjQ4MzhhNTIxMzQxNzA1OTIxOGEwN2UzNWUyZjFjNmNkZTk0Mjg3NDZhZGNlOWVhNmI4ZTFmN2Y2M2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdhODI3NjljMDg1NjYwNTQ0NWQwMzY3NGJlMTEyZjM5ZTAzMDdmY2E3YTAzOTNkYTgyZjM3MzhmNTk0ZWVjZjcifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L628-L634",
+          "version": "repo-lines-v1:sha256:d8f007698538d0ef3111f86017b4e2b0f984b0ca86916c1719e79e5d0b4aba91:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2ZjMGVhNmE0YWZlYzhmNzU0OGJkNDMzODczZDc4Y2Q0ZWIzM2FiOTRmZGNkMWU2N2YxYjk4ODc2OGM5NzBiYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDdmYTk4YjA3NzI3YzA2NjE2YWMxNjFlYmNkODVlYWQ4Yzk3YjQ0YjAxYmI3Njg3NjZmODI0N2ViMGE0ZGNlMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWU5ZWRiNjM5YjI3MjhlM2ZkOTU3MjZhMDI5MmJjOGFjYTMxYTBjZmQyNjdhYmUwMTAwNGY3Y2VhMGE4NWVhYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_13d5ec474e7e42288c6fbbe577ff342d",
+      "statement": "The overlay windows are mounted exactly while the user has completed onboarding and holds the permissions the active input mode needs (text-only mode drops the microphone requirement), re-evaluated on every permission refresh and input-mode change.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L399-L407",
+          "version": "repo-lines-v1:sha256:2ed2416eb266a4a36fc9256fd2dc368895dac65c2ad1259f20f239a236c721b1:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDk0MDYzNjYxN2MxZjc2OTUxNWFhOWFiMWRlZmVhYmZlNGMxZGIzZjE0YTM1MDc4MTNjYTM5MTcyZWQ2NWQwMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGVhNGU3NGRhOGQxYTg4YzE4Mjg5NmM3ZWMwNGUzYWRkM2FlMGY1MWM0NjVkZjQzYTkwMmZmZmRjZGY1MjEyMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODgzZDJlOTMzYjkyN2ZlODEzNjM0OGQ4OGE1ZTg3NmYwMmE5YzAyZWI2NTRkMzE3MjkwM2ExNDkzN2Y3M2ZlZCJ9"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L441-L448",
+          "version": "repo-lines-v1:sha256:de8c26471371cd5ab5174b87661d40e7fa8d570a89ddabfd3188a8fa7a9e7505:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2ZhZWY1MmMzNzM5MTcxM2U1NGZkZGY3Nzk0MjU2Mzg4ZTMxYjdhZjJkNTE3YTc2YTkwYzczNDM3ODY0OGQ5MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTUzODIwMGNmNjBjMzU2YTUwMWYyYTc0MzAxM2ZjZWVmNTFmNmMzZDk5NGNmNzg4ODhhYjAyZjVjNGEyNmViMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDBjM2ViMjhjY2M5NmJlNGEwYWFmNWEwZjcyNTY3ZWQxNDE0MDE1NDU0ZmRhNTVmMTNiMDdkYzMxN2UzMGI0NSJ9"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L538-L571",
+          "version": "repo-lines-v1:sha256:8bacebb93462a45d8bfa26c1e616c001d0b3b6997017f7133983fd7ea96da90e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzNmI1ODZjYzhiYTE2YTNkNjkwM2VjNDBmMGRiODQ4NTNmOTUzOTMxYmNmMDQyN2E2ZTA4Njg2NGNkYzUzM2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkYjZlNTJiNGQ0YWM0ZjY1NzI4MzNlODg1MDIxZGU3YzkxNzRlZTZiYzY4MDU5NWUwY2U1MTc2ODFjZDEwNjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmNmYxZjYwZGY2YWNmNmIxZTE2NzRmYmQzYTZhMDQwMzcyY2Y4M2NiYTBmMGI3NzM4YmMyY2IwNjU1YmViOWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c427fb448a314d9989ffcbd1731089e4",
+      "statement": "The global push-to-talk CGEvent tap is installed only when the input mode allows voice and Accessibility is granted; removing it also stops the screen-drawing recorder so mouse clicks are never left swallowed.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L189-L199",
+          "version": "repo-lines-v1:sha256:ff92821658d44be2dcd57dfc5acc2bfcb2499f8d554046229c2b333de3ef1ffd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyZGY1ODE4YWY5MzBlN2JkYjJiN2U1ODkyMmM0NDQxNmIxYTk0Yjg0ODYzNDRiZjE5OTNiZDlmZWJlZDEzODIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiMmQzZjVmZTk2YjI3YTMxNDRhYzY3NmExYzA5ODM5MzNiMWNlOGY4MzU4MDQ2N2Y1OTNkYmM4Njc2MDA1ODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5YTc2YzQ1OTExZDE4ZTVlZmI5NTYwM2YxMmFjNzFlMzMwNmJkOTkzN2I0MGVmNjEzZjgwMjIwZGVlM2QwNDkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a63391af6165424695b6901ef73ad110",
+      "statement": "Voice state is driven by a Combine sink over the dictation manager's recording/finalizing/preparing flags that never overwrites .responding and emits .turnFinished when dictation ends with no response in flight, and by StreamingSpeechPlayer's start/finish callbacks that move it to .responding and back to .idle.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L207-L222",
+          "version": "repo-lines-v1:sha256:8a07878bb92d8279d01aec1e3bf84db1ae5b8438c5a0a1ca2ecc127d1711372b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhNTBkZmI1Zjk4NTcwNTBjOTFlMmFmM2Q0YWUyY2NlYWM5ODU2NjU4ZDI3Njk5MzA1ODg0OTY3M2M3NDUxMDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzOWM0MDc4MjVjNmFhOGFkM2IxMTM0YTg1NDI4NWQzM2Y1ZDQ2NmYzOGRkM2Q1Y2NiZjA0NjVmMDg1OTNmZjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE4NmM5NGMwZTM3MjlhZGI1MGE0MjI4MmVlZjMzMDQyYTlhMTJlZDIyZjM4ZjliYjI3ZWQ1YTMzMGJlNmUzOTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFlMjEzOTY4YzRiYzlhYjBjMzY4MzMxOGMwOTBlODQ2OGQ1NjdiNGZjZTNmYzMxYTNjMTY2MTgzNWUyYzAxMDAifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L644-L675",
+          "version": "repo-lines-v1:sha256:c3eb42b8fc1fc96ad1b489bbe74c549a391ab32dab52545e4bc97bb5dd8dc0a1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhZTYwYTU3ZmFlZjIzN2M3NDc2NzllNjI1OGQzNjgyZGQ0YTIzYmJiZjY2ZTU3ZDkzZGRhZmNiNWVkMGQ1OWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYzZTZlMjQ4MzhhNTIxMzQxNzA1OTIxOGEwN2UzNWUyZjFjNmNkZTk0Mjg3NDZhZGNlOWVhNmI4ZTFmN2Y2M2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhNjlhNmY5NmZlNWFkNDE4NjE3MDg2YWRmZGM2NWEwZDNhNGFkOGFjNGFhMDJjYzI3Y2MyY2U2ZTdjYTA5ODQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ade4933e9ea54425ae7344a0ede16b38",
+      "statement": "OverlayWindowManager mounts one borderless, transparent, click-through OverlayWindow per NSScreen at .screenSaver level, excluded from the Accessibility tree and unable to become key or main, and rebuilds them when screen parameters change.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/OverlayWindow.swift#L19-L48",
+          "version": "repo-lines-v1:sha256:a9d1f457f210beaf97b4574a98544bcfa8e3343576ffd078b177d1934e519088:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1ODJkNjhjN2YwOTU0ODdjMDFjYTUxZWIxNzIyYTIxNTY0M2NmMTI5ZjQ3N2EwOWRkZDRiMGU0OWRhNTRkYTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdhYzUyYWU2YzU4ODgyNTkyMmNlMGI5ZTQ3NzU5Y2QxMDg5NTI1MzJiYmZmNGU1NDM0OWU1NjQyNDYyMmQxYzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMxNWQ5ZGE5OTZmYjJhYmUzYTYxNWEzZGNjOWQ1NDRkZDhhODI1NWJiZjcwNmM1ZTgwYjhlMjFiZjg5M2JjZjEifQ"
+        },
+        {
+          "resource": "repo://elfhub/OverlayWindow.swift#L55-L116",
+          "version": "repo-lines-v1:sha256:65cb2547255621d6416042a27bf9147622d4f8545ed5ac6425bc940b0b7b3ea0:eyJzZWxlY3RlZExpbmVDb3VudCI6NjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZiYTAwMTEzMmRkODRiY2JiNTNkYzlmZDBhODFhZjA0MGVkMDFjMzE4MDE0OGQ1NDZjOTZiMDYxZmUwNGQxMTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA1MWQ0MDkwM2RmMWE3NWEzMDBkMGI5NWQzMDRmMWMyMGUxNjAxMTY2YTg5OThhYjUyOWM3ODJkMmUwOGJlZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiZWQ4ZTM5NWFlNDA0M2NmMGZhNTRmMzIyNjhmMzQxMWVjZTJlNTJjNTU2NDgwYWI5NjYyYzEzNDE1YmJmN2IifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5cf8dcfd59964948b3c82ee110e19a31",
+      "statement": "completeOnboarding(startTutorial:) persists hasCompletedOnboarding, re-evaluates overlay mounting, and then either starts the guided tutorial (skipping the voice step in text-only mode and pointing steps when the model can't see the screen) or shows a getting-started hint in the status pill.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L461-L491",
+          "version": "repo-lines-v1:sha256:88b3fd6395b2edbb57c63828ca4fa003f53a0a6cc76389db242bcb78a6eca195:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2OGQzYmJhYTA0MDIyZDI1Yzc2NTQ2YmNjMmJjNzA5YzViNDk0M2Y4N2MyZTU3MThlOTVlZTY0MjVmYjU5M2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNmNTI1ODBjM2ZjZGVkOTBmYTIzZWVhYWIwYjQ3ZjI1Y2FlNjg1YTFhMmI4MDA0Yjk1YWZjOTc4YzNkZTNjY2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiNDY5MjNkYjliMTc5YzliNjIxZGZhY2JkMDgzM2RmNTQ0MWQ0YzlhNWFkZmIyODAxY2JjZDQ0ODViMzIyYjQifQ"
+        },
+        {
+          "resource": "repo://elfhub/GuidedTutorialController.swift#L100-L110",
+          "version": "repo-lines-v1:sha256:39ff5cad37f681116e11ca30f10f208c4e308e76e9065c8d43edff7fc9d90eff:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRmODlhYmI0MTM4MTVmM2NhYjAxY2E0MDFkMDVlMmM4MDJiNDBlNmExOTJmZDI0ZjlhNTM0NmI2ZTUxY2EwMDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIxNDdiZTQ0Y2MxNmI3NGE0NjExYzRmNmFkNGQ1ZmQzYzUwNDRiOGIxNzFmOWM4MzM2MGM2MmI4YmM1NjhlNjgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkY2UxZDFjODdlN2MyNjU2YTExN2Q5MWNkZTg2OGM0MjQ2NzBjYTBjZWRmZjY3M2Q4ZDQwNGZkZTM1ZWFhODIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5N2ZhNGI2OTQwODdjMzZkMjE1OWY5YzNiYTA5NTFhZmNhNWFkYzY0MzMzZTNkYzIxMzNlZTUxZDVlNmFkZDkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_db5a86ccbc804b4a9e5cb46adfa174be",
+      "statement": "Other surfaces deep-link into the main window through CompanionManager.showMainWindow(section:), which sets requestedMainAppSection; MainAppView opens that section and clears the request.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L99-L115",
+          "version": "repo-lines-v1:sha256:011f23cd2e2bcd56288accdb7102b3ed2fc5cbd42d8230eea2b4be14844d8ea0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmNjg3OWRkMmU1NTAxYzkzNDQxYTA5MDkwYmNkZmRiNmY0YTE0YjA2ZmRmMzVmY2JiMGQ0MThjMTU1ZjI1ZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg0ODcxODc4NzI2NjdhYWY0MmYzOGU5YjFhYjkxYjZkMzJkMWIxZjc2OWQ1YzIwYWM0YzU0NzBiY2ExMWZiNGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU3ZDkyMzUyYjNiMjY1ZjFjZThmNmQ3MTkyYjBlNWVlOWNhZDk5Yzg5MTkxZjU0NjU4YWU5NWMzYWFjYTYxYTMifQ"
+        },
+        {
+          "resource": "repo://elfhub/MainAppView.swift#L112-L116",
+          "version": "repo-lines-v1:sha256:01aba98b7af88634672773bc32f8d0e1449eca6019334328131df096f662861f:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjhmMDgxMzA2NDAyNDdlMDg5MDc2NTEwMGYxYjRhN2ZjMzQxMmU0NWVmZDA5NzVhY2VkMWJjMDUwNTc5OTdkZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDQwYmFjYTgzMzg1NTRmMTU4MjdlNmNlZmM3MmU1ZTE2Mjk4Mjc5MmQ2MjczNTA4M2JjZmE2Y2FhNTQ4NDEzYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjIyZjE1MThmZDQ0OGRlZWRkNjQ5NjQzN2JiNGRiMGUzOGQ5MzA2NmU1MGMwNGY4NzJkNDM0MzMzYWViOTg3NyJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

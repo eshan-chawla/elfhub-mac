@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:daf5725dfb717ea3fa0e0f378f2376397a7d11b2e20433f2eb137820b401f56e",
+  "claims": [
+    {
+      "id": "claim_6876e711a2b74235ab8596bf5af0edbe",
+      "statement": "upsert(_:apiKey:) leaves an existing key untouched for nil and clears it for an empty string; KeychainSecretStore deletes any existing item before adding so duplicates never occur, treats a nil/empty secret as a successful clear, and stores generic passwords under service so.elfhub.secrets with account provider-key-<configuration id>, accessible after first unlock; deleting a configuration also deletes its key.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/KeychainSecretStore.swift#L13-L69",
+          "version": "repo-lines-v1:sha256:f4e47fff16476151b79a3b1fb0ad1c30e14217973b37a326f74a37ecf63db07d:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhhODBiMzFkMGExZWFmMjc1NzIzZWQwZTdhMjViOWZkYzY2MTgyODQ5MjBlZTdmYzdhOTlhM2FiYzAzODdlZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkNTJlNDQ2NzU0ODgwNWZjMTc2OWZlNGI1MmU0MTA4MzMwNTE0MzBmMjUwNDk1MTc4MGM4NjE5MTZlMGRhMGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyZjQzNzQyYTFlNDlhYTFhMzI1OWMwNzdiYzFlNTEwMDdlODM4MWNlOTNlZjg1Zjk1MmUzODAyNzI2NWMyM2UifQ"
+        },
+        {
+          "resource": "repo://elfhub/ProviderConfigurationStore.swift#L64-L96",
+          "version": "repo-lines-v1:sha256:f63d8e4ddbf696ad1d91cc4c6efc2d715dea3b1652dd81dce8d414c308fbbd05:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlNjg5OWNlMjVjYzk0ZjBiZTVjYTE0ZjdjYmFlN2E2ZDllZjFlMDFmMjIxYWVkZTQ5MWVhODRlYjhjOTYxMTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE4ZTAyYWUzM2JjNGUxOGY1ZGRmM2I4ODJhNmJiMTU2Y2IyMjFmNWJkNTRjOTBlNDllOTk0ZWNiY2I3YTQyZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZmYjhkNGI4OGIxNDgyYjhkYTI4OTE3Mjg2ZTFlYTYxYjY0OWM2ODFmZDJkZjMzMzRlNmU2NzI5ZjAxNzFmMDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d7decb8cffb741af8aac3db03efb88a0",
+      "statement": "ProviderConfigurationStore persists configurations as JSON under the UserDefaults key llmProviderConfigurations and the active id under activeLLMProviderID, falls back to the first configuration when the stored active id is gone, and seeds no default model, so with no configuration makeActiveProvider throws a missingConfiguration error telling the user to add a model.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ProviderConfigurationStore.swift#L104-L110",
+          "version": "repo-lines-v1:sha256:abccb59d7254ed280d1412790ca38850c5ae205ba2e44362d660a407e14d2211:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2IzYmYyMTU4Y2Y3MjAxZTQ3ZTJkZjBkMmViNWRiM2MxYjJmMjRiYzg4YjM2NmVhYTA0ZTcxOTkxYTIyZmZmZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmUwZDBmZDlmNDBjNzk5MjA1YTYyYTQwZjQ5MTc5NjUwYWI5NDUwYmJhZTU2Y2ZiYTNkODQ5MGM3YmE3NmUxYiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDI1ZDIwOThlODRjMTVjZTA5ODZlYTFjMTA2YzNkY2JjMDYwZWM1OTFlOGU0YjA1M2RmY2ViOWVhMzg1OGVhZSJ9"
+        },
+        {
+          "resource": "repo://elfhub/ProviderConfigurationStore.swift#L14-L40",
+          "version": "repo-lines-v1:sha256:b350e28e6cb985178e6881660ee745c8b2d41320768bda3366722898519c2f94:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ0NzUxNDBlMjZlOWM1YTE3MTFkNjQ0NWExOGI3ZjRhZTIwMjJmOTkzZWY2Mjg0MDc1NTQzMDFiOTZlMGRjMjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJkMzQ2NTNhYTVmMjQyYzNiYjllMTQ4NTZlMDMyMDdiODg5MWM2YjRjMzlmOTA3NGI0MGQwMTg5NTJiYTg1OTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhNzg4YTgyOTU5MzZlZWRhZDM5NDRkZDI2OTNjZTY4NTE5OWVkYjQwOTEwN2VmODk4YmRmYWNmNDlmYTAwMTgifQ"
+        },
+        {
+          "resource": "repo://elfhub/ProviderConfigurationStore.swift#L153-L170",
+          "version": "repo-lines-v1:sha256:927e9121c91763258b5026813c1847ba87f2c8d297b94c2b83e9d36e2adefd5c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhZDJiNzQyYTk0YjExNGVmNWFmYTVjZjQyMzVmOWU5ZmJhYWY2YWJhMTUyZjNjZWVmMTFiMTA4N2RjZDc1ODYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4MTJlZmEwN2NiMWQzM2JmZjIyNjJkNDViZTM2OGU5YjRkYzVkMGE0MzRkNDE4YmJmM2RjNGFjZGZhNWRjMDkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b5026225e76c497c8cde596830c28d51",
+      "statement": "A provider is rebuilt from the active configuration on every turn by makeActiveProvider: Anthropic configs build ClaudeAPI at the configuration's direct messages endpoint, OpenAI-compatible configs build OpenAICompatibleLanguageModelProvider, and Gemini configs build GeminiLanguageModelProvider, with missing Anthropic or Gemini keys reported as missingConfiguration errors.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionTurnPipeline.swift#L94-L96",
+          "version": "repo-lines-v1:sha256:60d6265f5551f8ef91290f342f707a381ba334ee788af7d922f1fb765b1acbc6:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFkZWU4ZThhZWJiODMzMmM2ZmY3YzRiYTA0YzI0ZjQwNGE3YWFkMGY5Y2I1Mzk4MTUyMjVmYmE2ZDIxN2NiYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNTQ5YWZmYzQ0OWFmNzRiYzliNTY5NDlmOGFkMzkyNzdkNmZmODlmMzJhM2Q3Yzg3MzhlYmY5ZmY0MzA5ZDU3NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjUzNDdkNjM4NGM4YjhiN2IzYWMxZjk4NzkyYmY3MjFiMTUwODBjZWM5MjliZWNkMzEwMjhkMWIyNDAyNTBkNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzNiZGRjNzEwMzIxMGJjOWQ3MzhhMzYzYzg1M2EyMGNjNTU3MGIyNzMxMDYxYTZlOGRhYmQ3OGQwZGNkYjcwNCJ9"
+        },
+        {
+          "resource": "repo://elfhub/ProviderConfigurationStore.swift#L104-L151",
+          "version": "repo-lines-v1:sha256:ddc8e19923ed34384146e95a0de75834bac27b7976e0c97d5ba8680411046ae3:eyJzZWxlY3RlZExpbmVDb3VudCI6NDgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdiM2JmMjE1OGNmNzIwMWU0N2UyZGYwZDJlYjVkYjNjMWIyZjI0YmM4OGIzNjZlYWEwNGU3MTk5MWEyMmZmZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZlMGQwZmQ5ZjQwYzc5OTIwNWE2MmE0MGY0OTE3OTY1MGFiOTQ1MGJiYWU1NmNmYmEzZDg0OTBjN2JhNzZlMWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM1NTQzOTMzYWJkZjM4MDQxYTdjMzgyMGYxMGU1NTEzYzA5YTRjMDUyYzU3NmU1ODljYWY3NmMwMDk1NTEzYTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2b58b199a5c04ab9aeedc63b66149b1c",
+      "statement": "Provider kinds carry defaults: Anthropic and Gemini default to native tool calling and OpenAI-compatible endpoints do not; Gemini defaults to the 0–999 coordinate convention and the others to image pixels; ProviderConfiguration's custom decoding applies these defaults to fields missing from configurations saved by earlier builds.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ProviderConfiguration.swift#L38-L56",
+          "version": "repo-lines-v1:sha256:22302ecf451322a9f236a2a56cbbf031f82691ad4ea1e3a701bcd44d6fc0c559:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExOWEyOTU2MjQyZmY5MTgwYzQ5MTE3NDhjZTBlOGQ3MzJkZjUxMzA4ZDQ2ZDc5YjUwZDE2YmY3MTI3YjUwZDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAxZDI0OWE3ZDQyZTAxOTU0YWUyZjcxZjliYjRkODMyZjJjNzJjMjVhYzE3NDVlMjkxYTM1NDkxOWEyMjI0MjcifQ"
+        },
+        {
+          "resource": "repo://elfhub/ProviderConfiguration.swift#L98-L118",
+          "version": "repo-lines-v1:sha256:ad1e457295421ec412b6f43c8ec61afc8ece785482ba2e2571f409ae846e76c7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExMjc0MjkxODBkYWU3Y2M3NTk4ZGZhYTI4MmNmODE3NWQxMzRmYzVkYzlmMjkzODRmM2JkNjU5MTYzZTRiZDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZjZDNiOTg5Zjk3ODI5YWU4NTEwNmEyZDgyYmRjMWM0OTEzNGNkZmU2YTBjYTZmYjRiZTEyOGZkNWYyMTAyNDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxNmRmMmI2ODY1Yzg1M2Q5MzM0OWVjOGM4NGNkOGNlMGVmNzIxYjQ0MjUwM2M3MjljMDQ5MmZjNWQ0MDU1ZjUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cb9780604e334afcbe5e813725dc4de1",
+      "statement": "The speech-to-text layer is a runtime user choice persisted under transcriptionProviderChoice (default Apple on-device: SpeechAnalyzer on macOS 26+, SFSpeechRecognizer before), with AssemblyAI and OpenAI-compatible Whisper alternatives; CompanionManager rebuilds the provider through BuddyTranscriptionProviderFactory when the choice or keys change, deferring the swap during an in-progress dictation.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/BuddyTranscriptionProvider.swift#L132-L165",
+          "version": "repo-lines-v1:sha256:de34f02a576b485bb4efd58b60e43c91187afc46fae53ba48f65bd6cc27e19b3:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyNGUzOThjZGE4ZjZjMjNjNTIxODBkYjIxYzAxYmZiNGZjZDU3OTUxMjJhZmQ2NTI4OWMyOThiYWU2MmVmOTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5ZTc2MzU1Y2YxMTk5NDgwYzNmOTk4MzZiMTQ4NmM4NDFkODkxZmFhZDkwNGM2MDhlMDkzMDIyZDM3NTdhZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://elfhub/BuddyTranscriptionProvider.swift#L40-L69",
+          "version": "repo-lines-v1:sha256:6499f62d7041ca8d8a9fea9b49e79e2d6b8128321fdfc1b22fd918ba4a214365:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlZDk3ODcwNDExY2NjODNhNmRkMmZhNDUwZWE1YmM1M2Y0N2ViNDcxMDhmMWJhOGU2YmQzMDBkNTdkMjQwYjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImEyNzUzY2VlMmQxNGFkNmQxM2NiMjg1YzZkNWRjODY3ZGFlODlhMWEyYTYwMWRjMjY1MzA3YzE1YWJkN2QzZmUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU3MzliMjNkMTQ2Nzc4ZjdlZmVkNjQ2MGExMDNmNTRkMjhhNGIxYWVmNDdmNTk2ZDE3YzdkNjliZjhhM2RhNTYifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L346-L365",
+          "version": "repo-lines-v1:sha256:8d0fdbea5db60b3e1e2ab1dff7dc108a884c0e0f06c3f5dc2c1d6805225d6951:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmOTA2NzliMDk1NDhmYTgxZjZkNWVjMzkyZTY3Mjg2NGYyMDUxZDI2OWRjZTkyZTE5YmE2Y2JiYjJmNzgzM2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNlODY4ZjBlNDhjYzFkMTEwYTM1ODk5ZDBjZGRiYmU1ZTFmMTY5YjU3YmM1ZjY3MTM4ZDFiNDA5M2Y0MDEyMmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU3OGY0NzRiZmM0ZTk5MDRjMDIwOWFkMWRlOGIyY2FkYmQxNDAwYTJiMmEzYmQ3NThkNjg0ZjcwNzYzYWVjNDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_673400be26a44f668ef4721cc3e87f6e",
+      "statement": "The text-to-speech layer is SpeechOutputMode persisted under speechOutputMode (default on-device system voice; also ElevenLabs, OpenAI-compatible /audio/speech, or off); a chosen voice whose key or settings are missing falls back to the on-device voice.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L224-L293",
+          "version": "repo-lines-v1:sha256:875cfea2e0a99c091080eb9f4a30f4d98cefc61754715865929b1a5a2cb1fd6c:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzZjIwYjQ5ZWE4Zjc1MTZjYTFlMWZkNDYzYzFjYjAyNTg5MDBjNzg2YjM1ODk5Y2NkNjA3YTM3YWMyYThlMWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU5NDBmN2NhNWYxZjQwNjFhOTU1YjY4YWUyYzZiYzAyMjY2OGMwOTA1NjM5ZjhkZWYwMGE5YTE5ODkzNTdhMTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5NzcxYzQzOTdiM2E2Yjk2ODU0MTk5NmEwMmQxNzY1NTNiYmJiZjJjZDM1ZWJkZGRhM2E1OTQ2MGE1NTZjOWIifQ"
+        },
+        {
+          "resource": "repo://elfhub/SpeechSynthesisProvider.swift#L22-L54",
+          "version": "repo-lines-v1:sha256:270c92aab35b7f9b01151cb632e4d0799047fbb17881094124f547c42e087a0f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNkODk2ZWFiMGVkNjM5YTJhYWE3MDM5ZDI1MjEwYjgzZTQxOWEzMGRkZWM0M2VmYTY5NDljMzA4OWZiYWM2M2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIwYTc5NTBhNTJjZGI3YjhiNWE1ZDM0ZWFlMzg3MTJmMzMzYWE1NGI3ZTY4NzUyNDE5YjkzMzE1MmJkNTg4ZjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIyODc1Y2JjNGM4NTZlMzAzMzQ0NTgyNTg3YmRkYWE4YWE5NGM0YjkwODI4OTQzZWVlMGQ1NjE4MTZlN2VlYjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cddcdf278d774515b1097ad08c76f9a6",
+      "statement": "OnDeviceModelAssistant talks only to Ollama at http://localhost:11434, and 'use' activates an existing Ollama configuration for the model or creates one whose vision and tool-calling flags come from Ollama's /api/show capabilities and whose coordinate convention comes from OnDeviceModelCatalog.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/OnDeviceModelAssistant.swift#L235-L237",
+          "version": "repo-lines-v1:sha256:d6343edcfdc9f51f76e705e31dc3cb33c3fe30676883b025207d315ef4b6c8c8:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNzI0YTVlNjU1YTJhM2QyOTA5MWY2YmY5NDZlYzljMjYxODQwOTY0MTNjYzM2YjNkNzcxZDkwMDNiOThiNGU0NyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNzJhYjJiN2U4Mzc1ZGIxNjQ3NDUxMTQzZmY2MTk2NTY5NjExYjFjNmNjMTgzZGMyOTY3MGQzNjliOTNiOGRlZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjI2ZmFkYmY2NzliNDNmNzQ1ZTg5ZTQwNzcxNjlkY2ZmYjMyY2QzNDY0NDRkMmVjNTI1YjY3NTY2YjRjMjM1MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzllOTM1NGE1MjdjM2VhYjQ4YjE3NTlmMjNhODZkYTBiMTBiNmQyYzFjYjJmYzY1MTk5MjdmNTY3YzRlODRkZiJ9"
+        },
+        {
+          "resource": "repo://elfhub/OnDeviceModelAssistant.swift#L384-L417",
+          "version": "repo-lines-v1:sha256:55123b24474142bb03fc34b9dbc2800d375467cf807a90855123695a586c248c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRjMTAyMjI0YTM1ZjFmZGVlNGRhOWNjZjlhZmI3ZGM3OWRjZjFjYzQwMzdjYmViYzIwZDVkZjE5YjZhYzk0MmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcwM2YzOWZjZGIwNTdhODIwZTA4NDE0NDNkMjM3YzQyN2I0MmU3YzUxNTIwMTcwMDcyZDgxZjA0NjQxYjliMmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIzY2FlYTQ4MjEzZmYwZGJhYzUzYjAyNjk3MTJiN2E3OTAzZWVlMTg3NDZjMzdjNDEwY2VhNGEzNzVhM2MyMzcifQ"
+        },
+        {
+          "resource": "repo://elfhub/OnDeviceModelAssistant.swift#L5-L12",
+          "version": "repo-lines-v1:sha256:56bbd89609531f434112fd94e0da5ee29ab1c1fdbedb01ba7426e24032628564:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTFiZGNjNDZiZGZkZDhmZGM2OWMxODAxMGFkODFlMTY3MWNjY2JjNTczNWUxM2ZjYTk2ZGRmZTg2ZGRmMTgxZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDUzN2I4YzkwMjg2ZTRkNzM2MzQ1OTM1NzUyZjlmOWY5OWMyMTVmZmRkNDllMDA1NGJjYzQ4ZmE2ZDFiZWU2NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGYzNGFhMzFiZDYyMjlkODE3Y2NjZGNmM2EwMTQ3NDEzNmJmMWE2ZjdlMGVjMjc4ODI1ZDI5MGY2MjJhNWEwMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNjllZGQ3N2JlOGE5YTNiNjI1M2EwZDk1MTlkMDczNGYzOTgwODdjY2Q2MTRiYWEyMDI3MjAwOTYxYzExMGYyZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_82603e9cea0e4f5f9a823c201be3227e",
+      "statement": "LanguageModelProvider exposes displayName, capabilities (vision, tool calling, vision profile) and a single delta-streaming streamResponse over requests built from content blocks that include text, images, tool calls, tool results and verbatim Anthropic raw blocks, with maxOutputTokens defaulting to 2048.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/LanguageModelProvider.swift#L23-L172",
+          "version": "repo-lines-v1:sha256:5611792cdcf0a109bc0dc9abf5033b202b0d7d64abc104ed3694fa32ddf7106a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJmNjgwYjFjMDliNjJkOTUyY2JhNDdlYTI5ZGI3YTYwODgxZWQ0NTQxMGFiMDU3YjVlYmE2OTVkYWE2ODdkNDNmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI2NWE5OTY3YmJkZmZkZmUzZDJkOTVkZTRhYTdlMGZmMTgxYmEwNTBmYmFlMTI1M2VhODJjMjA3ZmRhZjM5ZDRlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI3OGU3ZWUxZTlmNDFhNWU2YTVhNGJhOTgyMGZhYzM3YTJmMmYyOTViYWFmZDIyY2IxYzFlNzE4N2IwZjU4NmRlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlYWUxOGM4YTc4Mjc0NjdiZGUxYTBlZmI2YmRiZDUxYjFjZDVkNDZhN2QwNTVlZjE3ZTRmZjU2ZWQwYmFmYWVkIn0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

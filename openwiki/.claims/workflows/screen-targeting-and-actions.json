@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:df24668ad6fa78d5c6cf507a0abdb299f33c90d39112013b614c0822a0c7f0cb",
+  "claims": [
+    {
+      "id": "claim_efd1a18de9bf4e059e2acb8dcc3592ca",
+      "statement": "CompanionScreenCapture maps one clamped, scaled display-local point into two global origins: AppKit bottom-left (Y flipped plus the display's AppKit frame origin) for overlay drawing, and Core Graphics top-left via CGDisplayBounds(displayID) for real CGEvent clicks, avoiding flip-against-primary-screen math that breaks on mixed-resolution multi-monitor layouts; an inverse mapping turns AppKit points (the user's ink) back into screenshot pixels.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionScreenCaptureUtility.swift#L27-L89",
+          "version": "repo-lines-v1:sha256:452d393b58b29450c302f317b05774a17db0241db2bf6ce79417d250cafbd2a2:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcyMTZhZDU1MDM2ZmEwNTZkMjNmZTVhODU4ZmQ2ZmQ3NmY5Nzc3NGU4MjRiOTJiYmZjNTdjNzQ0MTQ2ZDFkMWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkMzkxM2YxNzcyMWJkMzIyMTA4MjRjNjNjOTIzMGFiMWQxOTU0OTVkM2M1NTY2MDk2MDM1ZTAyOWZlYzI2NTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQyM2Q5M2IwNTgzZDQ3NjY2Njk4MWJmZTZmMTVhOGM1Y2RhMzk0NGZmYzgwMzJiYmI4YWRlOGM2NWI1N2NlMTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_06115c61893c4c2689d25d5349c1471d",
+      "statement": "ScreenActionCoordinator owns the consent gate: action mode is off by default, accessibility is rechecked before arming and firing, any user's-step action blocks the whole batch with a spoken reason, autoFire fires immediately only when nothing needs an explicit yes, and otherwise a consent card is armed with a spoken 'say go or hit confirm' prompt and a 20-second ID-guarded silent timeout.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ScreenActionCoordinator.swift#L101-L216",
+          "version": "repo-lines-v1:sha256:a6b6eb9acb0d80c19ad4a9ff22916967f1dc77cb87978b57e05358338dbd585f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTE2LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkNmU1NTFkZTgxZjdjY2Y2MDk3MmNmMWJjMGY1YTFmNGEyOGZhMmFjYzYzN2M3MDE0YTU0Zjk3MTI2ODcxMzM5IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI1YmZhNTg5ZmUxMWM0MGVlYjAxZDg0NzIzNTcxMzViMzMzZjNiZjA5NzRmZGY2MWNjMTRkMjAxZmIxZGNiN2U3IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwYzNjNWVhMTlhNGYzMzUzZmU0MjQ3ODYzNmQ2NTJlNzQ5ZjNlZTNiOTc1MDRmMTE2NzIwZDhjZmVmNGU0NTJlIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_5cc46b8d41994b3184339fa798529806",
+      "statement": "ScreenActionSynthesizer posts real CGEvents from a .hidSystemState source so Accessibility is attributed to elfhub itself: clicks move the pointer first, double-clicks use rising mouseEventClickState values, scrolling uses line units, typing posts per-character keyboardSetUnicodeString pairs, key combos resolve modifier names to virtual key codes, and every event is tagged with syntheticEventMarker in eventSourceUserData.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ScreenActionSynthesizer.swift#L33-L245",
+          "version": "repo-lines-v1:sha256:b543dfdb33d71c33e97bcb8746cf0cde418b29ff71a24a983977c90770c22801:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI2NjFiMDM0ZjcwYWFjNTRiM2RjNDdiOWI0Zjc2NTdmOGU5ZTc2MGZhYzAzZjY3NGM5MTdhOTM0ZDk0NWI1MGQ3IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI4ODc0YmFjNjExMzJjZTg5MWQ5OTAxOWE1YzdhNjM2NjMwYTQ3ZjEyMDlhM2UzNjZjMTBiNGFjNTcxMjkwN2YwIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIxOWQ3Mzk2Yzk1ZTRlMjdiZDViY2YzODBkZGQ4NmQ4MTNmNDI0YzQxNzQ1NGJhYjUxY2RlNjRlMTFhMjgzYjMxIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIzMTA3YWI2ZjAxYTU5NWNlNGUxY2M0OTc0YTBmMDllZGYzOTM4ZWM3MTY2Yzc1ZjFhNWI3NzQ5NWUwOTI4NmM4In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_be2a161169594d33b71199b0e78597b5",
+      "statement": "Screenshots capture only the display under the mouse cursor (shared edges go to the screen the cursor entered and gaps fall to the nearest screen), exclude elfhub's own windows and privacy-blocklisted apps from the ScreenCaptureKit filter, and are sized to the active model's vision profile without upscaling, encoded as JPEG at 0.8.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionScreenCaptureUtility.swift#L130-L242",
+          "version": "repo-lines-v1:sha256:616407e2f4dbcb6d4c5443719482cc0634c44d256f09362527e247008f3585e3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyMmQ1M2NkNzgxODlkYTUwNTczMDIzODIxZWUzNDIyZGM5ZDk2Zjc2YmRhMDA4ZGU3NGRiYzU1N2IyOTQxYzRhIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjZmUzMzM4OWExZTJjNzFmNzAxZmJmNjQ1NWViNWI4YjJhNzdiZmFjZDIxN2U0ZjM3Zjc2NzJkNTUyNGMxZWUwIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI0Yjg2YjAzYmFmNTU2MWFhMmU4NDMyMTliMzc3M2ZiNTIyOWI1Y2RkMmEyMjRkNTA4ZjQ3NmQzMjM2ZmY5NmQ0In0"
+        },
+        {
+          "resource": "repo://elfhub/ScreenshotGeometry.swift#L5-L20",
+          "version": "repo-lines-v1:sha256:fcbb37438f7183378d991f1df51eb206207cf2141999544dfc501095137644f6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwMmU4ODQ2NGIxOTI4YzM4ZjFkMzg1NWZjMzI3NTQyNjhiZGFmODM3ZGE3MmYwMGY1M2U0ZmE5MDhiOWVkMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwMWVhZDkzNmEyMjgxZDUzZGNjMDY0YjdlMmEyYWIwZDUzYjkyZWYzZWY3YjM0YjY2ODY3MzAwNzg5NWM4NjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAzZmM1ZGZlZDI3MmFkNzhkNjI0OTA5MjA0OWE4MTBkY2U1ZTA5NDdkOGZmZmFlNmIxZDk4NGJkY2Q5MmJkZjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiMmI4ZWZjZjAyNTdiYmE2NjNmODU4OGUwZGE5NGJkOTYwMTEzZWE1NjFhMWJiYWIxMTIzYzgxMGM4NmI2ODIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9a851da26f5c48f5a5d548256962b541",
+      "statement": "ConsentPolicy makes password fields and privacy-blocked apps always the user's step, requires an explicit yes for send/delete/purchase/submit/close effects judged from the real target title or key combo unless the user's own words authorize that effect, for unnamed default buttons, and for any action in sensitive frontmost apps (terminals, mail and messaging apps); the model's label can only add caution.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ConsentPolicy.swift#L8-L127",
+          "version": "repo-lines-v1:sha256:c1dc04f24fc8be26ee751dd35ae1cd0a694177b230b6fb49a8fe7c760465bff9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI4ODBkNDRmMjVlZDU1OWE2Yzc5MTNjMjUyZWM2M2IxZjg2MGQxODAyZDQ0ZmE1NDBlNjBmN2M4N2NhZjIwZDEzIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIzZThkZmI2ZDQ4YWY1YWQ5Y2EyMTY1M2EwOTkyNWMwZjc5MDU3MjNiOGFmYzkzNTlhOGMwNDk2NTliMGMyMmI0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJkZDhiNWM3MGVmZmVkYzA3ZTE5YWNhNTc4M2Q0MDc5YzE3ZDg2NWVjMjliNDE1YTgyYjQzZTlmODY1YjJiZGUzIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_f8e8fe6be17f46e1b5972852e03a01ad",
+      "statement": "Firing previews each targeted action with the pointer for 350 ms and waits 150 ms between actions, while UserInterruptionMonitor's active tap consumes Esc and treats any untagged physical input as the user taking over, halting the chain before its next event.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ScreenActionCoordinator.swift#L144-L148",
+          "version": "repo-lines-v1:sha256:54fc3f155be07f55465a473b412c18dc572215db0e3679f5585fbf777bcde027:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjk5YjIyZWY0OTU3OWNjNmRkM2FlZjc1NzQwNTEwZTQ5NmUwZWQ3M2MxNzUyM2JhZjY1NDQ5ZjZmZDVkZmYwZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWI3YzYxMzI2NTExYjUzMzRhYzg3MTgyMjJiZTRlMjgzMWI5N2Q4Yzg3NWIxMTE2ODkwNjY5NjA4N2M4MjZiYyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDQ5YzUyYjEyMWE4Y2NhZjA4N2U0YTE1MjZkODIwMGE1MmYyYWEzZGZlNDFjOGFjMWIxZGEzYmFhNTE0YWUwYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjg2NjZiYjU2OTgyYzYwYzMwMGE3OTUzYmY3ZGVmMTdjMzYxZWNmMjNjNDNhN2IyYjNiMTE4ODViYjc5Yzg1MiJ9"
+        },
+        {
+          "resource": "repo://elfhub/ScreenActionCoordinator.swift#L253-L299",
+          "version": "repo-lines-v1:sha256:ca5b4fe94b789bb1e9d5da5ea20d024cf4ad6b96f8252cbf51c5299d71d62103:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5MGZiM2U4ZjdkZmQ1MmU2MWY3OTdjYjVhM2QwNDBjOTA5Y2ZhYmRiNzYxZDg2NTA1NTI2MTVhMjQwMjY2MTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE2YjFjNjI3MWIzNjVkZjhkYmQ5Mjc3ODFmYTcyNTI4YTNmYzFhYjM0YTJlZmI3YjhlNDUwNmMyODViNzNlNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU3OWEwOGIxZDYzZGRjNDAxYjJiYmNmZGI3NDExZDUyYWEwYTgyMTg0Yjg3NTA1ZDM4ZDQ4MDY4YTZlYzU5MDcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_670fc6f940f84884858b030247527fee",
+      "statement": "ScreenGuidanceOverlayModel keeps the pointer up at least 3 seconds and until speech ends plus 1 second, keeps annotations 8 seconds after speech, fades the user's ink with the annotations (or after 20 seconds without a reply), hides the status pill 2.5 seconds after the turn goes idle, and clears pointer, marks and ink on turnStarted or allGuidanceDismissed.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionEventBus.swift#L98-L311",
+          "version": "repo-lines-v1:sha256:16bf61f25466e161174f238b358a620dd71a6f473450b195f54fd465f92fa9f3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjE0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI1ZTA4NjkwZTk0ZDY1YWFlZDE2OTgzMjI1NDE3MDJiZGQ4MGYwNWRmZmZmMGEyYzUwZTM1OGE5YjMwMDJmNTQ4IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIyZjMzOGEzYmVhMzM2MTU2Mzg5ZmU4YTc0YmFlMGZjM2YzYzA5ZjIyYmQ1YzgwZWU3YjNjOGI1OTg2ZTE5MTQ1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_e872866878834971a5fe4f2c09eb85f6",
+      "statement": "Guidance is limited to one pointer, at most 6 annotations and at most 4 actions per reply.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ScreenActionParsing.swift#L132-L159",
+          "version": "repo-lines-v1:sha256:9f33f0b93de962af7f75268945501de95b285e4597fef24a0f660b5967112904:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmMzgyZGM3YWIyMTE5Y2QwNjg5YzA2N2ZjZWU0Mzc3MGRiMTlkOWQwOWIzNTcwOTcxZGM1MzkxMDVjNmIyMDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwMDZjNGRkZTU1ZWUzNDk2Y2IxYTUyZjg5N2ZmYjEwNDkzNzY1YWNlNmU1MjRkNDk4YWQzNWQ1NTJiMjE3ODIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE4MmI3ZDYyZjBmYTRmOGFkNDg3ZTE2MTAwOTI5ZWU5ZTkwYTI0OTVmYTNiYjUxNTRkZjA2Y2UxYTNjMGE2MDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEwYTQ0ZjQ2NmIyOWY3M2M5ODc5NmE1ZWU2ZmQwNjkyOTFhYTNmNDA3YTE0ZDE3Yzg1MTE0N2FhNWNlNDU1YWIifQ"
+        },
+        {
+          "resource": "repo://elfhub/ScreenAnnotationParsing.swift#L35-L35",
+          "version": "repo-lines-v1:sha256:ad30338c6ea27509e87d9bf9ec37ea6aceef810217a5ed7099fc3f4f50d262bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWQzMDMzOGM2ZWEyNzUwOWU4N2Q5YmY5ZWMzN2VhNmFjZWVmODEwMjE3YTVlZDcwOTlmYzNmNGY1MGQyNjJiYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYWQzMDMzOGM2ZWEyNzUwOWU4N2Q5YmY5ZWMzN2VhNmFjZWVmODEwMjE3YTVlZDcwOTlmYzNmNGY1MGQyNjJiYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTNjN2NiMzA0YWZmYWUzYjkzNjA0Zjg3MzNlYjZlZWFiMmQ1ODRkMDViOTdhODNhMTNlNTkyNjBkNTY4MTFkNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWM1ZDZmZTcyNmFkMWUxN2QwMGI5NWQ4ZWNiODk1YTZlNDg5NGI1MjViMjU5OGM4NjYyYzA0MDM5ZGI0ZGNiMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_d994ac40b87e47aa84fe4c974dcc1184",
+      "statement": "While push-to-talk is held, UserScreenInkRecorder swallows mouse press/drag/up to record strokes drawn live on the overlay, a mouse event without the shortcut's modifiers ends drawing and passes through, and on send the strokes are burned into the screenshot and described in the model's coordinates.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionTurnPipeline.swift#L108-L134",
+          "version": "repo-lines-v1:sha256:4874ceaebc93a06026b7205d7a8afe58da9760e00cb71d8fec0b74b5098c08e6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlYjU0N2RlNTI5OTBkYjliODdiODZmMmE2MzE0OWM1ZGEwMDc2NGFiZDFmOTY0NDEyMTU0YjM5OWE4MmE4MDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4NDU1NmVhZWU5MDhlY2MzMzFmNjkzNmU2NzAwYjM2NWEwNzVjZjU1MGFlODI2ZTIwMDc5MGIxMzllNWI5ZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4NjhhMTg5YjNkNjEzN2NhYmQ0MjJkZGE4MTU5MTFkYTIxNTUyNmVjMWEyZTkyYmYyMTk0ZWM4ZGNjNDdlNjAifQ"
+        },
+        {
+          "resource": "repo://elfhub/UserScreenInk.swift",
+          "version": "repo-file-v1:sha256:2a3f5b1623e0f117d24846934e2726af5275d85c7e4a0702b4ac80b11fadb1a0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

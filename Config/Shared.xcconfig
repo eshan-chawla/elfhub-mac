@@ -1,0 +1,26 @@
+//
+//  Shared.xcconfig
+//  elfhub
+//
+//  Build settings shared by every elfhub build. elfhub is a desktop-first,
+//  bring-your-own-key app: there is no elfhub server, account, analytics or
+//  update feed. The only network requests the app makes are the API calls to
+//  the model, speech and voice services the user configures (or to servers
+//  running on their own Mac).
+//
+//  Per-developer values (signing team, bundle id) go in Config/Local.xcconfig,
+//  which is gitignored. Copy Config/Local.xcconfig.example to get started.
+//
+
+// Signing. Contributors can override this in Config/Local.xcconfig with their own team (a free Personal Team works).
+DEVELOPMENT_TEAM = 6L4MN688L8
+
+// Bundle identifier of the published app. It is final — never change it:
+// macOS ties every user's Screen Recording / Accessibility / Microphone
+// permissions, their saved settings and their launch-at-login item to this id
+// and the Developer ID signature. scripts/release.sh always archives with it.
+// It belongs to the maintainer's team, so contributors (and local development
+// builds) set their own id in Config/Local.xcconfig.
+ELFHUB_BUNDLE_IDENTIFIER = com.elfhub.os
+
+#include? "Local.xcconfig"

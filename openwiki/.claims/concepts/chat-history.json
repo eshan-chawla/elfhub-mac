@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:8323efed9b694c609bffef49b2b18048119c67a0991023a8cb00cf9bd3db0dc1",
+  "claims": [
+    {
+      "id": "claim_60dc16d4d70d4edba6f479813b1373b0",
+      "statement": "ChatConversationStore keeps each conversation as one JSON file named by its id under ~/Library/Application Support/elfhub/Conversations, written only while chat saving is enabled (on by default); turning saving off stops writing but keeps existing files.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L247-L263",
+          "version": "repo-lines-v1:sha256:6568f4ea3e026a5916d0d126a1ccef14e35c45736d9980c3120736632de53025:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM0MDExN2U1M2FkOTc3NTUwZDA0YWFhZmYwZWNmZDlmM2Q2MjQ0NGNiNjRiNjkxODljZTI0N2YxOTMyYzZlMjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYzOGRlNGJjZTQyMzFlMTE4MGE4NWQ0NTI2OWJkNzUzMjRiN2YwZWUwZTQzYjZiZGVkYmViYTI4ODQyZDg2YTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjczZTBlMTY5ODVjMGU2YTBhNWQ5MmViY2ZkOWE3NDA5M2MwMjg1MjNlYzg5MDZkMjg3OTE5NDkzODY0NmZkYmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyYmVlODM0MTBjMWE1YTc5MzY5MjdiMjY1ZTVmMWVhMzhjZTRjMmVkMGYyYjRmYWU5MmY4MzE1ZTZiZTdiZTgifQ"
+        },
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L276-L286",
+          "version": "repo-lines-v1:sha256:de24972fd1740cfdf07269edcf66888c62b655c9c56cfe05bca00cea38477d76:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk4NGVkODRkMzcyMjVhZmU1ODliYTc2NDQyMjJiYjA5MDI5NjlmMzMxYTgzODg3YWI2YWVjNzU1NmNkOWVjYmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIwOTc5ZmY1MTg4NmNkYjdlZDFkMjJiYzczMGM4MDQzMTVkMWFkYjI3NzYwNTJjODhkNzI4NjkwYjRkMjkwZjUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1ODU3N2ZlNTljM2JmNTc0NjhjNWY1ZWJmMDc3MjA1NzdmMzVkN2IyZjAyNTUyMTYyNGU2N2MzZjkyNTFiYTYifQ"
+        },
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L307-L317",
+          "version": "repo-lines-v1:sha256:5e3f9dc9a4656699a89efe795436198456be07e01134aac06a024ee4ce09a7e8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMzM2MwMjUxNmM4ODljMjc2MjJjY2M0OTBhMzIzY2E2YzRmYjAwYjViNThhMTU2MDRhOTFmMWJlYjU5ODAxNGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg0YmE1NGU3MGRiMzczZDk0YTU0NjRiYTg1N2FlNzkyNzdiOWFhNThiM2EwZjI3YzMyYzI1Y2Y2NWY4NDhmYTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzODk2MTJmN2ZkZWUzMGQxNTM0ZjdiYWM4OTQ0NmY0ODA0ODI3Y2EwMDQyZDlhNWY2MGY0NWY5YzVhYTExZjIifQ"
+        },
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L398-L410",
+          "version": "repo-lines-v1:sha256:90217424607d6168e3f565901289ebcc7ce258b7030d30ca0b33bdaecfa613d2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYmVkMzUzNzQwMjc4MjZkYjk4OGRiMGQ0MmI3YzUzY2E5NDk1YmU1NjIyOGRjMmU1ZGNmODdmZTcyY2VmYjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQyYWViMjhhMjk2MzJiYTBkYzVhMzg5OTIxNjA4NWRkNjQ0YzhlOTI3ZDkzNmMxODdkMThiODYyM2Q0ODg2YTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQzYmQ3ZTI1YTQ5YzYzNGQ5NTVjYWViOGU2YmYxZDNkYTVhMzY0MjExOWViNTliYjlkZDM0MDVmZGVhYjY5OTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_002fb690a93c417487b90bbd12bd45f2",
+      "statement": "StoredChatMessage decodes every field added after the first release (isError, inputSource, screenshotFileName, screenGuidance, userInk, notepad) with decodeIfPresent and defaults, so conversations saved by earlier builds still load.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L77-L90",
+          "version": "repo-lines-v1:sha256:7980662d12dc1b2163e18082f9477413f665f2d523544601c2477c7dcee5e50e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhYmVmMWFlMmFiYzBmZDhiMDM2MzY0OWU1MjcxNzc1ZTBjNTA3MDM0YWNmYzA3YTA3NGQ4ZjBiNmQyOTA4MzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg2M2VlYzY3MmFjYTUyMGNlZmI1NzBmYWU0Mzc0ZjY5MDFkMGZmMjQ3YWExODY0Yjg2ZjNmZDFiMjA3NTA2OGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVjYzQ1YThiMjA1MWY4MDljNmQyMTZmM2MxNDcxMTM0NjgxZWI0ZjY4YTc1MmU3Zjk5NzFjNDE2OTk0ZWEwODUifQ"
+        },
+        {
+          "resource": "repo://elfhubTests/ChatHistoryTests.swift#L46-L55",
+          "version": "repo-lines-v1:sha256:fb34aa06704333478aa15dddc8439fcc18f402daeff6cc68041b422c48f16131:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiZWZlZjI3MjVhNWQxYTgxYzdlZTk5YjU1ODBjOWU1ZGUwYjM3ODE4MDdkZTc4MjJmZTY1NmVhMjNlMTk3NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUxNGIzMjQ4ZWM5NzE0ZjViN2FjOGE1MjA5NWNmNzRhOWJmNDM2OWMyNDkxOGVhMmY1YjQ2MzI5MWUyMDFmNWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyZjBhZDMyNTU1NmFlNmQ1ODdmYTE4ZTdhNzBmNjEyOGQ2Y2JmYjViMDZkMDU1ODdiYmMyMzhkZjg2ZmVjNzIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_65632d7c1d084ad3814fbfc14631087b",
+      "statement": "Typed and spoken turns are recorded through the same TextChatViewModel API: beginExchange appends the question and an empty reply and saves, showStreamingReply fills the reply with tag-free speakable text without saving, and the turn ends in completeExchange, saveInterruptedExchange (keeping any notepad from the partial text) or failExchange (an error bubble).",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/TextChatView.swift#L106-L190",
+          "version": "repo-lines-v1:sha256:a071833f97048252dc02028203adff3f95ffe178cf36df837a6e7b053f8bd2e4:eyJzZWxlY3RlZExpbmVDb3VudCI6ODUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhOWYxOTQ4NDYzMmQyNjEzOTAzYTRkMTJlODlkOWYyOWE3ZWFlNmQ3MzA2ZjZjYWMyN2MyYjhkM2JhNmUxMGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5OWJkZWZlZWFjYTYzNDBlMDI5MGRjODZlODg5Yzg5ZDVlMTg5YWE1YmE0NGI1ODViM2I3MDczNGY0YTYyZDgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU3OGIxNzQ2ZmE4OTVhZTU3OTIwZWY1YTE2NmQ2YjViY2UxMmRlNzdhMTdmMzBkZmViMzBlNmQyZDY4ZTgwYTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e37216ab70ea4e608bfbf923d1e69851",
+      "statement": "A spoken question arriving more than 30 minutes after the conversation's last message starts a new conversation, which also clears the model's history.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L184-L192",
+          "version": "repo-lines-v1:sha256:fcc50b06ec3af23b8678eb79254781651c3a4fbbf826dd79b65237f9704fb7fb:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYWVhNWZlODlhODE4N2UzZDQ4MjhmY2M5YmVlZjViODdmZGQ5N2FhZDc4NzZhYjFkNWM4ODgwYThjZWViYmMyNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmI2OWM0YTQxOTNhMGFiYWNiN2I2ODRlZWI4MjRlYWQ4ZmZkZGE5NzBhZTU4ZjE0NWVlODlkYzk3OWYwMzUzMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYWVhZmNkY2MxOWJmMTJhNTNlNGIwZDAzZWY2ZmU2MGEwOThmMGNhODFmMTNiNTg5YjU5NzYyZTJiZjMxY2MyMiJ9"
+        },
+        {
+          "resource": "repo://elfhub/TextChatView.swift#L119-L123",
+          "version": "repo-lines-v1:sha256:fc997e15f5b56190f8cfc474b3fb25cbde0169516d6533b630c53f16f27ed7e0:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQ2NDIyNGYxYjI1MGUwNzczMTE1OTdjOWNkY2QyZWU5MzEwNmZkYWU0NTIwOTJkODNiZDA5OGRjZDhjY2E4NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGQ2NGYxMjQxZmFhMjg4Mjc5MjJiZWY4NzYxYzAwYjc5ODM0MWU1YmY2NzkwZTA3ZmIxYzdlZjFhYzk0ZTUyOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzI4NGVhYmZhMzUxYjg2YjllMDBlY2I2MTJkZDlkZDcyYWZmYmVlNjkyZDYyYzVmN2RhNjRiMjU4NGYwMDBmZCJ9"
+        },
+        {
+          "resource": "repo://elfhub/TextChatView.swift#L53-L58",
+          "version": "repo-lines-v1:sha256:cc882b8241a0002d819db4c8b3e6ab60445080c05c392fd03f28c4ed03b53b08:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGE0Y2FlNmIxYzViZGQxNDA3ZDBlODBkOTFkNzcxMWYwOTAyM2RkZjRmOGYzOGIxYjFkOWRiZjNkZmI2NDJkOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjNkMmI4OGVkN2UyNTcxMjE1NTM3ZjYxYTJmODJjN2IzZWFjZWMzMWE0ZTUyZWExODBhNmI5ZjFlMDVkN2VlNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDQ4Nzg4ZmVkYTFlZWRjNjhmYjJlMTFhYjgyYmE5YzM2MDNlZDVjMGE0ZDUwZDk2OTFmZmYwZjU3OWEwNjE0OSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_35cb7c163116433aab2393d8b84a8694",
+      "statement": "Screenshots are saved only while both chat saving and the off-by-default screenshot setting are on, as Conversations/Screenshots/<conversation id>/<message id>.jpg; a reply's marks and the user's ink are stored as vector data and are recorded only when a screenshot file was saved.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L132-L149",
+          "version": "repo-lines-v1:sha256:e4f0b35a556c37638e88f0508e7efb0cb9ccb218c5614e138ea177b8096cad3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI4YmJhMjY0NTY4MTA4YTI3ZTM2M2RmOTYyZWViZGJkZDQxY2U4ZTljNWUyZjA3NzJlOGZmNWViNzVmYTE4MzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVjMzliYTA1ODA5ODlkOGM5MDE4YWZjMGRhZDZkZmY0OGM1MjljM2E5Yzc1Y2MzMjVjOGJmMWJkMzY0NTJhMzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhjMDE0ZmU5OTg2YTc1ZDJkZDUxNzY1NzA3OWEwOTM5ODU5MzhmZTkyN2ZjZDg0MGJiNjE2NDBkYzEwNDJiNjQifQ"
+        },
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L321-L352",
+          "version": "repo-lines-v1:sha256:c144a8e27126241349de4adc780459ad8188ca5a1de158fa4a998b246ba19502:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2OGRkY2E4ZTQ1OGYwY2E2ODA4NzY4MzEyYjFkYjE4NDg1ZTlhZDMwM2JkYzU2NWIyNzMzYjRkYWY4NjhiOTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzODk2MTJmN2ZkZWUzMGQxNTM0ZjdiYWM4OTQ0NmY0ODA0ODI3Y2EwMDQyZDlhNWY2MGY0NWY5YzVhYTExZjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIyZWZjZDUwOTk4OTc4ODBiMDVlZmNhODhlOWQ3ODYxMDg2NGQzODQzMTUzY2UzNjM1YWFjNGRiZTFlNDg5NTEifQ"
+        },
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L383-L389",
+          "version": "repo-lines-v1:sha256:e1194ecca5b442802851b32099f1a6184398cfdbf80b7274686fccbef2b0ed06:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjA0NjZiZGYwNzMyN2NhMWIxOWEzNGUyNjlkNDQ1NjYzZWMzNTEwNzJmNGU4YTZkN2VhYTQxNmEyOTcwNWQxOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGUxNjE5NDI5MmQzZmVhZTY3OTU0YmFkYzBmYjNmOTFlYmJhMTU3MTE4YWY5NmZiNTJmY2Y4MzIzZjQ3MGM2NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNWM3YWMzNjBmNTRkNDNhZGU5ZjRhNWZiMjQ1ZDVjMmFhNGJiNzUyNmRhNmFjMThkODQ0MTY1ZjcxNzU1ZDEzZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2477d3b654ef49e9a166a862f82a0d96",
+      "statement": "Reopening a saved chat replaces the turn pipeline's history with its last 10 completed question/reply pairs, skipping error bubbles and unanswered questions and appending each reply's notepad text the same way a live turn does.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L194-L214",
+          "version": "repo-lines-v1:sha256:710cfc457d6b6940ca46585cf89a47f6fdd7aa57479867f1e0067ba365d1220b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4YjQ2MDMzOTk2NmFhMWUyZTI5ZjI5ZDU4ZWNlN2FhYTA0YjRiOTI0NmIyYzExZmQ2NGMyYzRiZTc1YTBhNWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU2YzZiOTk1NTJlNjYwMDMzNWUwZDcyMzA4NWZjNTVlNWFlMmRjMjE0NmNmMzYyMGFjMmIxNDkzZGNjYjI0YTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY4NTQ4ZDFiNDA3NGRmMjE0ZTEyNmVlNmQ1OGMxMjQwZmI4MmQzZjJjODg0MjYwMjUxN2YxNzYwMzMzNWYyZGQifQ"
+        },
+        {
+          "resource": "repo://elfhub/TextChatView.swift#L60-L68",
+          "version": "repo-lines-v1:sha256:f1a2f0c90edf72df1d5bc6cc72bd19d99e305e82da96fd58f934cb936675abef:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjU1YjE4MGQ0Njc3ZmFiNmUzNzk3NjFiY2Y2NmJhOGIwN2FlZGU1MDFmYzlhNDZkZGRiZmY3MTAxMTdmZWVhNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzQyMmI2OGRkYzgxMzBmOWUwZmFkOGM3ODM4MWRmMjY4N2RiODUxYTBjMjQ5MTlmY2U5ZWQ1MjI3YzQ3YWYwOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYTY5NmEwNDdhOTJlN2U1Mzk3N2IwZjIxOGM0NDllN2IwODZhZDExNzg2YzQwYWQ4ZTAyMTc2MTI4MzIyZDA1ZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_236ffc3661324a1c8ca7108295266218",
+      "statement": "Deleting a conversation removes its JSON file and its screenshot folder, while deleting all screenshots removes only the Screenshots directory and keeps the chats.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L288-L305",
+          "version": "repo-lines-v1:sha256:437dcb328b862500c2a6f1bbff1c373f885e4fffc535d0204b6a236e96c7e1fe:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5MWUwN2E1MjZiNGM0NjIzMDFlNThiNzBkYjMxZWNkYjE0MzJkZGRmNGUzOWRkZDA4NjZlNTIwOTA2MTQwNjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJiMjQxNjY0ZDAxNjBkN2UyZTFkZGZlNWY3NDdkZDg5NjA0Y2U5Yjg1ODdkNzU1ZTc4NGQzZGQ5NzZhYmU5ZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZlZGNiYzllYmE2ZDkzMGRmNWE5ZTBhYzNhYzJlNTk2NDU5ZTI1ZDM5NmIyNjBmODI1YWQ5NjNiZjczZGY0MWYifQ"
+        },
+        {
+          "resource": "repo://elfhub/ChatConversationStore.swift#L363-L367",
+          "version": "repo-lines-v1:sha256:dc3a56942bc7a3bca9aba6329f2a323198f6fdaa99b31a216a4cf24c94cfd26f:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2Q4N2YyZTkzYTVmMDAyOWRhYTIxMzU4YzA2ZmNjODFiZTIwMmFiZTE4YTQwNzI0NGJlYjEwODZmZGRkODIyMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzYwMDk0Y2UyNDE5Y2YzMDBmN2YzNzAzNzU5YTI5MDk1NmE2NTAwZjdiMzI5OGViOWE4NTg2MTY1MDI1NmEwOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTA1ZjdkMjRkMmMwM2NiZGViYzliNDAyOWYxZDg5ZThhNjdlZmZhODhiYTY2OWU1ODlkNTk1NjZmZWM0MmY1NSJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

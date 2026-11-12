@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:ed90366a73153fe659af137d62d25969e6f6c844da934784332beca44698672f",
+  "claims": [
+    {
+      "id": "claim_38c7ae71577b455391a1ecc7b934fc11",
+      "statement": "BuddyDictationManager deduplicates permission prompting by keeping exactly one in-flight permission request task that rapid repeat presses await, and for 1.0 second after a request completes it trusts the cached microphone status (not denied/restricted) because macOS can briefly still report notDetermined after Allow.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/BuddyDictationManager.swift#L800-L832",
+          "version": "repo-lines-v1:sha256:fa791c35fd325c5564c2ff5b2176f500b62c3ba29ac03086f7d2ae29e8ad4eb0:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwZDRkYzU5ZWY0YzlhYmU2ZWM2MmI3NDFjZTViMDEwNmI5MjEzMDU1M2I4NTZkNDU3MGI2ZjhhMDBkMTBmODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM4MDU1NTIyN2IxNGM1ZmEwYTQ0NTA1NjhmM2U0N2RmNzAxMDg1NjFlZDU4NjM3ZTZiODlkZDc5ZmVhOGE3NzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJkNTg0MGZhMzJiNmE0N2VmYTcxZjU2NTU0ZjE0OGQxZjgzYTYyM2MyZWFjMWI4NWNkZmY2ZWFlNzMxM2U3NGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dbeb24308d5d4f988eb04b0fcebf8582",
+      "statement": "Dictation finalization waits for the provider's final transcript up to a per-session fallback deadline (SFSpeechRecognizer 1.8 s, SpeechAnalyzer 2.5 s, AssemblyAI 2.8 s, OpenAI-compatible upload 8.0 s), finishing the session once and using the best partial transcript if the provider never finalizes.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/AppleSpeechTranscriptionProvider.swift#L61-L61",
+          "version": "repo-lines-v1:sha256:047948b08debd65839d1bca1b25651a62c383e3c461a2949a8abff212d3c7030:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDQ3OTQ4YjA4ZGViZDY1ODM5ZDFiY2ExYjI1NjUxYTYyYzM4M2UzYzQ2MWEyOTQ5YThhYmZmMjEyZDNjNzAzMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDQ3OTQ4YjA4ZGViZDY1ODM5ZDFiY2ExYjI1NjUxYTYyYzM4M2UzYzQ2MWEyOTQ5YThhYmZmMjEyZDNjNzAzMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDkyMmY5NjVjYWY1Yzg2NjBjOGRlMzYwYmRjYTFmODg4YmNjMWM5ZWM1NWRkZTkwZDE1MjhkYzcyNTU3N2RhOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2IxOWJiNGNkN2ZhMTUyMWNhYjM0NWNiZjc1YjVkMDcwZDVjZmNkMmM1NjJiODg1YjYyYTVhMzQ1MjUzNDY5YSJ9"
+        },
+        {
+          "resource": "repo://elfhub/AssemblyAIStreamingTranscriptionProvider.swift#L100-L100",
+          "version": "repo-lines-v1:sha256:fd4a5dccb7e375bf995ed00a720a897f1da8c2e9b42f25ca1347d7d649aa50c4:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmQ0YTVkY2NiN2UzNzViZjk5NWVkMDBhNzIwYTg5N2YxZGE4YzJlOWI0MmYyNWNhMTM0N2Q3ZDY0OWFhNTBjNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmQ0YTVkY2NiN2UzNzViZjk5NWVkMDBhNzIwYTg5N2YxZGE4YzJlOWI0MmYyNWNhMTM0N2Q3ZDY0OWFhNTBjNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmNjN2M2ODdlMDFhNTNkM2ExYjJhZWRmNzgzN2VlMTQ3OTY5NzZlODdlZDlkNDE0YTJiZDUzNjkwZjcxNzFhYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTYwMTE4NzEyOTNkMTM2OTBiOWVjNDM0ZTc4ZjQ3ZWVmMmNiMjRkYzZlNThhYTM2Yjc2YTA4MThjYzAzYTNkYSJ9"
+        },
+        {
+          "resource": "repo://elfhub/BuddyDictationManager.swift#L520-L560",
+          "version": "repo-lines-v1:sha256:80460368cbb3337a9778a96d4077d136490be528524d8dcc4781417ec7a78aed:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwOTcwM2Q5YzkxZjhmODZmNTE4OWNkMjE3NmE2NmFiYWZiMTJhZGUxMTZjOTZmZjhlM2RkMTVhZDU1ZGUxNzAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFiNjk5NWY0OTk5OGE3YmRkMThhMjUyY2Y2ZjRkY2IzNTUyZTE4NzUxOTFhOWJiYjRjNjU4ZDYxNTBkODhlZWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlmYTU2OTRiNzEwMGQ4YjNlYTVhMTdiZWFmZTNkOGQ4NzQ2NTEzNWU2MjRlMGEyMzQ0OGNmODc5OTgxMzFkOWYifQ"
+        },
+        {
+          "resource": "repo://elfhub/OpenAIAudioTranscriptionProvider.swift#L71-L71",
+          "version": "repo-lines-v1:sha256:31bdf24ed263122373868d48e6f51e02e4304e274dadfe246823318e7a69b22f:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzFiZGYyNGVkMjYzMTIyMzczODY4ZDQ4ZTZmNTFlMDJlNDMwNGUyNzRkYWRmZTI0NjgyMzMxOGU3YTY5YjIyZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzFiZGYyNGVkMjYzMTIyMzczODY4ZDQ4ZTZmNTFlMDJlNDMwNGUyNzRkYWRmZTI0NjgyMzMxOGU3YTY5YjIyZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmI4N2MxYTdiMWMyYjQ4OTRjMGY0NGYzNWZmNjljYmU0Mjc0NDFiYmEzY2U3ZjY3NjUzZDI4OTRlMjJkZmM4NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2RiYjBmZjMzNzJmNTIyNDU1NWRhZjI1MjgxZGU2YTYzNjlkNDYzZDc1ZTc4MTM5NGEwYjczMjk3Y2JmNjAxNSJ9"
+        },
+        {
+          "resource": "repo://elfhub/SpeechAnalyzerTranscriptionProvider.swift#L63-L63",
+          "version": "repo-lines-v1:sha256:c3cf719f981bd1133eb86172caf145c86f80cf7cc8e56621d7419cf09d1247c0:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzNjZjcxOWY5ODFiZDExMzNlYjg2MTcyY2FmMTQ1Yzg2ZjgwY2Y3Y2M4ZTU2NjIxZDc0MTljZjA5ZDEyNDdjMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzNjZjcxOWY5ODFiZDExMzNlYjg2MTcyY2FmMTQ1Yzg2ZjgwY2Y3Y2M4ZTU2NjIxZDc0MTljZjA5ZDEyNDdjMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNmI2OTkyZjM4Yjc3ZmUxOTRhNGVmNGQzZTcwZmY1MjExNTI3ZmIzODY0Nzc3NzJhMTRjMTBjZjIzNGYyZDEwYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmY5N2IzNmZhYjAwMDk3ZTNlYmYyM2U4Y2I2ZTI4NzE4NjgwYjNmY2ZjM2Y5OWRmZWQwYTVmMjg0N2U0MjhmMCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_a9b3bbc949424c5e8854067dc2a10b03",
+      "statement": "Partial transcripts continuously refresh latestRecognizedText via onTranscriptUpdate, and handleRecognitionError submits that partial when an error occurs during finalization with non-empty text, else it cancels dictation with the spoken fallback 'couldn't transcribe that. try again.'",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/BuddyDictationManager.swift#L567-L588",
+          "version": "repo-lines-v1:sha256:8b1f36760c33b3bf5f156547b0a13165138f04344cfaf1a78fc6e20574b9bdea:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUzMDU4MWJmOGU4NzFlMzBhMWVmMmE1OWE2ZDk0YzQwYjFiMjhjNDgwZGI5YzUzOThkYzQzM2VlNWVlZWE5NDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQzZGE0NjYwMzQ4ZDA3Y2I5MGVlNGQ2OGUzMTE1NDA1OGY4MjRmMjExNWY0YzBmN2Q5ZDA0ZDhkYjI0MzMyMDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwYWE3ZmViOTcyOWIxYmU1NDE5MTg5ZWIxZGRlNGE4YTAzYjBiYTk4MzQ3YzA3NDRhNGVmYmZiNzUzNzVhNTIifQ"
+        },
+        {
+          "resource": "repo://elfhub/BuddyDictationManager.swift#L607-L624",
+          "version": "repo-lines-v1:sha256:f7a02e854072b69472e90d7f2186c70f46689686c42f3b397bc44db051741fc1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0NmZlYmIxODFmOTI2YmE1NTQ4YjFjMWM3Nzc3YzEwMzA1NDAyZDBlMThhNWM2YjU3NGY5MjA4Yjg2YTc0NjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJiYWNiZTdmMzZlNmE2ZjI3M2Y0ZjNjMjhlYmQxYTc3NWE4MjMzNWI3ZThlMmEyNGE5YzcyNzI5YjVjOWM4YjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY4ZjQwYjM0NmJhOTRjNGQwMDM1NTc4NGVjODJjYmEzZTA0Yjg3ZmRiNWQwMjFhYmEzMTJiZmEwMTM3ZGExNzYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dc3160236fc04b67a4c469e7df9233e9",
+      "statement": "A quick press/release cannot leave a stuck session: release cancels pendingKeyboardShortcutStartTask, finishes ink recording and stops dictation, while startPushToTalk checks Task.isCancelled at several checkpoints and compares a rolling pendingStartRequestIdentifier so a stale start cannot resurrect a torn-down session.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/BuddyDictationManager.swift#L440-L500",
+          "version": "repo-lines-v1:sha256:4bbdf4e1d3a81a013ab5c6d3a8af761737d91fa32c93efaa0b64ee5136f92056:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmYTUwYTY1OGJjOWRmMTg2Yzk1OWY5MGE1MzI1OWI1NDdlYTg4OGVmNTM0OWZmMWMyMzE5MDAwM2I2MTVhNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBhNzBmNGE5YTk4NTNmNjQwNWY3NWMxYTlkZmU2NzJmNWFkNmQwYzQyZTQ4ZWQxMzExNDFlNjk2NDFlMjdkOTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNiZjI1MDgyYTM5OWVkZWE0N2UzMjM1NjU1NTFjNmVmMjBiZjZmOTAzZDIyM2JlMDIzMzBkZWFhNjlhZmYxMWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRhYjE5ODBiYjYxNjkxOTdiZDU2YmE1MzE5M2NmMDg3NTAyNjdkOTQxMTJmZmNhNzY5ODAzMGI4MmUwYjU5M2UifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L796-L816",
+          "version": "repo-lines-v1:sha256:9cfee1ee10b927b45dfa414c829ec9398612c083ea73d46cc0e7042a96a501dd:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwZmM2YzZmNTczOTJkMmFjYTRjYjRjN2FjZDQwNDc2NjBjNTExYWIyZGE4M2QwY2QwNmUxNDBhOTdiNTdmNDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZkZDQ1M2NhNGZhOWY3YjEyODZjZjRjOTU0ZjQ4YTU2NDE5MGM4MmUwNjdjNzIyMWUyNDEyZjUxMjRjNGM2Y2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlZTQ1NTBhNDk4OGIzOTNmMWQ3MmMxOGEzMDFhNzIwNjg3NWU4NTljZjU2NTg1NmQzYTRkM2Y3NDViMDMzZTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cf3b17c9a9944377b0589b0f14c61f4d",
+      "statement": "While a screen action awaits consent, the next voice utterance answers the prompt: affirmative phrases (go/yes/yep/do it/confirm/sure/ok go...) confirm pending actions, negative phrases (no/cancel/stop/wait/don't...) cancel them, and any other utterance silently drops the pending action and proceeds as a brand-new request.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L705-L749",
+          "version": "repo-lines-v1:sha256:8c2b644ee27f736dadcfe1606260ad85eec4477b06320bb026bec6673e9258dd:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwMDZiMDkwYjQwMzM2NjU0OTkyMzJlNTMzNWY5MzRhNjZiNDljY2Q4MmUyNjkzNjRiYThkYmVlNzAzY2JhNmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVkZWMwMzQyMzE1YjYwYTY1ZjI5ZDhmODk5YzYzOTJmYmY2MWE4NDU0NTRkMmY4MDFiM2U0MGEzZWU3MDhmMzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgxZGU2ZjFmMzcyYTg3NjNkZWUyYjFkY2EzMzU2ZWRkMTI0Mzg4ZWU4ZDM3NTkxODRhZTNlMTU5NzY5ZGI2YzIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8546d76f7d584caea03120561dadbca1",
+      "statement": "A push-to-talk press cancels the previous response task, speech and running actions, emits .turnStarted, starts ink recording when Accessibility is granted, and starts capturing the cursor's display immediately so the screenshot is ready when the user releases the keys.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L751-L795",
+          "version": "repo-lines-v1:sha256:33dc787e58d7582f4c857fe01ea833483b09fd33345e1754f78454f67b1c6c5a:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjYzhiYzYxY2QzMDc1YzI0ZmU4OWZiNDBhMWMxZTAzYmMyZTM4YmQ2M2VkZjdkMzQ1M2MyMjI2ZDMyYTFjMDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1MjJjNDJjZDE5YzZkMDNkODA4YzQ1MjcyMDU1MjgyNWI3ZWExYzViNDkxYjIxODUxMWNhYzc0MTVjZjlkOWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcxZjZiNzY4MmVhY2NjNzc0M2YyM2M5MGQ1MDRiMzk0YjcwYWI2ZTQ3MDdjYTk0ZDE4OGZhMjA5Y2JhOTBjZTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBjNmZhNzc3MmNkZmJiYTllZDkzMjliNTVmMDJjOGMxNjMwY2I5ODQ2MmIxMzBkNzI2ZDliNWQ0N2RiNWNjOGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b5894e948ae6421281c2eb85248e688f",
+      "statement": "The voice path reuses the key-down screenshot only if it shows the display the cursor is on when the transcript is sent, records the spoken question via beginExchange before running the turn, and on cancellation saves the interrupted exchange while other errors fail the exchange and speak an on-device fallback.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L822-L890",
+          "version": "repo-lines-v1:sha256:1de93e84fd0fcfa8b9ae17b5ae860bab5c6ec2b50a9b51802af0f926169cbe4d:eyJzZWxlY3RlZExpbmVDb3VudCI6NjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhYThmOTVjY2VmOWVkOTRiYzJmZjNkYjc4ZDM4NzA1NGNmNWM1NjQwM2Q2ODhhODU5NDkzMmE2YzgwOWU1NjIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVhYTU2MmM3YWY1YjBiYjBhY2Q3NjQxMTYxMjk1MjUwMTNhOWEzNDg4MjFjMWFiZjYzZTRlZWVkNDI5NTA5YTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA3NmFiNjllNmU4YTRmOWUxNDU3OTdkODYzYjg0NWUwYmQ2MTMzOWRhNDM4YTEyZjBhMzQ3OTU5ZTUyOGYzYTEifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionScreenCaptureUtility.swift#L254-L265",
+          "version": "repo-lines-v1:sha256:aceebb15b5eddfafdb107231c4176924d58a4a91c456cdbed8a324adc321bdb9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkYTU4MTc1YWZmNGIxOTkxOTVlYjJjYmVmZDBjN2E0ZGY4MzZjNjhjNjQ4MTUxYzFkMWYyYzUyMTQ5ZjA4NTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0YmRmOTNiMmY4N2Y4MTk2ZGNmOWMxM2Y0M2ZiZjU1MzJjYWYyMGM0NTg0ODU4ZWZkOGQ1Zjk4MTUxOTFkOWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUxYWYxZjBmYjY4YjZlY2JiZTZjNTkzOWFiNGNmODE0ZjMyMTNhZjcyYmU3OTk3MTExZWVmNDIyODYwYWYxNzQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_068d28b4d7dd4fda9db6f46730e06a12",
+      "statement": "Typed chat runs the same CompanionTurnPipeline through respondToChatMessage with no prefetched capture and presents the reply through the same StreamingReplyPresenter, so typed turns are spoken when a voice is on.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L896-L935",
+          "version": "repo-lines-v1:sha256:91fb45de7059518f87958112dce59a8bdfc96ac6a2c5222e635c6abe2c7de3aa:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkMTVkNTM4OWY1MTI1MTVhM2NiNzBmMTI2ZjA3NDg1MDAwMTNhMmQ5ZmIzM2M2NDk4YjNlMDVlNjZiZGZmYmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU5YTkyOTU3MTgxNTliZDU2YzBjZjk1MDI1MjE5MDBmZDQ5NzExMDZjZmY2Zjk3MTFhNzliYjY2Y2M5MDEzYjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjYmE5ZTk0NzZkZjVmZWE1MDYyNzA0MmEwYmQwNTAzZDFlOWZlMTMxMTk3ZTExZGJlMWQzYzRmYmNmMjdlNmYifQ"
+        },
+        {
+          "resource": "repo://elfhub/TextChatView.swift#L80-L104",
+          "version": "repo-lines-v1:sha256:3e1d36493c19955031d296f71e592ac2648acd912508f0d0a02eef8440bc2ced:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJkMzMxYmE1OWNhNjg0MWE2YTAxNTM2NjQwZGJkYTQ2NTMzNGZkZDY1MzI3NzdmOGJiODNjNThhOGFhMDBmNTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjExY2M1NGVlOThjNmUzNmMwMDg3YWRkMjRmYTJiZjA3NmMyOTZkOWIzNWQ0NWQ5NGRiOGIzMjA2MzQ2YTRjOGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMzOGFmNjBiYTM5NTVlNzIyODcxNWNjYzdlOTgzZjQ0ODJmYjk1MjBmOWJjM2ViYjlmNWYyZDFkZjVlMzY4YTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7635d1ee82694c4f8e6a95f47cdbe024",
+      "statement": "When a tool-calling model returns guidance tool calls without any spoken text, the pipeline sends one follow-up request that answers each tool call with 'shown to the user on their screen' and replays the assistant turn's content unchanged, then merges the follow-up's text and tool calls.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionTurnPipeline.swift#L175-L208",
+          "version": "repo-lines-v1:sha256:aacd395f8c14dc5b9ebdf4d6137997a6a924530341e10097ac432be23ac623e2:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ5Yjg3Mjk2YTI4MmE2ZjYxYWMxODhiMjdjODExNDJkNmExNGNkZTBkNGZlN2U2MmJhNzc5Yzc0MTUyMjI2ZjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4NDU1NmVhZWU5MDhlY2MzMzFmNjkzNmU2NzAwYjM2NWEwNzVjZjU1MGFlODI2ZTIwMDc5MGIxMzllNWI5ZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmMTBlYjI4YzA5OGM4ZTkwMDBjYjEzNTVlOThmZGRlNGI2NmEyOTE3M2Y0NTdlNmM5ODZjM2RmYTcyMGYxYmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f4043c2a239f47d3846f41faf259c615",
+      "statement": "For vision models the user's ink is burned into the sent screenshot and described in the user's text in the model's coordinate convention, while the un-inked capture is kept as originalScreenshotJPEGData for chat history.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionTurnPipeline.swift#L108-L134",
+          "version": "repo-lines-v1:sha256:4874ceaebc93a06026b7205d7a8afe58da9760e00cb71d8fec0b74b5098c08e6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlYjU0N2RlNTI5OTBkYjliODdiODZmMmE2MzE0OWM1ZGEwMDc2NGFiZDFmOTY0NDEyMTU0YjM5OWE4MmE4MDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU2YjA0NDkxNDY5NzIyZTgzNjNhOTRlNDA0NDUzOGUwMTNhMmEyMTdlMzZiMWU1NjhiYTYwYWNiN2I0YzhmMmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4NDU1NmVhZWU5MDhlY2MzMzFmNjkzNmU2NzAwYjM2NWEwNzVjZjU1MGFlODI2ZTIwMDc5MGIxMzllNWI5ZmMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc4NjhhMTg5YjNkNjEzN2NhYmQ0MjJkZGE4MTU5MTFkYTIxNTUyNmVjMWEyZTkyYmYyMTk0ZWM4ZGNjNDdlNjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d173323147ed41549860f6cb66661096",
+      "statement": "StreamingReplyPresenter emits live tag-free captions, queues each completed sentence on StreamingSpeechPlayer (which prepares the next sentence while the current one plays and continues on the on-device voice if the chosen voice fails), and on abandon stops speech but still reveals every notepad line already written.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/StreamingSpeechPlayer.swift#L157-L222",
+          "version": "repo-lines-v1:sha256:b388dc8c816748d388c033663c45172bbaf0a1519a0931efe17213aa43a83d96:eyJzZWxlY3RlZExpbmVDb3VudCI6NjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQzNzMyYmJiNTI5MjQ3YjU4MTUyZjZmYzQyZDk2NTU0OGNiYmZiY2Y1YWUyOTk2MDNmNGEwZjYwZjdiMWYwN2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ5MGE2NzlhOGUwNGRiOGQ2ZWZkMWVhOGMzZWU0YjI1OTJlYTA5NDIwMDAxNTQ3MTU1ZWRhNWM0MDhkMjQ2MjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4ZmFmNjI4MTRkYTMwNzk0MjBkMDEwNmJjM2RjZjJjYTMwNWQxY2I5ZDg5Y2U1MDQyOTgwYWI3YjE5YmRjYzkifQ"
+        },
+        {
+          "resource": "repo://elfhub/StreamingSpeechPlayer.swift#L247-L319",
+          "version": "repo-lines-v1:sha256:48ecdc4ac30110ea749a37e78444de5c951fad57694920f46b5511ae72ef5f57:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ0NzUxNDBlMjZlOWM1YTE3MTFkNjQ0NWExOGI3ZjRhZTIwMjJmOTkzZWY2Mjg0MDc1NTQzMDFiOTZlMGRjMjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjllOWFlYmI5ZDQ5YmRlZDQ0ZTQyMjA3MzZkMDRmYjkyMzJiNjc5OGJiMjBlYTljZTY3NjYwMDQyMjgzMjA2YzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE4MmEzZjRkNjc2MTc3ZDQ5NzMxMjYxMGU3NTc1MjJmOWFjN2Q5OTNlMWE0ZDBjMTdhZjFjMDVjOGM1YjNhYjAifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}
