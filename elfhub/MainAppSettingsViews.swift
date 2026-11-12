@@ -14,6 +14,7 @@ import SwiftUI
 // MARK: - Categories
 
 enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
+    case elf
     case models
     case modes
     case shortcuts
@@ -25,6 +26,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
 
     var displayTitle: String {
         switch self {
+        case .elf: return "Elf"
         case .models: return "Models"
         case .modes: return "Modes"
         case .shortcuts: return "Shortcuts"
@@ -36,6 +38,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
 
     var systemImageName: String {
         switch self {
+        case .elf: return "sparkles"
         case .models: return "cpu"
         case .modes: return "slider.horizontal.3"
         case .shortcuts: return "keyboard"
@@ -47,6 +50,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
 
     var subtitle: String {
         switch self {
+        case .elf:
+            return "Who your elf is: its soul, what it knows about you, the skills it learned, and its home folder."
         case .models:
             return "Speech-to-text, the language model and the voice. Requests go straight from this app to the services you pick — or stay on this Mac with local models. Keys are kept in your Keychain."
         case .modes:
@@ -73,6 +78,8 @@ struct SettingsCategoryPage: View {
     var body: some View {
         MainAppPage(title: settingsCategory.displayTitle, subtitle: settingsCategory.subtitle) {
             switch settingsCategory {
+            case .elf:
+                ElfSettingsContent(companionManager: companionManager, elfManager: companionManager.elfManager)
             case .models:
                 ModelsSettingsContent(companionManager: companionManager)
             case .modes:

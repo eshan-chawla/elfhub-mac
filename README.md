@@ -20,6 +20,18 @@ elfhub is **desktop-first and bring-your-own-key**: there is no elfhub server, a
 - **Acts on your machine (with consent)** — click, type, scroll, or press shortcuts. Every action goes through a per-turn consent gate: only your own words asking elfhub to *do* something count as consent, and Esc stops it instantly.
 - **Text chat too** — type instead of talking whenever you want. Everything you ask, typed or spoken, is saved on your Mac and shows up in Chat (turn it off or delete it in Settings). Optionally, the screenshot each question sent can be kept too (off by default): it sits in a collapsible row under the message, opens in an in-app viewer, and when you or elfhub drew on it you can switch Before / After between the original and the marked-up version — the drawing and marks are redrawn from saved data, so only one image is stored.
 
+## Your elf
+
+The assistant is your **elf**, and it lives in a folder on your Mac (Settings › Elf, or `~/Library/Application Support/elfhub/Elves/main`):
+
+- **`soul.md`** — instructions it follows in every reply. You write it; the elf can only suggest changes.
+- **`profile.md`** — your personal preferences, as the elf noted them. Edit or clear it anytime.
+- **`skills/`** — working knowledge it learned, one markdown file per skill.
+- **`elf.json`** — its name, how it answers (reply length, tone, language) and the setup it was used with (never your keys).
+- **`files/`** — its own working files.
+
+The soul, profile and skills go to your language model with each question, like the rest of the conversation. **Export elf…** saves a `.elf` file with its config, soul and skills; your profile and its files are only included if you switch them on.
+
 ## The three model layers
 
 | Layer | Options |
