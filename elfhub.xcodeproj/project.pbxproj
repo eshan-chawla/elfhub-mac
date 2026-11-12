@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		E1F05B000000000000000021 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E1F05B000000000000000011 /* Sparkle */; };
+		E1F05A000000000000000021 /* MLXAudioCore in Frameworks */ = {isa = PBXBuildFile; productRef = E1F05A000000000000000011 /* MLXAudioCore */; };
+		E1F05A000000000000000022 /* MLXAudioTTS in Frameworks */ = {isa = PBXBuildFile; productRef = E1F05A000000000000000012 /* MLXAudioTTS */; };
+		E1F05A000000000000000023 /* MLXAudioSTT in Frameworks */ = {isa = PBXBuildFile; productRef = E1F05A000000000000000013 /* MLXAudioSTT */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +61,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				E1F05B000000000000000021 /* Sparkle in Frameworks */,
+				E1F05A000000000000000021 /* MLXAudioCore in Frameworks */,
+				E1F05A000000000000000022 /* MLXAudioTTS in Frameworks */,
+				E1F05A000000000000000023 /* MLXAudioSTT in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,6 +134,9 @@
 			name = elfhub;
 			packageProductDependencies = (
 				E1F05B000000000000000011 /* Sparkle */,
+				E1F05A000000000000000011 /* MLXAudioCore */,
+				E1F05A000000000000000012 /* MLXAudioTTS */,
+				E1F05A000000000000000013 /* MLXAudioSTT */,
 			);
 			productName = elfhub;
 			productReference = 28F22CBF2F56440300A0FC59 /* elfhub.app */;
@@ -213,6 +222,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E1F05B000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				E1F05A000000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 28F22CC02F56440300A0FC59 /* Products */;
@@ -614,6 +624,14 @@
 				version = 2.10.1;
 			};
 		};
+		E1F05A000000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Neywa-Labs/mlx-audio-swift.git";
+			requirement = {
+				kind = revision;
+				revision = 0e03fee81e87e6d6a186fb72610589bd92fc87cd;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -621,6 +639,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E1F05B000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		E1F05A000000000000000011 /* MLXAudioCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1F05A000000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */;
+			productName = MLXAudioCore;
+		};
+		E1F05A000000000000000012 /* MLXAudioTTS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1F05A000000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */;
+			productName = MLXAudioTTS;
+		};
+		E1F05A000000000000000013 /* MLXAudioSTT */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1F05A000000000000000001 /* XCRemoteSwiftPackageReference "mlx-audio-swift" */;
+			productName = MLXAudioSTT;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

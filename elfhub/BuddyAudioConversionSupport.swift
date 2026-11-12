@@ -69,7 +69,9 @@ final class BuddyPCM16AudioConverter {
     }
 }
 
-enum BuddyWAVFileBuilder {
+/// Pure byte building, so it can also run off the main actor (the on-device
+/// voice model runtime wraps its audio in WAV here).
+nonisolated enum BuddyWAVFileBuilder {
     static func buildWAVData(
         fromPCM16MonoAudio pcm16AudioData: Data,
         sampleRate: Int,

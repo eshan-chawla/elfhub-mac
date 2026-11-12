@@ -7,7 +7,8 @@
 //  The only network requests the app makes are the API calls to the model,
 //  speech and voice services the user configures (or to servers running on
 //  their own Mac), OpenAI's sign-in when the user chooses "Continue with
-//  ChatGPT", the web search and pages elves with the web on use, and the
+//  ChatGPT", the web search and pages elves with the web on use, model
+//  downloads from Hugging Face that the user starts themselves, and the
 //  published app's daily Sparkle update check against GitHub Releases.
 //
 //  Per-developer values (signing team, bundle id) go in Config/Local.xcconfig,
@@ -24,5 +25,9 @@ DEVELOPMENT_TEAM = 6L4MN688L8
 // It belongs to the maintainer's team, so contributors (and local development
 // builds) set their own id in Config/Local.xcconfig.
 ELFHUB_BUNDLE_IDENTIFIER = com.elfhub.os
+
+// Apple silicon only: on-device speech-to-text and voice models run on MLX
+// (mlx-audio-swift), which needs an Apple GPU and doesn't build for Intel.
+ARCHS = arm64
 
 #include? "Local.xcconfig"

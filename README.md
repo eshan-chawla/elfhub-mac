@@ -4,7 +4,7 @@
   <a href="https://github.com/eshan-chawla/elfhub/releases/latest/download/elfhub.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download elfhub for macOS" height="36"></a>
 </p>
 
-<sub>macOS 14.2 or later · free and open source (AGPL-3.0) · signed and notarized by Apple · <a href="https://github.com/eshan-chawla/elfhub/releases">all releases</a></sub>
+<sub>macOS 14.2 or later on Apple silicon (M1 or newer) · free and open source (AGPL-3.0) · signed and notarized by Apple · <a href="https://github.com/eshan-chawla/elfhub/releases">all releases</a></sub>
 
 An AI desktop companion for macOS. elfhub lives in your menu bar — it can see your screen, talk to you, point at and annotate what matters, and take actions on your computer on request. It works alongside the agent you're hacking with: performing real computer use in front of the agent to move your task along, and helping you learn new things as you work.
 
@@ -58,7 +58,7 @@ elfhub keeps itself up to date: once a day it checks GitHub Releases, and when a
 
 ## Build and run
 
-Prerequisites: macOS 14.2+ and Xcode 16+.
+Prerequisites: an Apple silicon Mac with macOS 14.2+, and Xcode 26+ with its Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`), which the on-device speech engine (MLX) needs.
 
 ```bash
 open elfhub.xcodeproj
