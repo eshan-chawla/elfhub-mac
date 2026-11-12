@@ -8,7 +8,7 @@
 
 An AI desktop companion for macOS. elfhub lives in your menu bar — it can see your screen, talk to you, point at and annotate what matters, and take actions on your computer on request. It works alongside the agent you're hacking with: performing real computer use in front of the agent to move your task along, and helping you learn new things as you work.
 
-elfhub is **desktop-first and bring-your-own-key**: there is no elfhub server, account, analytics or update feed. You choose each model layer yourself — a cloud API with your own key, or a model running on your Mac — and the only requests that leave the app are the API calls to the services you picked. Keys live in your Keychain; chats are saved only on your Mac.
+elfhub is **desktop-first and bring-your-own-key**: there is no elfhub server, account or analytics. You choose each model layer yourself — a cloud API with your own key, or a model running on your Mac — and the only requests that leave the app are the API calls to the services you picked, plus a once-a-day check on GitHub for a newer version of elfhub (it sends only the app's version; turn it off in Settings › General). Keys live in your Keychain; chats are saved only on your Mac.
 
 ## What it does
 
@@ -36,7 +36,7 @@ The **on-device model assistant** (Models → On-device models) finds Ollama, do
 2. Open it and drag **elfhub** into **Applications**.
 3. Open elfhub from Applications. It's signed and notarized, so macOS only asks you to confirm opening an app downloaded from the internet.
 
-elfhub doesn't update itself. To update, download the latest DMG and replace the app in Applications. Your settings, keys and chats stay where they are.
+elfhub keeps itself up to date: once a day it checks GitHub Releases, and when a new version is out it shows what's new with **Install**, **Remind me later** and **Skip**. Nothing is installed until you click Install (or switch on automatic installs). Every update is signed, so only real elfhub releases can install. Change this in Settings › General, or use **elfhub › Check for Updates…**. Your settings, keys and chats stay where they are.
 
 ## First launch
 
@@ -86,6 +86,7 @@ elfhub/          # Swift source
   CompanionPanelView.swift           Menu bar panel UI
   OverlayWindow.swift                Guidance overlay (pointer, annotations, status pill)
   BuddyDictation*.swift              Push-to-talk pipeline
+  AppUpdateController.swift          Sparkle updates (published app only)
 elfhubTests/     # Unit tests
 elfhubUITests/   # UI tests
 ```

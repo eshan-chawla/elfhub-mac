@@ -85,6 +85,10 @@ final class CompanionManager: ObservableObject {
     /// Downloads and manages models that run on this Mac (Ollama, Apple speech).
     let onDeviceModelAssistant = OnDeviceModelAssistant()
 
+    /// Sparkle updates for the published app; created at launch so the daily
+    /// check is scheduled straight away.
+    let appUpdateController = AppUpdateController()
+
     /// The optional walkthrough offered at the end of onboarding.
     lazy var guidedTutorialController: GuidedTutorialController = {
         let guidedTutorialController = GuidedTutorialController(companionEventBus: companionEventBus)

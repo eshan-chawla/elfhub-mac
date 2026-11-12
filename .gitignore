@@ -31,5 +31,8 @@ coding-plans/
 *.certSigningRequest
 *.mobileprovision
 *.provisionprofile
+# Exported Sparkle update-signing keys (generate_keys -x). Keep the backup offline.
+*.ed25519
+sparkle-private-key*
 .env
 .env.*
