@@ -8,6 +8,14 @@ swift -O scripts/icon/make-app-icon.swift
 
 Builds every size in `elfhub/Assets.xcassets/AppIcon.appiconset` (16–1024 px) from `brand/source/elfhub-icon-source.jpg`. It removes the dark background, resizes the igloo inside the square (`iglooScaleWithinRoundedSquare`, now 0.85, using the cut-out in `brand/source/elfhub-igloo-cutout-source.png`), fits the rounded square to Apple's macOS icon grid (824 px on a 1024 px canvas, with a soft shadow), and writes `brand/elfhub-icon-1024.png` and `brand/elfhub-icon.svg`. It also writes `brand/elfhub-igloo-1024.png` and `brand/elfhub-igloo.svg` from the igloo cut-out. Run it after changing the source artwork.
 
+## `icon/make-menu-bar-icon.swift` — Rebuild the menu bar icon
+
+```bash
+swift scripts/icon/make-menu-bar-icon.swift [preview.png]
+```
+
+Draws the one-colour igloo glyph (18 × 18 pt) that matches the app icon. It writes the glyph as a single SVG path to `elfhub/Assets.xcassets/MenuBarIcon.imageset/` (a vector template image, so macOS tints it for light and dark menu bars) and to `brand/elfhub-menu-bar-igloo.svg`. Pass a path to also get a large preview PNG.
+
 The icon artwork is all rights reserved, not AGPL — see `brand/LICENSE.md`.
 
 ## `release.sh` — Ship a new version of elfhub

@@ -65,45 +65,24 @@ final class MenuBarPanelManager: NSObject {
 
         guard let button = statusItem?.button else { return }
 
-        button.image = makeMenuBarIcon()
-        button.image?.isTemplate = true
+        button.image = Self.makeMenuBarIcon()
         button.action = #selector(statusItemClicked)
         button.target = self
     }
 
-    /// Draws the elfhub triangle as the menu bar icon (the app's mark).
-    private func makeMenuBarIcon() -> NSImage {
-        let iconSize: CGFloat = 18
-        let image = NSImage(size: NSSize(width: iconSize, height: iconSize))
-        image.lockFocus()
+    /// The asset catalog's "MenuBarIcon": the igloo glyph that matches the
+    /// app icon, kept as a vector template image so macOS tints it for light
+    /// and dark menu bars. Rebuilt by scripts/icon/make-menu-bar-icon.swift.
+    static let menuBarIconAssetName = "MenuBarIcon"
+    static let menuBarIconSizeInPoints: CGFloat = 18
 
-        let triangleSize = iconSize * 0.7
-        let cx = iconSize * 0.50
-        let cy = iconSize * 0.50
-        let height = triangleSize * sqrt(3.0) / 2.0
-
-        let top = CGPoint(x: cx, y: cy + height / 1.5)
-        let bottomLeft = CGPoint(x: cx - triangleSize / 2, y: cy - height / 3)
-        let bottomRight = CGPoint(x: cx + triangleSize / 2, y: cy - height / 3)
-
-        let angle = 35.0 * .pi / 180.0
-        func rotate(_ point: CGPoint) -> CGPoint {
-            let dx = point.x - cx, dy = point.y - cy
-            let cosA = CGFloat(cos(angle)), sinA = CGFloat(sin(angle))
-            return CGPoint(x: cx + cosA * dx - sinA * dy, y: cy + sinA * dx + cosA * dy)
-        }
-
-        let path = NSBezierPath()
-        path.move(to: rotate(top))
-        path.line(to: rotate(bottomLeft))
-        path.line(to: rotate(bottomRight))
-        path.close()
-
-        NSColor.black.setFill()
-        path.fill()
-
-        image.unlockFocus()
-        return image
+    static func makeMenuBarIcon() -> NSImage? {
+        guard let menuBarIcon = NSImage(named: menuBarIconAssetName) else { return nil }
+        menuBarIcon.size = NSSize(width: menuBarIconSizeInPoints, height: menuBarIconSizeInPoints)
+        // Set in the asset catalog too; repeated so the tinting never
+        // depends on how the catalog was compiled.
+        menuBarIcon.isTemplate = true
+        return menuBarIcon
     }
 
     @objc private func statusItemClicked() {
