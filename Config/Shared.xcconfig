@@ -6,7 +6,8 @@
 //  bring-your-own-key app: there is no elfhub server, account, analytics or
 //  update feed. The only network requests the app makes are the API calls to
 //  the model, speech and voice services the user configures (or to servers
-//  running on their own Mac).
+//  running on their own Mac), plus OpenAI's sign-in when the user chooses
+//  "Continue with ChatGPT" to use their ChatGPT plan.
 //
 //  Per-developer values (signing team, bundle id) go in Config/Local.xcconfig,
 //  which is gitignored. Copy Config/Local.xcconfig.example to get started.

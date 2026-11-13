@@ -169,7 +169,7 @@ final class GeminiLanguageModelProvider: LanguageModelProvider {
                 return [["functionCall": ["name": toolCall.toolName, "args": toolCall.argumentsDictionary]]]
             case let .toolResult(_, toolName, resultText):
                 return [["functionResponse": ["name": toolName, "response": ["result": resultText]]]]
-            case .anthropicRawBlock:
+            case .anthropicRawBlock, .openAIResponsesRawItem:
                 return []
             }
         }

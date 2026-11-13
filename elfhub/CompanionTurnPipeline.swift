@@ -74,41 +74,158 @@ final class CompanionTurnPipeline {
         conversationHistory = Array(historyTurns.suffix(Self.maximumHistoryTurns))
     }
 
-    /// Captures the display the cursor is on at the size the active model
-    /// wants. Called at push-to-talk key-down so the screenshot is ready
-    /// before the user finishes speaking.
+    /// Captures the display the cursor is on at the size the model that will
+    /// answer wants (the ChatGPT plan's fallback while the plan can't).
+    /// Called at push-to-talk key-down so the screenshot is ready before the
+    /// user finishes speaking.
     func captureCursorScreenForActiveModel() async throws -> [CompanionScreenCapture] {
-        let visionProfile = providerConfigurationStore.activeConfiguration?.visionProfile
+        let visionProfile = providerConfigurationStore.configurationForNextTurn()?.visionProfile
             ?? .genericVisionModel(coordinateConvention: .imagePixels)
         return try await CompanionScreenCaptureUtility.captureCursorScreenAsJPEG(visionProfile: visionProfile)
     }
 
     // MARK: - Turn
 
+    /// - Parameter onLanguageModelSwitched: called when the ChatGPT plan
+    ///   can't answer and the turn starts over on the fallback model (the
+    ///   caller drops what streamed so far), and when the plan answers again
+    ///   after a stretch on the fallback.
     func runTurn(
         userText: String,
         prefetchedScreenCaptures: [CompanionScreenCapture]?,
         userInkStrokes: [UserInkStroke] = [],
         isSpokenTurn: Bool = false,
-        onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void
+        onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
+        onLanguageModelSwitched: @escaping @MainActor (LanguageModelSwitchNotice) -> Void = { _ in }
     ) async throws -> TurnResult {
         // This turn replaces whatever the previous one was doing on screen,
         // and only this turn's actions may run from now on.
         let screenActionTurnToken = screenActionCoordinator.beginTurn()
 
-        let languageModelProvider = try providerConfigurationStore.makeActiveProvider()
-        let capabilities = languageModelProvider.capabilities
-        let coordinateConvention = capabilities.visionProfile.coordinateConvention
+        guard let turnConfiguration = providerConfigurationStore.configurationForNextTurn() else {
+            throw LanguageModelProviderError.missingConfiguration("add a model in Settings, under Models")
+        }
 
         var screenCaptures: [CompanionScreenCapture]
         if let prefetchedScreenCaptures, !prefetchedScreenCaptures.isEmpty {
             screenCaptures = prefetchedScreenCaptures
         } else {
             screenCaptures = try await CompanionScreenCaptureUtility.captureCursorScreenAsJPEG(
-                visionProfile: capabilities.visionProfile
+                visionProfile: turnConfiguration.visionProfile
             )
         }
         try Task.checkCancellation()
+
+        do {
+            let turnResult = try await runModelPartOfTurn(
+                languageModelProvider: try providerConfigurationStore.makeProvider(for: turnConfiguration),
+                userText: userText,
+                screenCaptures: screenCaptures,
+                userInkStrokes: userInkStrokes,
+                isSpokenTurn: isSpokenTurn,
+                screenActionTurnToken: screenActionTurnToken,
+                onReplyTextDelta: onReplyTextDelta
+            )
+            if turnConfiguration.kind == .chatGPTPlan, providerConfigurationStore.chatGPTPlanUnavailableSince != nil {
+                providerConfigurationStore.clearChatGPTPlanUnavailable()
+                onLanguageModelSwitched(.returnedToChatGPTPlan)
+            }
+            return turnResult
+        } catch {
+            let fallbackConfiguration = providerConfigurationStore.fallbackConfiguration
+            guard let fallbackConfigurationForThisTurn = Self.fallbackConfiguration(
+                afterFailure: error,
+                of: turnConfiguration,
+                fallbackConfiguration: fallbackConfiguration,
+                isFallbackReady: fallbackConfiguration.map(providerConfigurationStore.isReady) ?? false
+            ), let planUsageError = error as? ChatGPTPlanUsageError else {
+                throw error
+            }
+            try Task.checkCancellation()
+            if let pauseReason = Self.chatGPTPlanPauseReason(afterFailure: planUsageError) {
+                // Later turns go to the fallback too; the plan is tried
+                // again on a new turn an hour from now.
+                providerConfigurationStore.recordChatGPTPlanUnavailable(reason: pauseReason)
+            }
+            onLanguageModelSwitched(.switchedToFallback(
+                fallbackModelName: fallbackConfigurationForThisTurn.displayName,
+                reason: planUsageError
+            ))
+
+            // Same screenshot when it's within the fallback's image limits;
+            // otherwise a new one sized for it (an oversized image would be
+            // shrunk by the provider and the coordinates would drift).
+            let fallbackVisionProfile = fallbackConfigurationForThisTurn.visionProfile
+            let screenCapturesFitTheFallback = screenCaptures.allSatisfy { screenCapture in
+                ScreenshotGeometry.imageFits(
+                    widthInPixels: screenCapture.screenshotWidthInPixels,
+                    heightInPixels: screenCapture.screenshotHeightInPixels,
+                    profile: fallbackVisionProfile
+                )
+            }
+            if !screenCapturesFitTheFallback {
+                screenCaptures = try await CompanionScreenCaptureUtility.captureCursorScreenAsJPEG(visionProfile: fallbackVisionProfile)
+                try Task.checkCancellation()
+            }
+            return try await runModelPartOfTurn(
+                languageModelProvider: try providerConfigurationStore.makeProvider(for: fallbackConfigurationForThisTurn),
+                userText: userText,
+                screenCaptures: screenCaptures,
+                userInkStrokes: userInkStrokes,
+                isSpokenTurn: isSpokenTurn,
+                screenActionTurnToken: screenActionTurnToken,
+                onReplyTextDelta: onReplyTextDelta
+            )
+        }
+    }
+
+    /// The model that should answer this turn after `failure`, or nil to let
+    /// the failure stand. Only a ChatGPT-plan problem (its usage limit,
+    /// eligibility, availability or sign-in) moves the turn, and only to a
+    /// ready fallback that isn't the plan itself.
+    nonisolated static func fallbackConfiguration(
+        afterFailure failure: Error,
+        of failedConfiguration: ProviderConfiguration,
+        fallbackConfiguration: ProviderConfiguration?,
+        isFallbackReady: Bool
+    ) -> ProviderConfiguration? {
+        guard failedConfiguration.kind == .chatGPTPlan,
+              let planUsageError = failure as? ChatGPTPlanUsageError,
+              planUsageError.switchesToFallbackModel,
+              let fallbackConfiguration,
+              isFallbackReady,
+              fallbackConfiguration.kind != .chatGPTPlan else {
+            return nil
+        }
+        return fallbackConfiguration
+    }
+
+    /// Whether a ChatGPT-plan failure pauses the plan for an hour. Only the
+    /// usage limit and an ineligible plan do: they won't clear in a moment.
+    /// A brief outage or a sign-in problem moves just this turn.
+    nonisolated static func chatGPTPlanPauseReason(afterFailure failure: Error) -> ChatGPTPlanUnavailableReason? {
+        switch failure as? ChatGPTPlanUsageError {
+        case .usageLimitReached: return .usageLimitReached
+        case .notEligible: return .notEligible
+        default: return nil
+        }
+    }
+
+    /// Everything after the screenshot: ink, prompt, model, guidance,
+    /// actions and history. Runs once, or twice when the ChatGPT plan hands
+    /// the turn to the fallback model.
+    private func runModelPartOfTurn(
+        languageModelProvider: LanguageModelProvider,
+        userText: String,
+        screenCaptures capturedScreenCaptures: [CompanionScreenCapture],
+        userInkStrokes: [UserInkStroke],
+        isSpokenTurn: Bool,
+        screenActionTurnToken: ScreenActionTurnToken,
+        onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void
+    ) async throws -> TurnResult {
+        let capabilities = languageModelProvider.capabilities
+        let coordinateConvention = capabilities.visionProfile.coordinateConvention
+        var screenCaptures = capturedScreenCaptures
 
         // What the user drew while talking goes into the screenshot itself
         // (the only copy kept) and into words, so "this" can be resolved.

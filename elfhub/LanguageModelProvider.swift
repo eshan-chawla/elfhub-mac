@@ -80,6 +80,11 @@ enum LanguageModelContentBlock {
     /// follow-up request can replay the assistant turn unchanged. Other
     /// providers ignore it.
     case anthropicRawBlock(String)
+    /// A Responses API output item (reasoning, function call, message) kept
+    /// verbatim as JSON so the tool follow-up can replay it — reasoning
+    /// items carry encrypted content the model needs back. Other providers
+    /// ignore it.
+    case openAIResponsesRawItem(String)
 }
 
 struct LanguageModelMessage {
@@ -315,10 +320,14 @@ enum LanguageModelHTTPStreaming {
     /// while the server answers with a retryable status or the connection
     /// fails before any byte of the reply arrives. A non-retryable error
     /// status throws `httpError` with the server's message.
+    /// `shouldRetryErrorResponse` lets a provider refuse retries for errors
+    /// that waiting won't fix even though their status is usually
+    /// retryable (a ChatGPT plan's usage limit is a 429).
     static func openStream(
         _ urlRequest: URLRequest,
         using session: URLSession,
-        providerName: String
+        providerName: String,
+        shouldRetryErrorResponse: ((_ statusCode: Int, _ responseBody: String) -> Bool)? = nil
     ) async throws -> URLSession.AsyncBytes {
         var attemptNumber = 1
         while true {
@@ -350,8 +359,9 @@ enum LanguageModelHTTPStreaming {
             }
             let errorBody = errorBodyLines.joined(separator: "\n")
 
-            guard attemptNumber < LanguageModelRetryPolicy.maximumAttemptCount,
-                  LanguageModelRetryPolicy.shouldRetry(statusCode: httpResponse.statusCode) else {
+            let isRetryableErrorResponse = shouldRetryErrorResponse?(httpResponse.statusCode, errorBody)
+                ?? LanguageModelRetryPolicy.shouldRetry(statusCode: httpResponse.statusCode)
+            guard attemptNumber < LanguageModelRetryPolicy.maximumAttemptCount, isRetryableErrorResponse else {
                 throw LanguageModelProviderError.httpError(statusCode: httpResponse.statusCode, body: errorBody)
             }
             let delayInSeconds = LanguageModelRetryPolicy.delayBeforeRetry(

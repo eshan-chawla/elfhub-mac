@@ -15,6 +15,9 @@ enum LanguageModelProviderKind: String, Codable, CaseIterable, Identifiable {
     case anthropic
     case openAICompatible
     case gemini
+    /// OpenAI models paid for by the user's ChatGPT plan, after "Continue
+    /// with ChatGPT" (Responses API with an OAuth token, no API key).
+    case chatGPTPlan
 
     var id: String { rawValue }
 
@@ -23,6 +26,7 @@ enum LanguageModelProviderKind: String, Codable, CaseIterable, Identifiable {
         case .anthropic: return "Anthropic"
         case .openAICompatible: return "OpenAI-compatible"
         case .gemini: return "Google Gemini"
+        case .chatGPTPlan: return "ChatGPT plan"
         }
     }
 
@@ -32,6 +36,7 @@ enum LanguageModelProviderKind: String, Codable, CaseIterable, Identifiable {
         case .anthropic: return "https://api.anthropic.com"
         case .openAICompatible: return "https://openrouter.ai/api/v1  (or http://localhost:11434/v1)"
         case .gemini: return "https://generativelanguage.googleapis.com/v1beta"
+        case .chatGPTPlan: return ChatGPTPlanOAuthConstants.resource
         }
     }
 
@@ -39,7 +44,7 @@ enum LanguageModelProviderKind: String, Codable, CaseIterable, Identifiable {
     /// support it reliably; local servers vary by model, so it's opt-in there.
     var defaultSupportsToolCalling: Bool {
         switch self {
-        case .anthropic, .gemini: return true
+        case .anthropic, .gemini, .chatGPTPlan: return true
         case .openAICompatible: return false
         }
     }
@@ -50,7 +55,7 @@ enum LanguageModelProviderKind: String, Codable, CaseIterable, Identifiable {
     /// set per configuration.
     var defaultCoordinateConvention: ModelCoordinateConvention {
         switch self {
-        case .anthropic, .openAICompatible: return .imagePixels
+        case .anthropic, .openAICompatible, .chatGPTPlan: return .imagePixels
         case .gemini: return .normalizedTo999
         }
     }
@@ -124,7 +129,7 @@ struct ProviderConfiguration: Codable, Identifiable, Equatable {
         switch kind {
         case .anthropic:
             return ModelVisionProfile.forAnthropicModel(identifier: model)
-        case .openAICompatible, .gemini:
+        case .openAICompatible, .gemini, .chatGPTPlan:
             return ModelVisionProfile.genericVisionModel(coordinateConvention: coordinateConvention)
         }
     }
@@ -138,10 +143,12 @@ struct ProviderConfiguration: Codable, Identifiable, Equatable {
     }
 
     /// Whether this configuration needs a key: local servers usually need
-    /// none; cloud APIs always do.
+    /// none; cloud APIs always do, except the ChatGPT plan, which uses the
+    /// ChatGPT sign-in instead.
     var requiresAPIKey: Bool {
         switch kind {
         case .anthropic, .gemini: return true
+        case .chatGPTPlan: return false
         case .openAICompatible: return !LocalModelServerPreset.isLocalBaseURL(baseURL)
         }
     }
@@ -155,6 +162,21 @@ struct ProviderConfiguration: Codable, Identifiable, Equatable {
     /// A direct Claude configuration for the user's own Anthropic key.
     static func directAnthropic() -> ProviderConfiguration {
         LanguageModelProviderCatalog.preset(withIdentifier: "anthropic")!.makeConfiguration()
+    }
+
+    static let chatGPTPlanPresetIdentifier = "chatgpt-plan"
+
+    /// The configuration for the user's ChatGPT plan (one per Mac, since
+    /// elfhub signs in to one ChatGPT account).
+    static func chatGPTPlan(model: String) -> ProviderConfiguration {
+        ProviderConfiguration(
+            kind: .chatGPTPlan,
+            displayName: "ChatGPT plan",
+            baseURL: ChatGPTPlanOAuthConstants.resource,
+            model: model,
+            supportsVision: true,
+            presetIdentifier: chatGPTPlanPresetIdentifier
+        )
     }
 
     /// A configuration for a local OpenAI-compatible model server.

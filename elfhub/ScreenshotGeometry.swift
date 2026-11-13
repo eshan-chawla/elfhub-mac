@@ -159,6 +159,13 @@ enum ScreenshotGeometry {
         return (targetWidth, targetHeight)
     }
 
+    /// True when an image of this size is within a model's limits, so a
+    /// screenshot taken for one model can be sent to another unchanged.
+    static func imageFits(widthInPixels: Int, heightInPixels: Int, profile: ModelVisionProfile) -> Bool {
+        max(widthInPixels, heightInPixels) <= profile.maximumLongEdgeInPixels
+            && widthInPixels * heightInPixels <= profile.maximumTotalPixels
+    }
+
     /// Converts a coordinate the model returned into the sent image's pixel
     /// space (top-left origin). Pixel conventions pass through unchanged.
     static func screenshotPixel(

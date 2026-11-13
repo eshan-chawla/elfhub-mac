@@ -892,18 +892,19 @@ final class CompanionManager: ObservableObject {
         // Voice turns are part of the conversation history, next to typed
         // ones. Recorded before the turn runs: after a quiet spell this starts
         // a new conversation, which also clears what the model remembers.
-        let recordedVoiceExchange = textChatViewModel.beginExchange(userText: transcript, inputSource: .spoken)
+        var recordedVoiceExchange = textChatViewModel.beginExchange(userText: transcript, inputSource: .spoken)
         let userInkStrokes = pendingUserInkStrokes
         pendingUserInkStrokes = []
 
         currentResponseTask = Task {
             voiceState = .processing
-            let streamingReplyPresenter = StreamingReplyPresenter(
+            var streamingReplyPresenter = StreamingReplyPresenter(
                 companionEventBus: companionEventBus,
                 streamingSpeechPlayer: streamingSpeechPlayer,
                 speechProvider: speechProviderForCurrentSettings()
             )
             var rawReplyText = ""
+            var languageModelSwitchNotice: LanguageModelSwitchNotice?
             do {
                 let prefetchedScreenCaptures = await prefetchedScreenCaptureTask?.value
                 let reusablePrefetchedScreenCaptures = CompanionScreenCaptureUtility.shouldReusePrefetchedScreenCaptures(
@@ -920,6 +921,32 @@ final class CompanionManager: ObservableObject {
                         streamingReplyPresenter.receive(replyTextDelta: replyTextDelta)
                         rawReplyText += replyTextDelta
                         textChatViewModel.showStreamingReply(rawReplyText: rawReplyText, for: recordedVoiceExchange)
+                    },
+                    onLanguageModelSwitched: { [weak self] switchNotice in
+                        guard let self else { return }
+                        languageModelSwitchNotice = switchNotice
+                        self.companionEventBus.emit(.hintRequested(switchNotice.message))
+                        self.textChatViewModel.showLanguageModelSwitchNotice(
+                            switchNotice,
+                            inConversationWithIdentifier: recordedVoiceExchange.conversationIdentifier
+                        )
+                        guard case .switchedToFallback = switchNotice else { return }
+                        // The fallback answers from the start: stop what was
+                        // being said, keep any partial reply as interrupted,
+                        // and stream the new answer into a fresh reply.
+                        streamingReplyPresenter.abandon()
+                        recordedVoiceExchange = self.textChatViewModel.restartExchangeAfterLanguageModelSwitch(
+                            recordedVoiceExchange,
+                            userText: transcript,
+                            inputSource: .spoken,
+                            rawReplyTextSoFar: rawReplyText
+                        )
+                        rawReplyText = ""
+                        streamingReplyPresenter = StreamingReplyPresenter(
+                            companionEventBus: self.companionEventBus,
+                            streamingSpeechPlayer: self.streamingSpeechPlayer,
+                            speechProvider: self.speechProviderForCurrentSettings()
+                        )
                     }
                 )
                 streamingReplyPresenter.finish(finalSpokenText: turnResult.spokenText)
@@ -943,6 +970,15 @@ final class CompanionManager: ObservableObject {
                     voiceState = .idle
                 }
                 companionEventBus.emit(.turnFinished)
+                // Shown again once the reply is done: while it streamed, the
+                // caption took the pill's place. Not over actions, though:
+                // "esc to stop" matters more while elfhub is acting.
+                if let languageModelSwitchNotice,
+                   Self.shouldShowLanguageModelSwitchHintAfterTurn(
+                       isRunningScreenActions: screenActionCoordinator.isRunningActions
+                   ) {
+                    companionEventBus.emit(.hintRequested(languageModelSwitchNotice.message))
+                }
             }
             if inFlightResponseIdentifier == responseIdentifier {
                 inFlightResponseIdentifier = nil
@@ -954,9 +990,14 @@ final class CompanionManager: ObservableObject {
     /// result (final text + the screenshot it sent) returned to the chat UI.
     /// Runs the same screenshot + guidance + actions pipeline, and speaks per
     /// the current voice setting.
+    /// - Parameter onLanguageModelSwitched: the turn moved between the
+    ///   ChatGPT plan and the fallback model. On `.switchedToFallback` the
+    ///   fallback starts over, so the chat keeps what streamed so far as an
+    ///   interrupted reply.
     func respondToChatMessage(
         _ userText: String,
-        onTextChunk: @escaping @MainActor @Sendable (String) -> Void
+        onTextChunk: @escaping @MainActor @Sendable (String) -> Void,
+        onLanguageModelSwitched: @escaping @MainActor (LanguageModelSwitchNotice) -> Void = { _ in }
     ) async throws -> CompanionTurnPipeline.TurnResult {
         stopSpeech()
         screenActionCoordinator.stopRunningActions(spokenReason: nil)
@@ -971,7 +1012,7 @@ final class CompanionManager: ObservableObject {
             companionEventBus.emit(.turnFinished)
         }
 
-        let streamingReplyPresenter = StreamingReplyPresenter(
+        var streamingReplyPresenter = StreamingReplyPresenter(
             companionEventBus: companionEventBus,
             streamingSpeechPlayer: streamingSpeechPlayer,
             speechProvider: speechProviderForCurrentSettings()
@@ -984,6 +1025,19 @@ final class CompanionManager: ObservableObject {
                     turnLatencyTimeline.mark(.firstReplyText)
                     streamingReplyPresenter.receive(replyTextDelta: replyTextDelta)
                     onTextChunk(replyTextDelta)
+                },
+                onLanguageModelSwitched: { [weak self] switchNotice in
+                    guard let self else { return }
+                    self.companionEventBus.emit(.hintRequested(switchNotice.message))
+                    if case .switchedToFallback = switchNotice {
+                        streamingReplyPresenter.abandon()
+                        streamingReplyPresenter = StreamingReplyPresenter(
+                            companionEventBus: self.companionEventBus,
+                            streamingSpeechPlayer: self.streamingSpeechPlayer,
+                            speechProvider: self.speechProviderForCurrentSettings()
+                        )
+                    }
+                    onLanguageModelSwitched(switchNotice)
                 }
             )
             streamingReplyPresenter.finish(finalSpokenText: turnResult.spokenText)
@@ -997,19 +1051,33 @@ final class CompanionManager: ObservableObject {
         }
     }
 
+    /// Whether the switch hint is shown again in the pill after a turn. The
+    /// pill can show one thing; while actions run it says what elfhub is
+    /// doing and how to stop it, and the chat notice still has the switch.
+    nonisolated static func shouldShowLanguageModelSwitchHintAfterTurn(isRunningScreenActions: Bool) -> Bool {
+        !isRunningScreenActions
+    }
+
+    /// What elfhub says when a turn fails.
+    nonisolated static func spokenErrorUtterance(for error: Error) -> String {
+        if case let LanguageModelProviderError.missingConfiguration(detail) = error {
+            return "I can't answer yet: \(detail)."
+        } else if error is ClaudeAPIError {
+            return "Sorry, the model declined that request."
+        } else if let planUsageError = error as? ChatGPTPlanUsageError {
+            // No fallback model answered, so say what to do about the plan.
+            return planUsageError.errorDescription ?? "Your ChatGPT plan couldn't answer."
+        } else {
+            return "Sorry, I couldn't get a response. Check your connection or model settings and try again."
+        }
+    }
+
     /// Speaks a short error with the on-device voice when a turn fails — the
     /// configured voice may be the thing that's unreachable — and says what
     /// to fix when the cause is a missing setup step.
     private func speakResponseErrorFallback(for error: Error) {
         CompanionEarcon.failed.play()
-        let utterance: String
-        if case let LanguageModelProviderError.missingConfiguration(detail) = error {
-            utterance = "I can't answer yet: \(detail)."
-        } else if error is ClaudeAPIError {
-            utterance = "Sorry, the model declined that request."
-        } else {
-            utterance = "Sorry, I couldn't get a response. Check your connection or model settings and try again."
-        }
+        let utterance = Self.spokenErrorUtterance(for: error)
         companionEventBus.emit(.responseCaptionAvailable(utterance))
         streamingSpeechPlayer.speakCompleteText(utterance, using: systemSpeechProvider)
     }

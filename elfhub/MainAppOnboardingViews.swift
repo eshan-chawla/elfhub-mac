@@ -106,7 +106,7 @@ struct OnboardingPane: View {
                     .foregroundColor(DS.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("elfhub runs on your Mac with your own keys or local models. There's no elfhub account or server — the only things that leave this app are the requests to the services you pick below.")
+                Text("elfhub runs on your Mac with your own keys, your ChatGPT plan, or local models. There's no elfhub account or server — the only things that leave this app are the requests to the services you pick below.")
                     .font(.system(size: 12))
                     .foregroundColor(DS.Colors.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -15,14 +15,26 @@ enum KeychainSecretStore {
     private static let service = "so.elfhub.secrets"
 
     /// Stores (or clears, when `secret` is nil/empty) a secret for `account`.
+    /// An existing item is updated in place, so there is never a moment with
+    /// no item: the ChatGPT sign-in's refresh token rotates on every renewal
+    /// and must not be lost if the app quits mid-write.
     @discardableResult
     static func setSecret(_ secret: String?, forAccount account: String) -> Bool {
-        // Remove any existing item first so we never duplicate.
-        deleteSecret(forAccount: account)
-
         guard let secret, !secret.isEmpty, let secretData = secret.data(using: .utf8) else {
-            return true // clearing is success
+            return deleteSecret(forAccount: account)
         }
+
+        let existingItemQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        let updateStatus = SecItemUpdate(
+            existingItemQuery as CFDictionary,
+            [kSecValueData as String: secretData] as CFDictionary
+        )
+        if updateStatus == errSecSuccess { return true }
+        guard updateStatus == errSecItemNotFound else { return false }
 
         let attributes: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

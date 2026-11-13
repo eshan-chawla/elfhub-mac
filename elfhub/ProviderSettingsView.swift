@@ -89,15 +89,18 @@ struct ProviderSettingsView: View {
             )
 
             if !isReady {
-                capabilityBadge(text: configuration.model.isEmpty ? "pick a model" : "needs key", color: DS.Colors.warning)
+                capabilityBadge(text: notReadyBadgeText(for: configuration), color: DS.Colors.warning)
             }
 
-            Button(action: { startEditing(configuration) }) {
-                Image(systemName: "pencil").foregroundColor(DS.Colors.textTertiary)
+            // The ChatGPT plan is set up on its own card above, not here.
+            if configuration.kind != .chatGPTPlan {
+                Button(action: { startEditing(configuration) }) {
+                    Image(systemName: "pencil").foregroundColor(DS.Colors.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Edit")
+                .pointerCursor()
             }
-            .buttonStyle(.plain)
-            .help("Edit")
-            .pointerCursor()
 
             Button(action: { store.delete(id: configuration.id) }) {
                 Image(systemName: "trash").foregroundColor(DS.Colors.textTertiary)
@@ -114,6 +117,11 @@ struct ProviderSettingsView: View {
         .contentShape(Rectangle())
         .onTapGesture { store.setActiveConfiguration(id: configuration.id) }
         .pointerCursor()
+    }
+
+    private func notReadyBadgeText(for configuration: ProviderConfiguration) -> String {
+        if configuration.model.isEmpty { return "pick a model" }
+        return configuration.kind == .chatGPTPlan ? "needs sign-in" : "needs key"
     }
 
     private func capabilityBadge(text: String, color: Color) -> some View {
@@ -327,7 +335,9 @@ struct ProviderSettingsView: View {
 
             labeledField("API format") {
                 Picker("", selection: bindingForKind()) {
-                    ForEach(LanguageModelProviderKind.allCases) { kind in
+                    // The ChatGPT plan isn't an API format you can point at
+                    // another endpoint; it's set up with its own sign-in.
+                    ForEach(LanguageModelProviderKind.allCases.filter { $0 != .chatGPTPlan }) { kind in
                         Text(kind.displayLabel).tag(kind)
                     }
                 }

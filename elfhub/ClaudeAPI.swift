@@ -342,6 +342,8 @@ final class ClaudeAPI {
                     return []
                 }
                 return [rawBlock]
+            case .openAIResponsesRawItem:
+                return []
             }
         }
         return ["role": role, "content": contentBlocks]

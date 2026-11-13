@@ -160,7 +160,7 @@ final class OpenAICompatibleLanguageModelProvider: LanguageModelProvider {
                 contentParts.append(["type": "text", "text": image.label])
             case let .toolResult(toolCallIdentifier, _, resultText):
                 toolResultMessages.append(["role": "tool", "tool_call_id": toolCallIdentifier, "content": resultText])
-            case .toolCall, .anthropicRawBlock:
+            case .toolCall, .anthropicRawBlock, .openAIResponsesRawItem:
                 continue
             }
         }
@@ -188,7 +188,7 @@ final class OpenAICompatibleLanguageModelProvider: LanguageModelProvider {
                     "type": "function",
                     "function": ["name": toolCall.toolName, "arguments": toolCall.argumentsJSON],
                 ])
-            case .image, .toolResult, .anthropicRawBlock:
+            case .image, .toolResult, .anthropicRawBlock, .openAIResponsesRawItem:
                 continue
             }
         }

@@ -25,6 +25,16 @@ final class TextChatViewModel: ObservableObject {
     @Published private(set) var activeConversation = ChatConversation()
     @Published private(set) var isResponding = false
     @Published var draft: String = ""
+    /// Shown above the chat whose turn the ChatGPT plan handed to the
+    /// fallback model (or took over again), until the user dismisses it.
+    @Published private(set) var languageModelSwitchChatNotice: LanguageModelSwitchChatNotice?
+
+    /// The switch notice for the chat on screen, if it belongs to that chat.
+    var visibleLanguageModelSwitchNotice: LanguageModelSwitchNotice? {
+        guard let languageModelSwitchChatNotice,
+              languageModelSwitchChatNotice.isShown(inConversationWithIdentifier: activeConversation.id) else { return nil }
+        return languageModelSwitchChatNotice.switchNotice
+    }
 
     let chatConversationStore: ChatConversationStore
     private let companionManager: CompanionManager
@@ -82,17 +92,34 @@ final class TextChatViewModel: ObservableObject {
         guard !trimmed.isEmpty, !isResponding else { return }
         draft = ""
 
-        let recordedExchange = beginExchange(userText: trimmed, inputSource: .typed)
+        var recordedExchange = beginExchange(userText: trimmed, inputSource: .typed)
         isResponding = true
 
         currentTask = Task { [weak self] in
             guard let self else { return }
             var rawReplyText = ""
             do {
-                let turnResult = try await self.companionManager.respondToChatMessage(trimmed) { chunk in
-                    rawReplyText += chunk
-                    self.showStreamingReply(rawReplyText: rawReplyText, for: recordedExchange)
-                }
+                let turnResult = try await self.companionManager.respondToChatMessage(
+                    trimmed,
+                    onTextChunk: { chunk in
+                        rawReplyText += chunk
+                        self.showStreamingReply(rawReplyText: rawReplyText, for: recordedExchange)
+                    },
+                    onLanguageModelSwitched: { switchNotice in
+                        self.showLanguageModelSwitchNotice(
+                            switchNotice,
+                            inConversationWithIdentifier: recordedExchange.conversationIdentifier
+                        )
+                        guard case .switchedToFallback = switchNotice else { return }
+                        recordedExchange = self.restartExchangeAfterLanguageModelSwitch(
+                            recordedExchange,
+                            userText: trimmed,
+                            inputSource: .typed,
+                            rawReplyTextSoFar: rawReplyText
+                        )
+                        rawReplyText = ""
+                    }
+                )
                 self.completeExchange(recordedExchange, with: turnResult)
             } catch is CancellationError {
                 self.saveInterruptedExchange(recordedExchange, rawReplyTextSoFar: rawReplyText)
@@ -187,6 +214,47 @@ final class TextChatViewModel: ObservableObject {
         }
     }
 
+    /// The ChatGPT plan stopped partway and the fallback model answers the
+    /// same question from the start. A reply that had already begun is kept
+    /// as interrupted and the new answer gets its own exchange in the same
+    /// chat (even if the user has opened another one since); if nothing had
+    /// streamed yet, the same reply bubble is reused.
+    func restartExchangeAfterLanguageModelSwitch(
+        _ recordedExchange: RecordedExchange,
+        userText: String,
+        inputSource: StoredChatMessage.InputSource,
+        rawReplyTextSoFar: String
+    ) -> RecordedExchange {
+        guard !rawReplyTextSoFar.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return recordedExchange
+        }
+        saveInterruptedExchange(recordedExchange, rawReplyTextSoFar: rawReplyTextSoFar)
+        var restartedExchange = recordedExchange
+        updateConversation(withIdentifier: recordedExchange.conversationIdentifier, savingToDisk: true) { conversation in
+            let exchangeIdentifiers = conversation.appendExchange(userText: userText, inputSource: inputSource)
+            restartedExchange = RecordedExchange(
+                conversationIdentifier: recordedExchange.conversationIdentifier,
+                userMessageIdentifier: exchangeIdentifiers.userMessageIdentifier,
+                assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier
+            )
+        }
+        return restartedExchange
+    }
+
+    func showLanguageModelSwitchNotice(
+        _ switchNotice: LanguageModelSwitchNotice,
+        inConversationWithIdentifier conversationIdentifier: UUID
+    ) {
+        languageModelSwitchChatNotice = LanguageModelSwitchChatNotice(
+            switchNotice: switchNotice,
+            conversationIdentifier: conversationIdentifier
+        )
+    }
+
+    func dismissLanguageModelSwitchNotice() {
+        languageModelSwitchChatNotice = nil
+    }
+
     func failExchange(_ recordedExchange: RecordedExchange, with error: Error) {
         updateConversation(withIdentifier: recordedExchange.conversationIdentifier, savingToDisk: true) { conversation in
             conversation.setText("⚠️ \(error.localizedDescription)", ofMessageWithIdentifier: recordedExchange.assistantMessageIdentifier)
@@ -244,6 +312,12 @@ struct TextChatView: View {
             Divider().background(DS.Colors.borderSubtle)
             if let onOpenModelSettings {
                 ModelSetupBanner(onOpenModelSettings: onOpenModelSettings)
+            }
+            if let visibleLanguageModelSwitchNotice = viewModel.visibleLanguageModelSwitchNotice {
+                LanguageModelSwitchNoticeBanner(
+                    switchNotice: visibleLanguageModelSwitchNotice,
+                    onDismiss: viewModel.dismissLanguageModelSwitchNotice
+                )
             }
             messageList
             Divider().background(DS.Colors.borderSubtle)
@@ -543,6 +617,70 @@ private struct ModelSetupBanner: View {
         .help("Open Settings › Models")
         .onHover { isHovered = $0 }
         .pointerCursor()
+    }
+}
+
+// MARK: - Language Model Switch Notice
+
+/// Says the ChatGPT plan handed a turn to the fallback model (or answers
+/// again), so typed chats see what the status pill said. Stays until closed.
+/// After the usage limit, "Manage usage" (ChatGPT's usage settings) is its
+/// main action, as OpenAI's guidelines ask; the click-through pill can't
+/// hold a button, so this banner carries it.
+private struct LanguageModelSwitchNoticeBanner: View {
+    let switchNotice: LanguageModelSwitchNotice
+    let onDismiss: () -> Void
+
+    @State private var isCloseButtonHovered = false
+    @State private var isManageUsageButtonHovered = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "arrow.triangle.swap")
+                .font(.system(size: 11, weight: .semibold))
+                .padding(.top, 1)
+            Text(switchNotice.message)
+                .font(.system(size: 12, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if switchNotice.offersManageUsage {
+                Button {
+                    NSWorkspace.shared.open(ChatGPTPlanOAuthConstants.manageUsageURL)
+                } label: {
+                    Text("Manage usage")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(DS.Colors.textPrimary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(DS.Colors.textSecondary.opacity(isManageUsageButtonHovered ? 0.25 : 0.15))
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Open ChatGPT's usage settings in your browser")
+                .onHover { isManageUsageButtonHovered = $0 }
+                .pointerCursor()
+            }
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .padding(4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(DS.Colors.textSecondary.opacity(isCloseButtonHovered ? 0.15 : 0))
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss")
+            .onHover { isCloseButtonHovered = $0 }
+            .pointerCursor()
+        }
+        .foregroundColor(DS.Colors.textSecondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+        .background(DS.Colors.textSecondary.opacity(0.08))
     }
 }
 

@@ -325,6 +325,11 @@ struct LanguageModelLayerSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            ChatGPTPlanCard(
+                chatGPTPlanAccount: ChatGPTPlanAccount.shared,
+                providerConfigurationStore: providerConfigurationStore
+            )
+
             ProviderSettingsView(store: providerConfigurationStore)
 
             if providerConfigurationStore.isActiveConfigurationReady && !companionManager.activeLanguageModelSeesScreen {

@@ -8,7 +8,7 @@
 
 An AI desktop companion for macOS. elfhub lives in your menu bar — it can see your screen, talk to you, point at and annotate what matters, and take actions on your computer on request. It works alongside the agent you're hacking with: performing real computer use in front of the agent to move your task along, and helping you learn new things as you work.
 
-elfhub is **desktop-first and bring-your-own-key**: there is no elfhub server, account, analytics or update feed. You choose each model layer yourself — a cloud API with your own key, or a model running on your Mac — and the only requests that leave the app are the API calls to the services you picked. Keys live in your Keychain; chats are saved only on your Mac.
+elfhub is **desktop-first and bring-your-own-key**: there is no elfhub server, account, analytics or update feed. You choose each model layer yourself — a cloud API with your own key, or a model running on your Mac — and the only requests that leave the app are the API calls to the services you picked. Already pay for ChatGPT? **Continue with ChatGPT** lets elfhub answer with OpenAI models included in your plan, no API key needed. Keys and sign-ins live in your Keychain; chats are saved only on your Mac.
 
 ## What it does
 
@@ -25,7 +25,7 @@ elfhub is **desktop-first and bring-your-own-key**: there is no elfhub server, a
 | Layer | Options |
 |-------|---------|
 | **Speech-to-text** | On-device Apple recognition (default, private), AssemblyAI (your key), or any Whisper / OpenAI-compatible endpoint — OpenAI, Groq, or a local faster-whisper server |
-| **Language model** | Anthropic, OpenAI, Google Gemini, OpenRouter, Mistral, xAI, Groq, DeepSeek, Together AI (your key) — or Ollama, LM Studio, llama.cpp on your Mac, or any other OpenAI-compatible endpoint. **Multimodal is optional:** a model that sees images can look at your screen and point; a text-only model still talks and chats |
+| **Language model** | Your ChatGPT plan (Continue with ChatGPT — no key; pick a fallback model for when the plan's usage limit is reached), or Anthropic, OpenAI, Google Gemini, OpenRouter, Mistral, xAI, Groq, DeepSeek, Together AI (your key) — or Ollama, LM Studio, llama.cpp on your Mac, or any other OpenAI-compatible endpoint. **Multimodal is optional:** a model that sees images can look at your screen and point; a text-only model still talks and chats |
 | **Text-to-speech** | On-device Apple voices (default), ElevenLabs (your key), any OpenAI-compatible speech endpoint — OpenAI, or a local Kokoro server — or off |
 
 The **on-device model assistant** (Models → On-device models) finds Ollama, downloads recommended vision models with live progress, and switches elfhub to them in a click. It can also pre-download Apple's on-device speech model (macOS 26+).

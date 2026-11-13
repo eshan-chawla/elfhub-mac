@@ -16,9 +16,24 @@ final class ProviderConfigurationStore: ObservableObject {
     /// The user's provider configurations.
     @Published private(set) var configurations: [ProviderConfiguration]
     @Published private(set) var activeConfigurationID: UUID?
+    /// The model that answers when the ChatGPT plan can't (its usage limit,
+    /// or signed out). Nil means elfhub only tells the user.
+    @Published private(set) var fallbackConfigurationID: UUID?
+    /// When the ChatGPT plan last couldn't answer; the fallback answers for
+    /// an hour after this, then the plan is tried again.
+    @Published private(set) var chatGPTPlanUnavailableSince: Date?
+    @Published private(set) var chatGPTPlanUnavailableReason: ChatGPTPlanUnavailableReason?
 
     private static let configurationsKey = "llmProviderConfigurations"
     private static let activeIDKey = "activeLLMProviderID"
+    private static let fallbackIDKey = "languageModelFallbackProviderID"
+    private static let chatGPTPlanUnavailableSinceKey = "chatGPTPlanUnavailableSince"
+    private static let chatGPTPlanUnavailableReasonKey = "chatGPTPlanUnavailableReason"
+
+    /// Readiness of the ChatGPT plan depends on its sign-in, so views that
+    /// watch this store also refresh when the sign-in changes.
+    private var chatGPTPlanAccountChangeSubscription: AnyCancellable?
+    private var chatGPTPlanSignInCompletedSubscription: AnyCancellable?
 
     init() {
         let loadedConfigurations = Self.loadConfigurations()
@@ -29,7 +44,22 @@ final class ProviderConfigurationStore: ObservableObject {
                 loadedConfigurations.contains(where: { $0.id == storedActiveID }) ? storedActiveID : nil
             }
             ?? loadedConfigurations.first?.id
+        self.fallbackConfigurationID = UserDefaults.standard.string(forKey: Self.fallbackIDKey)
+            .flatMap(UUID.init(uuidString:))
+            .flatMap { storedFallbackID in
+                loadedConfigurations.contains(where: { $0.id == storedFallbackID }) ? storedFallbackID : nil
+            }
+        self.chatGPTPlanUnavailableSince = UserDefaults.standard.object(forKey: Self.chatGPTPlanUnavailableSinceKey) as? Date
+        self.chatGPTPlanUnavailableReason = UserDefaults.standard.string(forKey: Self.chatGPTPlanUnavailableReasonKey)
+            .flatMap(ChatGPTPlanUnavailableReason.init(rawValue:))
         Self.saveConfigurations(loadedConfigurations)
+        chatGPTPlanAccountChangeSubscription = ChatGPTPlanAccount.shared.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        // A fresh sign-in can answer right away, so it ends any pause.
+        chatGPTPlanSignInCompletedSubscription = ChatGPTPlanAccount.shared.signInCompletedPublisher.sink { [weak self] _ in
+            self?.clearChatGPTPlanUnavailable()
+        }
     }
 
     // MARK: - Active config
@@ -46,9 +76,11 @@ final class ProviderConfigurationStore: ObservableObject {
         return isReady(activeConfiguration)
     }
 
-    /// True when a configuration has a model and, if it needs one, a key.
+    /// True when a configuration has a model and, if it needs one, a key
+    /// (or, for the ChatGPT plan, a sign-in that may use the plan).
     func isReady(_ configuration: ProviderConfiguration) -> Bool {
         guard !configuration.model.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        if configuration.kind == .chatGPTPlan { return ChatGPTPlanAccount.shared.canUsePlan }
         guard configuration.requiresAPIKey else { return true }
         return apiKey(forProviderID: configuration.id)?.isEmpty == false
     }
@@ -83,6 +115,9 @@ final class ProviderConfigurationStore: ObservableObject {
 
     func delete(id: UUID) {
         configurations.removeAll { $0.id == id }
+        if fallbackConfigurationID == id {
+            setFallbackConfiguration(id: nil)
+        }
         KeychainSecretStore.deleteSecret(forAccount: KeychainSecretStore.account(forProviderID: id))
         if activeConfigurationID == id {
             activeConfigurationID = configurations.first?.id
@@ -99,7 +134,64 @@ final class ProviderConfigurationStore: ObservableObject {
         KeychainSecretStore.secret(forAccount: KeychainSecretStore.account(forProviderID: providerID))
     }
 
+    // MARK: - Fallback for the ChatGPT plan
+
+    /// The fallback model, when one is chosen and still exists.
+    var fallbackConfiguration: ProviderConfiguration? {
+        configurations.first(where: { $0.id == fallbackConfigurationID })
+    }
+
+    /// Models that can stand in for the ChatGPT plan: every other ready model.
+    var fallbackCandidates: [ProviderConfiguration] {
+        configurations.filter { $0.kind != .chatGPTPlan && isReady($0) }
+    }
+
+    func setFallbackConfiguration(id: UUID?) {
+        fallbackConfigurationID = id
+        if let id {
+            UserDefaults.standard.set(id.uuidString, forKey: Self.fallbackIDKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.fallbackIDKey)
+        }
+    }
+
+    /// The configuration the next turn should use: the active one, or the
+    /// fallback while the ChatGPT plan can't answer.
+    func configurationForNextTurn(now: Date = Date()) -> ProviderConfiguration? {
+        let fallbackConfiguration = fallbackConfiguration
+        return LanguageModelTurnRouting.configurationForNextTurn(
+            activeConfiguration: activeConfiguration,
+            fallbackConfiguration: fallbackConfiguration,
+            isFallbackReady: fallbackConfiguration.map(isReady) ?? false,
+            canUseChatGPTPlan: ChatGPTPlanAccount.shared.canUsePlan,
+            chatGPTPlanUnavailableSince: chatGPTPlanUnavailableSince,
+            now: now
+        )
+    }
+
+    /// Pauses the ChatGPT plan for an hour (the fallback answers meanwhile).
+    func recordChatGPTPlanUnavailable(reason: ChatGPTPlanUnavailableReason, now: Date = Date()) {
+        chatGPTPlanUnavailableSince = now
+        chatGPTPlanUnavailableReason = reason
+        UserDefaults.standard.set(now, forKey: Self.chatGPTPlanUnavailableSinceKey)
+        UserDefaults.standard.set(reason.rawValue, forKey: Self.chatGPTPlanUnavailableReasonKey)
+    }
+
+    /// Ends the pause: the plan answered again, or the user signed in again.
+    func clearChatGPTPlanUnavailable() {
+        guard chatGPTPlanUnavailableSince != nil || chatGPTPlanUnavailableReason != nil else { return }
+        chatGPTPlanUnavailableSince = nil
+        chatGPTPlanUnavailableReason = nil
+        UserDefaults.standard.removeObject(forKey: Self.chatGPTPlanUnavailableSinceKey)
+        UserDefaults.standard.removeObject(forKey: Self.chatGPTPlanUnavailableReasonKey)
+    }
+
     // MARK: - Building the live provider
+
+    /// Builds a provider for one of the stored configurations, with its key.
+    func makeProvider(for configuration: ProviderConfiguration) throws -> LanguageModelProvider {
+        try Self.makeProvider(for: configuration, apiKey: apiKey(forProviderID: configuration.id))
+    }
 
     /// Builds a LanguageModelProvider from the active configuration.
     func makeActiveProvider() throws -> LanguageModelProvider {
@@ -146,6 +238,17 @@ final class ProviderConfigurationStore: ObservableObject {
                 apiKey: apiKey,
                 model: configuration.model,
                 capabilities: capabilities
+            )
+
+        case .chatGPTPlan:
+            // No key: each request asks the ChatGPT account for a fresh token.
+            return OpenAIResponsesLanguageModelProvider(
+                displayName: configuration.displayName,
+                model: configuration.model,
+                capabilities: capabilities,
+                accessTokenSource: { forcingRefresh in
+                    try await ChatGPTPlanAccount.shared.validAccessToken(forcingRefresh: forcingRefresh)
+                }
             )
         }
     }
@@ -199,6 +302,8 @@ enum LocalModelServerDiscovery {
             request.timeoutInterval = 8
             request.setValue(apiKey ?? "", forHTTPHeaderField: "x-goog-api-key")
             return parseGeminiModelIdentifiers(fromModelsResponse: try await performModelListRequest(request))
+        case .chatGPTPlan:
+            return try await ChatGPTPlanAccount.shared.listModels().map(\.slug)
         }
     }
 

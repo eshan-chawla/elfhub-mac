@@ -19,7 +19,7 @@ I'll reply as soon as I can, keep you posted while it's fixed, and credit you in
 Especially welcome:
 
 - screen actions (click, type, keys) that run without the user's consent, or get around the consent card or Esc
-- API keys leaving the Keychain, or being sent anywhere other than the service they belong to
+- API keys or ChatGPT sign-in tokens leaving the Keychain, or being sent anywhere other than the service they belong to
 - screenshots, audio, chats or the action log leaving the Mac other than to the model services the user chose
 - windows of privacy-blocklisted apps (password managers and similar) appearing in screenshots
 - problems with the signed and notarized release builds
