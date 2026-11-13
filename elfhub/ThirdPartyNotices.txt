@@ -3,6 +3,10 @@ elfhub — third-party notices
 elfhub is licensed under the GNU Affero General Public License v3.0.
 Source code: https://github.com/eshan-chawla/elfhub
 
+The elfhub app icon, menu bar icon and igloo artwork are Copyright (c) 2026 Eshan Chawla,
+all rights reserved. They are not covered by the AGPL and may not be used,
+copied or modified without written permission.
+
 This app includes code from the following project.
 
 

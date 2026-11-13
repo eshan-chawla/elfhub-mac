@@ -165,6 +165,11 @@ struct FloatingNotepadView: View {
     let onClose: () -> Void
     /// The window's height follows its content; reported here.
     let onPreferredHeightChange: (CGFloat) -> Void
+    /// The header is the handle for moving the window. Called on every
+    /// mouse movement of a header drag with how far the mouse has moved
+    /// since the press (SwiftUI points, y down).
+    let onHeaderDragChanged: (CGSize) -> Void
+    let onHeaderDragEnded: () -> Void
 
     static let width: CGFloat = 380
     static let headerHeight: CGFloat = 40
@@ -231,9 +236,21 @@ struct FloatingNotepadView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: Self.headerHeight)
-        // The whole header (outside its buttons) is the handle for moving
-        // the window anywhere on screen.
-        .background(NotepadWindowDragArea())
+        .background(NotepadHeaderOpenHandCursor())
+        // The whole header (title included; the buttons keep their clicks)
+        // is the handle for moving the window anywhere on screen. A SwiftUI
+        // gesture, because an AppKit view behind SwiftUI content only gets
+        // the clicks nothing in front of it claims.
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                .onChanged { dragValue in
+                    onHeaderDragChanged(dragValue.translation)
+                }
+                .onEnded { _ in
+                    onHeaderDragEnded()
+                }
+        )
     }
 
     private var lines: some View {
@@ -268,26 +285,25 @@ struct FloatingNotepadView: View {
     private static let bottomOfLinesIdentifier = "notepad-bottom-of-lines"
 }
 
-/// Drags the window it sits in. SwiftUI content doesn't move a borderless
-/// window by itself (NSHostingView never lets a mouse-down move it), so the
-/// header hosts this AppKit view, which hands the drag to the window. Shows
-/// an open hand so it reads as something you can grab.
-private struct NotepadWindowDragArea: NSViewRepresentable {
+/// Shows an open hand over the header so it reads as something you can
+/// grab. Only sets the cursor: it never takes clicks (the header's drag
+/// gesture moves the window).
+private struct NotepadHeaderOpenHandCursor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
-        WindowDraggingView()
+        OpenHandCursorView()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.window?.invalidateCursorRects(for: nsView)
+    }
 
-    private final class WindowDraggingView: NSView {
-        override var mouseDownCanMoveWindow: Bool { true }
-
-        override func mouseDown(with event: NSEvent) {
-            window?.performDrag(with: event)
-        }
-
+    private final class OpenHandCursorView: NSView {
         override func resetCursorRects() {
             addCursorRect(bounds, cursor: .openHand)
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
         }
     }
 }

@@ -9,7 +9,7 @@ architecture, key files, conventions, and build instructions.
 All source files live flat in this directory; see the root `AGENTS.md` "Key Files"
 table for a per-file map. Highlights:
 
-- `elfhubApp.swift` — entry point; `WindowGroup` main window + `CompanionAppDelegate`
+- `elfhubApp.swift` — entry point; AppKit main window (`MainWindowPresenter`) + `CompanionAppDelegate`
 - `CompanionManager.swift` — central state machine for the voice pipeline
 - `CompanionPanelView.swift` — SwiftUI content shared by the main window and the menu bar panel
 - `MenuBarPanelManager.swift` — NSStatusItem + floating NSPanel

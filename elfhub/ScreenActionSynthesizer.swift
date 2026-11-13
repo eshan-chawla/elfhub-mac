@@ -84,7 +84,7 @@ enum ScreenActionSynthesizer {
 
     /// Moves the pointer to the target and performs a single left click.
     /// The move happens first so hover/tooltip state updates and the real
-    /// pointer visibly lands where the user just saw the triangle point.
+    /// pointer visibly lands where the user just saw the overlay pointer point.
     static func performSingleClick(at coreGraphicsGlobalPoint: CGPoint) async {
         await postMouseMove(to: coreGraphicsGlobalPoint)
         await postMouseClickPair(at: coreGraphicsGlobalPoint, clickState: 1)

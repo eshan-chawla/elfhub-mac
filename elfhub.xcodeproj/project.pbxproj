@@ -12,38 +12,38 @@
 			containerPortal = 28F22CB72F56440300A0FC59 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 28F22CBE2F56440300A0FC59;
-			remoteInfo = "elfhub";
+			remoteInfo = elfhub;
 		};
 		28F22CD72F56440300A0FC59 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 28F22CB72F56440300A0FC59 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 28F22CBE2F56440300A0FC59;
-			remoteInfo = "elfhub";
+			remoteInfo = elfhub;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		28F22CBF2F56440300A0FC59 /* elfhub.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "elfhub.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		28F22CCC2F56440300A0FC59 /* elfhubTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "elfhubTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		28F22CD62F56440300A0FC59 /* elfhubUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "elfhubUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		28F22CBF2F56440300A0FC59 /* elfhub.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = elfhub.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		28F22CCC2F56440300A0FC59 /* elfhubTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = elfhubTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		28F22CD62F56440300A0FC59 /* elfhubUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = elfhubUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EF0C0F160000000000000A01 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		28F22CC12F56440300A0FC59 /* elfhub */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "elfhub";
+			path = elfhub;
 			sourceTree = "<group>";
 		};
 		28F22CCF2F56440300A0FC59 /* elfhubTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "elfhubTests";
+			path = elfhubTests;
 			sourceTree = "<group>";
 		};
 		28F22CD92F56440300A0FC59 /* elfhubUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "elfhubUITests";
+			path = elfhubUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -120,10 +120,10 @@
 			fileSystemSynchronizedGroups = (
 				28F22CC12F56440300A0FC59 /* elfhub */,
 			);
-			name = "elfhub";
+			name = elfhub;
 			packageProductDependencies = (
 			);
-			productName = "elfhub";
+			productName = elfhub;
 			productReference = 28F22CBF2F56440300A0FC59 /* elfhub.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -143,10 +143,10 @@
 			fileSystemSynchronizedGroups = (
 				28F22CCF2F56440300A0FC59 /* elfhubTests */,
 			);
-			name = "elfhubTests";
+			name = elfhubTests;
 			packageProductDependencies = (
 			);
-			productName = "elfhubTests";
+			productName = elfhubTests;
 			productReference = 28F22CCC2F56440300A0FC59 /* elfhubTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
@@ -166,10 +166,10 @@
 			fileSystemSynchronizedGroups = (
 				28F22CD92F56440300A0FC59 /* elfhubUITests */,
 			);
-			name = "elfhubUITests";
+			name = elfhubUITests;
 			packageProductDependencies = (
 			);
-			productName = "elfhubUITests";
+			productName = elfhubUITests;
 			productReference = 28F22CD62F56440300A0FC59 /* elfhubUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
@@ -404,7 +404,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "elfhub/elfhub.entitlements";
+				CODE_SIGN_ENTITLEMENTS = elfhub/elfhub.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -414,9 +414,9 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "elfhub/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "elfhub";
-				INFOPLIST_KEY_CFBundleName = "elfhub";
+				INFOPLIST_FILE = elfhub/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = elfhub;
+				INFOPLIST_KEY_CFBundleName = elfhub;
 				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "elfhub uses your microphone so you can talk to it";
@@ -428,7 +428,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(ELFHUB_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "elfhub";
+				PRODUCT_NAME = elfhub;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -444,7 +444,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "elfhub/elfhub.entitlements";
+				CODE_SIGN_ENTITLEMENTS = elfhub/elfhub.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -454,9 +454,9 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "elfhub/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "elfhub";
-				INFOPLIST_KEY_CFBundleName = "elfhub";
+				INFOPLIST_FILE = elfhub/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = elfhub;
+				INFOPLIST_KEY_CFBundleName = elfhub;
 				INFOPLIST_KEY_LSUIElement = NO;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "elfhub uses your microphone so you can talk to it";
@@ -468,7 +468,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(ELFHUB_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "elfhub";
+				PRODUCT_NAME = elfhub;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -533,7 +533,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "elfhub";
+				TEST_TARGET_NAME = elfhub;
 			};
 			name = Debug;
 		};
@@ -551,7 +551,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = "elfhub";
+				TEST_TARGET_NAME = elfhub;
 			};
 			name = Release;
 		};

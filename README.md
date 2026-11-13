@@ -88,10 +88,14 @@ elfhub/          # Swift source
   BuddyDictation*.swift              Push-to-talk pipeline
 elfhubTests/     # Unit tests
 elfhubUITests/   # UI tests
+brand/           # App icon artwork (all rights reserved, not AGPL — see brand/LICENSE.md)
+scripts/         # Release, DMG and icon scripts
 ```
 
 ## Contributing
 
 elfhub is licensed under the [GNU AGPL v3.0](LICENSE) — fork it, hack on it, build your own version. PRs welcome.
+
+The app icon is the exception: the igloo icon, menu bar icon and artwork (`brand/` and the app's icon images) are all rights reserved and not part of the open-source licence. If you ship your own build, give it your own icon — see [brand/LICENSE.md](brand/LICENSE.md).
 
 If you're using Claude Code (or another agent), point it at `CLAUDE.md` — it already knows the codebase.
