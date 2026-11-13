@@ -34,23 +34,28 @@ let glyphScaleOnCanvas: CGFloat = 1.35
 // All measurements in points on the drawing grid, origin at the
 // bottom-left, y up.
 let groundLineY: CGFloat = 4
-let domeCenterX: CGFloat = 10.4
-let domeHorizontalRadius: CGFloat = 6.6
-let domeHeight: CGFloat = 9
+let domeCenterX: CGFloat = 9
+let domeHorizontalRadius: CGFloat = 7.6
+let domeHeight: CGFloat = 9.2
+// Two rows of blocks with staggered joints (so they read as bricks) under a
+// solid cap, like the snow on top of the artwork's igloo.
 let gapBetweenBlocks: CGFloat = 0.8
 let firstBlockRowTopY: CGFloat = groundLineY + 3
 let secondBlockRowTopY: CGFloat = firstBlockRowTopY + gapBetweenBlocks + 2.4
-let firstBlockRowJointX: CGFloat = 14.2
-let secondBlockRowJointX: CGFloat = 11.8
-let tunnelCenterX: CGFloat = 5.4
-let tunnelHorizontalRadius: CGFloat = 3.6
+let firstBlockRowJointX: CGFloat = 13.6
+let secondBlockRowJointX: CGFloat = 12.4
+// The entrance tunnel sits a little left of the dome's middle, like the
+// artwork's, but stays inside the dome's outline: a tunnel sticking out of
+// the side makes the glyph look like a turtle with its head out.
+let tunnelCenterX: CGFloat = 7.0
+let tunnelHorizontalRadius: CGFloat = 3.3
 let tunnelHeight: CGFloat = 5
-let tunnelOutlineGap: CGFloat = 0.9
-// The doorway matches the artwork's opening: straight sides with a round
-// top, about half the tunnel's height, a little left of the tunnel's middle.
-let doorwayCenterX: CGFloat = 5.1
-let doorwayWidth: CGFloat = 2.2
-let doorwayHeight: CGFloat = 2.6
+let tunnelOutlineGap: CGFloat = 0.8
+// The doorway: straight sides with a round top, about 60% of the tunnel's
+// height, with walls thick enough to read as a tunnel at menu bar size.
+let doorwayCenterX: CGFloat = tunnelCenterX
+let doorwayWidth: CGFloat = 2.4
+let doorwayHeight: CGFloat = 3.0
 
 func failAndExit(_ message: String) -> Never {
     FileHandle.standardError.write(Data("make-menu-bar-icon: \(message)\n".utf8))
