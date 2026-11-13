@@ -3,8 +3,8 @@
 // The icon artwork is NOT covered by the AGPL — see brand/LICENSE.md.
 // Copyright (c) 2026 Eshan Chawla. All rights reserved.
 //
-// Run from the repo root:
-//   swift scripts/icon/make-app-icon.swift
+// Run from the repo root (-O keeps it to a few seconds):
+//   swift -O scripts/icon/make-app-icon.swift
 //
 // What it does:
 // 1. Takes the full icon design (blue rounded square with the igloo, on a
@@ -13,13 +13,19 @@
 //    border, so dark pixels inside the artwork (the igloo's doorway) stay.
 //    Edge pixels get partial transparency with the background colour
 //    un-mixed, so there's no dark fringe.
-// 2. Fits the rounded square to Apple's macOS icon grid — an 824 px body on
+// 2. Resizes the igloo inside the square (iglooScaleWithinRoundedSquare).
+//    The igloo cut-out (brand/source/elfhub-igloo-cutout-source.png) lines
+//    up pixel for pixel with the full design, so it marks exactly where the
+//    igloo and its shadow are. That area is painted out of the square with
+//    a smooth fill from the blue around it, and the cut-out is drawn back
+//    at the new size, centred where it was, with a soft contact shadow.
+// 3. Fits the rounded square to Apple's macOS icon grid — an 824 px body on
 //    a 1024 px canvas, 100 px margin, with a soft drop shadow — so elfhub
 //    sits the same size as other apps in the Dock and Finder.
-// 3. Writes every size the asset catalog needs (16–1024 px) into
+// 4. Writes every size the asset catalog needs (16–1024 px) into
 //    elfhub/Assets.xcassets/AppIcon.appiconset, halving step by step so the
 //    small sizes stay sharp. Xcode compiles these into the app's icon.
-// 4. Writes brand/elfhub-icon-1024.png and brand/elfhub-icon.svg, plus
+// 5. Writes brand/elfhub-icon-1024.png and brand/elfhub-icon.svg, plus
 //    brand/elfhub-igloo-1024.png and brand/elfhub-igloo.svg from the igloo
 //    cut-out (brand/source/elfhub-igloo-cutout-source.png). The artwork is a
 //    3D render, so the SVGs embed it as a PNG: tracing it into vector paths
@@ -37,6 +43,29 @@ let iconSourcePath = "brand/source/elfhub-icon-source.jpg"
 let iglooCutoutSourcePath = "brand/source/elfhub-igloo-cutout-source.png"
 let appIconSetFolderPath = "elfhub/Assets.xcassets/AppIcon.appiconset"
 let brandFolderPath = "brand"
+
+// The igloo's size relative to the source artwork (1 = as drawn).
+let iglooScaleWithinRoundedSquare: CGFloat = 0.85
+
+// Painting the original igloo out (source pixels, 2048 px artwork). The
+// painted area covers the igloo, the dark floor beside it that the cut-out
+// leaves out (the square's blue never has a blue value this low), and
+// everything below it, where its shadow fell; it reaches this far beyond
+// those and blends into the original over the outer feather width. It
+// stays clear of the square's bevelled edge.
+let darkestSquareBlueValue: UInt8 = 140
+let paintedOutReachInPixels: Float = 70
+let paintedOutFeatherInPixels: Float = 24
+let squareEdgeKeepOutInPixels = 45
+// The smooth fill is solved on a grid this many times coarser than the
+// source; the square's blue is a soft gradient, so detail isn't lost.
+let paintedOutFillGridScale = 8
+let paintedOutFillIterationCount = 1500
+
+// The new contact shadow under the resized igloo (source pixels).
+let iglooShadowOffsetInPixels: CGFloat = 18
+let iglooShadowBlurInPixels: CGFloat = 44
+let iglooShadowColor = CGColor(srgbRed: 0, green: 0.05, blue: 0.3, alpha: 0.5)
 
 // Apple's macOS app icon grid (1024 px canvas).
 let iconCanvasSizeInPixels = 1024
@@ -250,13 +279,225 @@ for pixelIndex in 0..<sourcePixelCount {
     }
 }
 
-let backgroundRemovedImage = sourcePixelBytes.withUnsafeMutableBytes { pixelBufferPointer -> CGImage in
+// MARK: - 2. Resize the igloo
+
+// The igloo cut-out at the source's size. Drawing it into a premultiplied
+// context also drops the colour data hidden under its transparent pixels.
+let iglooCutoutSourceImage = loadImage(atPath: iglooCutoutSourcePath)
+guard iglooCutoutSourceImage.width == sourceWidthInPixels, iglooCutoutSourceImage.height == sourceHeightInPixels else {
+    failAndExit("\(iglooCutoutSourcePath) must be the same size as \(iconSourcePath) (it marks where the igloo is)")
+}
+var iglooPixelBytes = [UInt8](repeating: 0, count: sourcePixelCount * 4)
+let iglooCutoutImage = iglooPixelBytes.withUnsafeMutableBytes { pixelBufferPointer -> CGImage in
+    let iglooContext = makeTransparentContext(
+        widthInPixels: sourceWidthInPixels,
+        heightInPixels: sourceHeightInPixels,
+        pixelBuffer: pixelBufferPointer.baseAddress
+    )
+    iglooContext.draw(iglooCutoutSourceImage, in: CGRect(x: 0, y: 0, width: sourceWidthInPixels, height: sourceHeightInPixels))
+    return iglooContext.makeImage()!
+}
+func iglooOpacityByte(pixelIndex: Int) -> UInt8 { iglooPixelBytes[pixelIndex * 4 + 3] }
+
+var iglooTopRow = sourceHeightInPixels
+var iglooBottomRow = 0
+var iglooLeftColumn = sourceWidthInPixels
+var iglooRightColumn = 0
+for pixelIndex in 0..<sourcePixelCount where iglooOpacityByte(pixelIndex: pixelIndex) > 128 {
+    let row = pixelIndex / sourceWidthInPixels
+    let column = pixelIndex % sourceWidthInPixels
+    iglooTopRow = min(iglooTopRow, row)
+    iglooBottomRow = max(iglooBottomRow, row)
+    iglooLeftColumn = min(iglooLeftColumn, column)
+    iglooRightColumn = max(iglooRightColumn, column)
+}
+guard iglooRightColumn > iglooLeftColumn else { failAndExit("\(iglooCutoutSourcePath) has no igloo in it") }
+
+// The lowest igloo pixel in each column; everything under it is shadow.
+var lowestIglooRowByColumn = [Int](repeating: -1, count: sourceWidthInPixels)
+for pixelIndex in 0..<sourcePixelCount where iglooOpacityByte(pixelIndex: pixelIndex) > 0 {
+    let column = pixelIndex % sourceWidthInPixels
+    lowestIglooRowByColumn[column] = max(lowestIglooRowByColumn[column], pixelIndex / sourceWidthInPixels)
+}
+
+// Distance from every pixel to the igloo, the dark floor beside it or the
+// area under it, by a two-pass chamfer transform.
+let diagonalStepInPixels: Float = 1.4142
+var distanceToIglooOrShadow = [Float](repeating: 1_000_000, count: sourcePixelCount)
+for pixelIndex in 0..<sourcePixelCount {
+    let row = pixelIndex / sourceWidthInPixels
+    let column = pixelIndex % sourceWidthInPixels
+    let isIglooPixel = iglooOpacityByte(pixelIndex: pixelIndex) > 0
+    let isOldShadowPixel = lowestIglooRowByColumn[column] >= 0 && row > lowestIglooRowByColumn[column]
+    let isInsideIglooArea = row >= iglooTopRow && row <= iglooBottomRow
+        && column >= iglooLeftColumn && column <= iglooRightColumn
+    let isDarkFloorPixel = isInsideIglooArea
+        && sourcePixelBytes[pixelIndex * 4 + 3] == 255
+        && sourcePixelBytes[pixelIndex * 4 + 2] < darkestSquareBlueValue
+    if isIglooPixel || isOldShadowPixel || isDarkFloorPixel { distanceToIglooOrShadow[pixelIndex] = 0 }
+}
+for row in 0..<sourceHeightInPixels {
+    for column in 0..<sourceWidthInPixels {
+        let pixelIndex = row * sourceWidthInPixels + column
+        var shortestDistance = distanceToIglooOrShadow[pixelIndex]
+        if column > 0 { shortestDistance = min(shortestDistance, distanceToIglooOrShadow[pixelIndex - 1] + 1) }
+        if row > 0 {
+            shortestDistance = min(shortestDistance, distanceToIglooOrShadow[pixelIndex - sourceWidthInPixels] + 1)
+            if column > 0 { shortestDistance = min(shortestDistance, distanceToIglooOrShadow[pixelIndex - sourceWidthInPixels - 1] + diagonalStepInPixels) }
+            if column < sourceWidthInPixels - 1 { shortestDistance = min(shortestDistance, distanceToIglooOrShadow[pixelIndex - sourceWidthInPixels + 1] + diagonalStepInPixels) }
+        }
+        distanceToIglooOrShadow[pixelIndex] = shortestDistance
+    }
+}
+for row in stride(from: sourceHeightInPixels - 1, through: 0, by: -1) {
+    for column in stride(from: sourceWidthInPixels - 1, through: 0, by: -1) {
+        let pixelIndex = row * sourceWidthInPixels + column
+        var shortestDistance = distanceToIglooOrShadow[pixelIndex]
+        if column < sourceWidthInPixels - 1 { shortestDistance = min(shortestDistance, distanceToIglooOrShadow[pixelIndex + 1] + 1) }
+        if row < sourceHeightInPixels - 1 {
+            shortestDistance = min(shortestDistance, distanceToIglooOrShadow[pixelIndex + sourceWidthInPixels] + 1)
+            if column < sourceWidthInPixels - 1 { shortestDistance = min(shortestDistance, distanceToIglooOrShadow[pixelIndex + sourceWidthInPixels + 1] + diagonalStepInPixels) }
+            if column > 0 { shortestDistance = min(shortestDistance, distanceToIglooOrShadow[pixelIndex + sourceWidthInPixels - 1] + diagonalStepInPixels) }
+        }
+        distanceToIglooOrShadow[pixelIndex] = shortestDistance
+    }
+}
+
+/// Whether a pixel is far enough inside the square that painting it can't
+/// touch the bevelled edge.
+func isWellInsideRoundedSquare(row: Int, column: Int) -> Bool {
+    for (rowOffset, columnOffset) in [(-squareEdgeKeepOutInPixels, 0), (squareEdgeKeepOutInPixels, 0), (0, -squareEdgeKeepOutInPixels), (0, squareEdgeKeepOutInPixels)] {
+        let checkedRow = row + rowOffset
+        let checkedColumn = column + columnOffset
+        guard checkedRow >= 0, checkedRow < sourceHeightInPixels, checkedColumn >= 0, checkedColumn < sourceWidthInPixels,
+              sourcePixelBytes[(checkedRow * sourceWidthInPixels + checkedColumn) * 4 + 3] == 255 else { return false }
+    }
+    return true
+}
+
+func isPaintedOutPixel(pixelIndex: Int) -> Bool {
+    distanceToIglooOrShadow[pixelIndex] <= paintedOutReachInPixels
+        && isWellInsideRoundedSquare(row: pixelIndex / sourceWidthInPixels, column: pixelIndex % sourceWidthInPixels)
+}
+
+// A coarse grid of the square's colour (unpremultiplied, 0–255). Cells that
+// touch the painted-out area are unknown and get a smooth (harmonic) fill
+// from their known neighbours.
+let fillGridWidth = sourceWidthInPixels / paintedOutFillGridScale
+let fillGridHeight = sourceHeightInPixels / paintedOutFillGridScale
+let fillGridCellCount = fillGridWidth * fillGridHeight
+var fillGridColorChannels = [[Float]](repeating: [Float](repeating: 0, count: fillGridCellCount), count: 3)
+var isFillGridCellUnknown = [Bool](repeating: false, count: fillGridCellCount)
+for gridRow in 0..<fillGridHeight {
+    for gridColumn in 0..<fillGridWidth {
+        let cellIndex = gridRow * fillGridWidth + gridColumn
+        var premultipliedColorSums: [Float] = [0, 0, 0]
+        var opacitySum: Float = 0
+        for row in (gridRow * paintedOutFillGridScale)..<((gridRow + 1) * paintedOutFillGridScale) {
+            for column in (gridColumn * paintedOutFillGridScale)..<((gridColumn + 1) * paintedOutFillGridScale) {
+                let pixelIndex = row * sourceWidthInPixels + column
+                if isPaintedOutPixel(pixelIndex: pixelIndex) { isFillGridCellUnknown[cellIndex] = true }
+                for channelIndex in 0..<3 { premultipliedColorSums[channelIndex] += Float(sourcePixelBytes[pixelIndex * 4 + channelIndex]) }
+                opacitySum += Float(sourcePixelBytes[pixelIndex * 4 + 3]) / 255
+            }
+        }
+        for channelIndex in 0..<3 {
+            fillGridColorChannels[channelIndex][cellIndex] = opacitySum > 0 ? premultipliedColorSums[channelIndex] / opacitySum : 0
+        }
+    }
+}
+
+// Start each unknown cell from a straight blend of the nearest known cells
+// to its left and right (the blue changes mostly top to bottom), then relax.
+var unknownFillGridCellIndices: [Int] = []
+for gridRow in 0..<fillGridHeight {
+    var gridColumn = 0
+    while gridColumn < fillGridWidth {
+        guard isFillGridCellUnknown[gridRow * fillGridWidth + gridColumn] else { gridColumn += 1; continue }
+        let firstUnknownColumn = gridColumn
+        while gridColumn < fillGridWidth && isFillGridCellUnknown[gridRow * fillGridWidth + gridColumn] { gridColumn += 1 }
+        let knownLeftColumn = max(firstUnknownColumn - 1, 0)
+        let knownRightColumn = min(gridColumn, fillGridWidth - 1)
+        for unknownColumn in firstUnknownColumn..<gridColumn {
+            let blendFraction = Float(unknownColumn - knownLeftColumn) / Float(max(knownRightColumn - knownLeftColumn, 1))
+            let cellIndex = gridRow * fillGridWidth + unknownColumn
+            for channelIndex in 0..<3 {
+                let leftValue = fillGridColorChannels[channelIndex][gridRow * fillGridWidth + knownLeftColumn]
+                let rightValue = fillGridColorChannels[channelIndex][gridRow * fillGridWidth + knownRightColumn]
+                fillGridColorChannels[channelIndex][cellIndex] = leftValue + (rightValue - leftValue) * blendFraction
+            }
+            unknownFillGridCellIndices.append(cellIndex)
+        }
+    }
+}
+for _ in 0..<paintedOutFillIterationCount {
+    for cellIndex in unknownFillGridCellIndices {
+        for channelIndex in 0..<3 {
+            let neighbourAverage = (fillGridColorChannels[channelIndex][cellIndex - 1]
+                + fillGridColorChannels[channelIndex][cellIndex + 1]
+                + fillGridColorChannels[channelIndex][cellIndex - fillGridWidth]
+                + fillGridColorChannels[channelIndex][cellIndex + fillGridWidth]) / 4
+            fillGridColorChannels[channelIndex][cellIndex] = neighbourAverage
+        }
+    }
+}
+
+// Paint the fill over the old igloo and shadow, sampled smoothly from the
+// grid, blending into the original over the feather.
+func fillGridColorValue(channelIndex: Int, atSourceColumn column: Int, row: Int) -> Float {
+    let gridX = min(max((Float(column) + 0.5) / Float(paintedOutFillGridScale) - 0.5, 0), Float(fillGridWidth - 1))
+    let gridY = min(max((Float(row) + 0.5) / Float(paintedOutFillGridScale) - 0.5, 0), Float(fillGridHeight - 1))
+    let leftColumn = Int(gridX), topRow = Int(gridY)
+    let rightColumn = min(leftColumn + 1, fillGridWidth - 1), bottomRow = min(topRow + 1, fillGridHeight - 1)
+    let horizontalFraction = gridX - Float(leftColumn), verticalFraction = gridY - Float(topRow)
+    let channelValues = fillGridColorChannels[channelIndex]
+    let topValue = channelValues[topRow * fillGridWidth + leftColumn] * (1 - horizontalFraction) + channelValues[topRow * fillGridWidth + rightColumn] * horizontalFraction
+    let bottomValue = channelValues[bottomRow * fillGridWidth + leftColumn] * (1 - horizontalFraction) + channelValues[bottomRow * fillGridWidth + rightColumn] * horizontalFraction
+    return topValue * (1 - verticalFraction) + bottomValue * verticalFraction
+}
+for pixelIndex in 0..<sourcePixelCount where isPaintedOutPixel(pixelIndex: pixelIndex) {
+    let fillWeight = min((paintedOutReachInPixels - distanceToIglooOrShadow[pixelIndex]) / paintedOutFeatherInPixels, 1)
+    let row = pixelIndex / sourceWidthInPixels
+    let column = pixelIndex % sourceWidthInPixels
+    let byteOffset = pixelIndex * 4
+    let opacity = Float(sourcePixelBytes[byteOffset + 3]) / 255
+    for channelIndex in 0..<3 {
+        let originalValue = opacity > 0 ? Float(sourcePixelBytes[byteOffset + channelIndex]) / opacity : 0
+        let filledValue = fillGridColorValue(channelIndex: channelIndex, atSourceColumn: column, row: row)
+        let blendedValue = filledValue * fillWeight + originalValue * (1 - fillWeight)
+        sourcePixelBytes[byteOffset + channelIndex] = UInt8(min(max(blendedValue * opacity, 0), 255).rounded())
+    }
+}
+
+let iglooFreeArtworkImage = sourcePixelBytes.withUnsafeMutableBytes { pixelBufferPointer -> CGImage in
     makeTransparentContext(
         widthInPixels: sourceWidthInPixels,
         heightInPixels: sourceHeightInPixels,
         pixelBuffer: pixelBufferPointer.baseAddress
     ).makeImage()!
 }
+
+// Draw the igloo back at its new size, centred where it was. CoreGraphics
+// draws from the bottom-left, so rows are flipped.
+let iglooCenterX = CGFloat(iglooLeftColumn + iglooRightColumn + 1) / 2
+let iglooCenterYFromBottom = CGFloat(sourceHeightInPixels) - CGFloat(iglooTopRow + iglooBottomRow + 1) / 2
+let artworkContext = makeTransparentContext(widthInPixels: sourceWidthInPixels, heightInPixels: sourceHeightInPixels)
+artworkContext.draw(iglooFreeArtworkImage, in: CGRect(x: 0, y: 0, width: sourceWidthInPixels, height: sourceHeightInPixels))
+artworkContext.setShadow(
+    offset: CGSize(width: 0, height: -iglooShadowOffsetInPixels * iglooScaleWithinRoundedSquare),
+    blur: iglooShadowBlurInPixels * iglooScaleWithinRoundedSquare,
+    color: iglooShadowColor
+)
+artworkContext.draw(
+    iglooCutoutImage,
+    in: CGRect(
+        x: iglooCenterX - iglooCenterX * iglooScaleWithinRoundedSquare,
+        y: iglooCenterYFromBottom - iglooCenterYFromBottom * iglooScaleWithinRoundedSquare,
+        width: CGFloat(sourceWidthInPixels) * iglooScaleWithinRoundedSquare,
+        height: CGFloat(sourceHeightInPixels) * iglooScaleWithinRoundedSquare
+    )
+)
+let backgroundRemovedImage = artworkContext.makeImage()!
 
 // CGImage cropping uses top-left coordinates, like the pixel rows above.
 let artworkBoundsInSource = CGRect(
@@ -271,7 +512,7 @@ guard artworkBoundsInSource.width > CGFloat(sourceWidthInPixels) / 2,
 }
 print("Rounded square in the source: \(Int(artworkBoundsInSource.width))×\(Int(artworkBoundsInSource.height)) px at (\(artworkLeftColumn), \(artworkTopRow))")
 
-// MARK: - 2. Fit it to Apple's grid
+// MARK: - 3. Fit it to Apple's grid
 
 let masterIconContext = makeTransparentContext(widthInPixels: iconCanvasSizeInPixels, heightInPixels: iconCanvasSizeInPixels)
 masterIconContext.setShadow(
@@ -292,7 +533,7 @@ masterIconContext.draw(
 )
 let masterIconImage = masterIconContext.makeImage()!
 
-// MARK: - 3. Every size for the asset catalog
+// MARK: - 4. Every size for the asset catalog
 
 writePNG(masterIconImage, toPath: "\(appIconSetFolderPath)/1024-mac.png")
 var previousSizeImage = masterIconImage
@@ -303,17 +544,14 @@ for iconSizeInPixels in [512, 256, 128, 64, 32, 16] {
     writePNG(previousSizeImage, toPath: "\(appIconSetFolderPath)/\(iconSizeInPixels)-mac.png")
 }
 
-// MARK: - 4. Brand files
+// MARK: - 5. Brand files
 
 writePNG(masterIconImage, toPath: "\(brandFolderPath)/elfhub-icon-1024.png")
 writeSVG(embedding: masterIconImage, title: "elfhub", toPath: "\(brandFolderPath)/elfhub-icon.svg")
 
-// The igloo on its own (no rounded square), at 1024 px. Drawing it into a
-// premultiplied context also drops the colour data hidden under its
-// transparent pixels.
-let iglooCutoutSourceImage = loadImage(atPath: iglooCutoutSourcePath)
+// The igloo on its own (no rounded square), at 1024 px.
 let iglooContext = makeTransparentContext(widthInPixels: iconCanvasSizeInPixels, heightInPixels: iconCanvasSizeInPixels)
-iglooContext.draw(iglooCutoutSourceImage, in: CGRect(x: 0, y: 0, width: iconCanvasSizeInPixels, height: iconCanvasSizeInPixels))
+iglooContext.draw(iglooCutoutImage, in: CGRect(x: 0, y: 0, width: iconCanvasSizeInPixels, height: iconCanvasSizeInPixels))
 let iglooImage = iglooContext.makeImage()!
 writePNG(iglooImage, toPath: "\(brandFolderPath)/elfhub-igloo-1024.png")
 writeSVG(embedding: iglooImage, title: "elfhub igloo", toPath: "\(brandFolderPath)/elfhub-igloo.svg")
