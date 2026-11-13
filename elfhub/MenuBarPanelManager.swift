@@ -61,7 +61,9 @@ final class MenuBarPanelManager: NSObject {
     // MARK: - Status Item
 
     private func createStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // Sized to the icon (not a square the bar's height) so the wide igloo
+        // is never squeezed.
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         guard let button = statusItem?.button else { return }
 
@@ -74,7 +76,7 @@ final class MenuBarPanelManager: NSObject {
     /// app icon, kept as a vector template image so macOS tints it for light
     /// and dark menu bars. Rebuilt by scripts/icon/make-menu-bar-icon.swift.
     static let menuBarIconAssetName = "MenuBarIcon"
-    static let menuBarIconSizeInPoints: CGFloat = 18
+    static let menuBarIconSizeInPoints: CGFloat = 22
 
     static func makeMenuBarIcon() -> NSImage? {
         guard let menuBarIcon = NSImage(named: menuBarIconAssetName) else { return nil }

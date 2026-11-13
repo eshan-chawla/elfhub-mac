@@ -7,7 +7,8 @@
 // Run from the repo root:
 //   swift scripts/icon/make-menu-bar-icon.swift [preview.png]
 //
-// Writes the glyph as one SVG path (18 × 18 pt, macOS's menu bar icon size)
+// Writes the glyph as one SVG path (22 × 22 pt, the tallest icon that fits
+// the menu bar; the igloo is drawn on an 18 pt grid and scaled to fill it)
 // to elfhub/Assets.xcassets/MenuBarIcon.imageset/menu-bar-igloo.svg, where
 // the asset catalog keeps it as a vector template image (macOS tints it for
 // light and dark menu bars), and to brand/elfhub-menu-bar-igloo.svg. With an
@@ -23,9 +24,15 @@ import UniformTypeIdentifiers
 
 let copyrightNotice = "Copyright (c) 2026 Eshan Chawla. All rights reserved. The elfhub icon is not licensed under AGPL-3.0 and may not be used, copied or modified without written permission."
 
-let glyphCanvasSizeInPoints: CGFloat = 18
+// The igloo is drawn on an 18 pt grid, then scaled up and centred on the
+// 22 pt canvas. It's wide and low, so it needs the extra size to read at
+// the same weight as other menu bar icons.
+let drawingGridSizeInPoints: CGFloat = 18
+let glyphCanvasSizeInPoints: CGFloat = 22
+let glyphScaleOnCanvas: CGFloat = 1.35
 
-// All measurements in points, origin at the bottom-left, y up.
+// All measurements in points on the drawing grid, origin at the
+// bottom-left, y up.
 let groundLineY: CGFloat = 4
 let domeCenterX: CGFloat = 10.4
 let domeHorizontalRadius: CGFloat = 6.6
@@ -54,14 +61,15 @@ func archAboveGround(centerX: CGFloat, horizontalRadius: CGFloat, height: CGFloa
         ellipseIn: CGRect(x: centerX - horizontalRadius, y: groundLineY - height, width: horizontalRadius * 2, height: height * 2),
         transform: nil
     )
-    let aboveGround = CGPath(rect: CGRect(x: 0, y: groundLineY, width: glyphCanvasSizeInPoints, height: glyphCanvasSizeInPoints), transform: nil)
+    let aboveGround = CGPath(rect: CGRect(x: 0, y: groundLineY, width: drawingGridSizeInPoints, height: drawingGridSizeInPoints), transform: nil)
     return fullEllipse.intersection(aboveGround)
 }
 
 let canvasWidth = glyphCanvasSizeInPoints
+let drawingGridWidth = drawingGridSizeInPoints
 let blockGaps = CGMutablePath()
-blockGaps.addRect(CGRect(x: 0, y: firstBlockRowTopY, width: canvasWidth, height: gapBetweenBlocks))
-blockGaps.addRect(CGRect(x: 0, y: secondBlockRowTopY, width: canvasWidth, height: gapBetweenBlocks))
+blockGaps.addRect(CGRect(x: 0, y: firstBlockRowTopY, width: drawingGridWidth, height: gapBetweenBlocks))
+blockGaps.addRect(CGRect(x: 0, y: secondBlockRowTopY, width: drawingGridWidth, height: gapBetweenBlocks))
 blockGaps.addRect(CGRect(x: firstBlockRowJointX, y: groundLineY, width: gapBetweenBlocks, height: firstBlockRowTopY - groundLineY))
 blockGaps.addRect(CGRect(
     x: secondBlockRowJointX,
@@ -81,7 +89,16 @@ let doorway = archAboveGround(centerX: doorwayCenterX, horizontalRadius: doorway
 
 let domeWithBlocks = dome.subtracting(blockGaps).subtracting(tunnelWithOutlineGap)
 let tunnelWithDoorway = tunnel.subtracting(doorway)
-let iglooGlyph = domeWithBlocks.union(tunnelWithDoorway)
+let iglooOnDrawingGrid = domeWithBlocks.union(tunnelWithDoorway)
+
+// Scale up and centre on the canvas.
+let iglooBoundsOnDrawingGrid = iglooOnDrawingGrid.boundingBoxOfPath
+var scaleAndCentreTransform = CGAffineTransform(translationX: canvasWidth / 2, y: canvasWidth / 2)
+    .scaledBy(x: glyphScaleOnCanvas, y: glyphScaleOnCanvas)
+    .translatedBy(x: -iglooBoundsOnDrawingGrid.midX, y: -iglooBoundsOnDrawingGrid.midY)
+guard let iglooGlyph = iglooOnDrawingGrid.copy(using: &scaleAndCentreTransform) else {
+    failAndExit("couldn't scale the glyph")
+}
 
 let glyphBounds = iglooGlyph.boundingBoxOfPath
 guard glyphBounds.minX >= 0, glyphBounds.maxX <= canvasWidth, glyphBounds.minY >= 0, glyphBounds.maxY <= canvasWidth else {
@@ -134,12 +151,12 @@ for outputPath in ["elfhub/Assets.xcassets/MenuBarIcon.imageset/menu-bar-igloo.s
     }
 }
 
-// Optional preview: the glyph at 1×, 2× and 16× on light and dark bars.
+// Optional preview: the glyph at 1×, 2× and 13× on light and dark bars.
 if CommandLine.arguments.count > 1 {
     let previewPath = CommandLine.arguments[1]
-    let previewScales: [CGFloat] = [1, 2, 16]
+    let previewScales: [CGFloat] = [1, 2, 13]
     let previewWidth = Int(previewScales.reduce(0) { $0 + canvasWidth * $1 + 20 }) + 20
-    let previewHeight = Int(canvasWidth * 16 + 40) * 2
+    let previewHeight = Int(canvasWidth * 13 + 40) * 2
     let previewContext = CGContext(
         data: nil, width: previewWidth, height: previewHeight, bitsPerComponent: 8, bytesPerRow: 0,
         space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue

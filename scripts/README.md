@@ -14,7 +14,7 @@ Builds every size in `elfhub/Assets.xcassets/AppIcon.appiconset` (16–1024 px) 
 swift scripts/icon/make-menu-bar-icon.swift [preview.png]
 ```
 
-Draws the one-colour igloo glyph (18 × 18 pt) that matches the app icon. It writes the glyph as a single SVG path to `elfhub/Assets.xcassets/MenuBarIcon.imageset/` (a vector template image, so macOS tints it for light and dark menu bars) and to `brand/elfhub-menu-bar-igloo.svg`. Pass a path to also get a large preview PNG.
+Draws the one-colour igloo glyph (22 × 22 pt, the tallest that fits the menu bar) that matches the app icon. It writes the glyph as a single SVG path to `elfhub/Assets.xcassets/MenuBarIcon.imageset/` (a vector template image, so macOS tints it for light and dark menu bars) and to `brand/elfhub-menu-bar-igloo.svg`. Pass a path to also get a large preview PNG.
 
 The icon artwork is all rights reserved, not AGPL — see `brand/LICENSE.md`.
 

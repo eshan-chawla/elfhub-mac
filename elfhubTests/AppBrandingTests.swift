@@ -2,7 +2,7 @@
 //  AppBrandingTests.swift
 //  elfhubTests
 //
-//  The igloo menu bar icon ships in the app's asset catalog as an 18 pt
+//  The igloo menu bar icon ships in the app's asset catalog as a 22 pt
 //  template image, so macOS tints it for light and dark menu bars.
 //
 
@@ -16,6 +16,6 @@ struct AppBrandingTests {
     @Test func theMenuBarIconIsTheIglooTemplateImage() throws {
         let menuBarIcon = try #require(MenuBarPanelManager.makeMenuBarIcon())
         #expect(menuBarIcon.isTemplate)
-        #expect(menuBarIcon.size == NSSize(width: 18, height: 18))
+        #expect(menuBarIcon.size == NSSize(width: 22, height: 22))
     }
 }
