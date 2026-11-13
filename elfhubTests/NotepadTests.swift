@@ -7,6 +7,7 @@
 //  are never spoken, and the whole notepad is saved with the reply.
 //
 
+import AppKit
 import Foundation
 import Testing
 @testable import elfhub
@@ -271,5 +272,16 @@ struct NotepadTests {
         #expect(assistantText.hasPrefix("here they are."))
         #expect(assistantText.contains("2. save it"))
         #expect(assistantText.contains("steps"))
+    }
+
+    // MARK: - Moving the window
+
+    @Test func draggingTheHeaderKeepsTheWindowTheSameDistanceFromTheMouse() {
+        let notepadDragStart = NotepadWindowDragStart(
+            mouseLocation: NSPoint(x: 1200, y: 800),
+            windowOrigin: NSPoint(x: 1000, y: 500)
+        )
+        let movedWindowOrigin = notepadDragStart.windowOrigin(forMouseLocation: NSPoint(x: 700, y: 950))
+        #expect(movedWindowOrigin == NSPoint(x: 500, y: 650))
     }
 }

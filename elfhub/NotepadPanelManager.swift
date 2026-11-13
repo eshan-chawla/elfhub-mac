@@ -104,6 +104,9 @@ final class NotepadPanelManager {
 
     private var notepadPanel: NSPanel?
     private var eventSubscription: AnyCancellable?
+    /// Where the mouse and the window were when the current header drag
+    /// began (screen coordinates); nil when no drag is in progress.
+    private var notepadDragStart: NotepadWindowDragStart?
 
     /// Space between the window and the screen's edges (and the menu bar).
     private static let screenEdgeInset: CGFloat = 24
@@ -127,6 +130,7 @@ final class NotepadPanelManager {
     func closeNotepad() {
         notepadPanel?.orderOut(nil)
         notepadPanel = nil
+        notepadDragStart = nil
         notepadPanelModel.open(title: "")
     }
 
@@ -175,9 +179,15 @@ final class NotepadPanelManager {
             },
             onPreferredHeightChange: { [weak self] preferredWindowHeight in
                 self?.resizeNotepadPanel(toHeight: preferredWindowHeight)
+            },
+            onHeaderDragChanged: { [weak self] dragTranslation in
+                self?.moveNotepadPanel(followingHeaderDragTranslation: dragTranslation)
+            },
+            onHeaderDragEnded: { [weak self] in
+                self?.notepadDragStart = nil
             }
         )
-        let hostingView = NSHostingView(rootView: floatingNotepadView)
+        let hostingView = FirstClickHostingView(rootView: floatingNotepadView)
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         notepadPanel.contentView = hostingView
@@ -203,6 +213,32 @@ final class NotepadPanelManager {
         notepadPanel.invalidateShadow()
     }
 
+    /// Moves the window with the mouse while its header is dragged. The
+    /// window's position comes from the mouse's screen location, not from
+    /// the gesture's own coordinates: those are relative to the window, which
+    /// is moving under them.
+    private func moveNotepadPanel(followingHeaderDragTranslation dragTranslation: CGSize) {
+        guard let notepadPanel else { return }
+        let currentMouseLocation = NSEvent.mouseLocation
+        if notepadDragStart == nil {
+            // The gesture reports its first change after a small movement;
+            // step back by that movement to find where the press was. The
+            // window hasn't moved yet, so the translation is exact here.
+            // SwiftUI's y grows downward, the screen's grows upward.
+            notepadDragStart = NotepadWindowDragStart(
+                mouseLocation: NSPoint(
+                    x: currentMouseLocation.x - dragTranslation.width,
+                    y: currentMouseLocation.y + dragTranslation.height
+                ),
+                windowOrigin: notepadPanel.frame.origin
+            )
+        }
+        guard let notepadDragStart else { return }
+        notepadPanel.setFrameOrigin(
+            notepadDragStart.windowOrigin(forMouseLocation: currentMouseLocation)
+        )
+    }
+
     private func screenUnderMouse() -> NSScreen? {
         let mouseLocation = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
@@ -213,4 +249,26 @@ final class NotepadPanelManager {
 /// text can be selected and copied with ⌘C.
 private final class NotepadPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+}
+
+/// The panel never activates elfhub, so almost every click on it lands
+/// while the user is in another app. Without this, AppKit spends that first
+/// click making the panel key and the header drag (or a button) only works
+/// on a second try.
+private final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+/// Where a header drag began: the window keeps the same offset from the
+/// mouse for the whole drag.
+struct NotepadWindowDragStart: Equatable {
+    let mouseLocation: NSPoint
+    let windowOrigin: NSPoint
+
+    func windowOrigin(forMouseLocation currentMouseLocation: NSPoint) -> NSPoint {
+        NSPoint(
+            x: windowOrigin.x + (currentMouseLocation.x - mouseLocation.x),
+            y: windowOrigin.y + (currentMouseLocation.y - mouseLocation.y)
+        )
+    }
 }
