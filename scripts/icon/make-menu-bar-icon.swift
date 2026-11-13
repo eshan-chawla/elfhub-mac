@@ -46,9 +46,11 @@ let tunnelCenterX: CGFloat = 5.4
 let tunnelHorizontalRadius: CGFloat = 3.6
 let tunnelHeight: CGFloat = 5
 let tunnelOutlineGap: CGFloat = 0.9
-let doorwayCenterX: CGFloat = 5.0
-let doorwayHorizontalRadius: CGFloat = 1.35
-let doorwayHeight: CGFloat = 3.1
+// The doorway matches the artwork's opening: straight sides with a round
+// top, about half the tunnel's height, a little left of the tunnel's middle.
+let doorwayCenterX: CGFloat = 5.1
+let doorwayWidth: CGFloat = 2.2
+let doorwayHeight: CGFloat = 2.6
 
 func failAndExit(_ message: String) -> Never {
     FileHandle.standardError.write(Data("make-menu-bar-icon: \(message)\n".utf8))
@@ -85,7 +87,16 @@ let tunnelWithOutlineGap = archAboveGround(
     horizontalRadius: tunnelHorizontalRadius + tunnelOutlineGap,
     height: tunnelHeight + tunnelOutlineGap
 )
-let doorway = archAboveGround(centerX: doorwayCenterX, horizontalRadius: doorwayHorizontalRadius, height: doorwayHeight)
+let doorwayTopRadius = doorwayWidth / 2
+let doorwayStraightSides = CGPath(
+    rect: CGRect(x: doorwayCenterX - doorwayTopRadius, y: groundLineY, width: doorwayWidth, height: doorwayHeight - doorwayTopRadius),
+    transform: nil
+)
+let doorwayRoundTop = CGPath(
+    ellipseIn: CGRect(x: doorwayCenterX - doorwayTopRadius, y: groundLineY + doorwayHeight - doorwayWidth, width: doorwayWidth, height: doorwayWidth),
+    transform: nil
+)
+let doorway = doorwayStraightSides.union(doorwayRoundTop)
 
 let domeWithBlocks = dome.subtracting(blockGaps).subtracting(tunnelWithOutlineGap)
 let tunnelWithDoorway = tunnel.subtracting(doorway)
