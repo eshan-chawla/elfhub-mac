@@ -256,7 +256,7 @@ struct OnboardingPane: View {
 /// Onboarding step 2: what elfhub keeps on this Mac, shown before setup ends
 /// so nobody is saving chats without having seen the choice. The toggles show
 /// the stores' own defaults (chats on, screenshots off, action log on) and
-/// change the same settings as Settings › Privacy.
+/// change the same settings as Settings › Privacy & permissions.
 struct OnboardingDataOnThisMacCard: View {
     @ObservedObject var chatConversationStore: ChatConversationStore
     @ObservedObject var computerUseAuditLog: ComputerUseAuditLog
@@ -297,7 +297,7 @@ struct OnboardingDataOnThisMacCard: View {
                 )
             )
 
-            Text("Change these anytime in Settings › Privacy.")
+            Text("Change these anytime in Settings › Privacy & permissions.")
                 .font(.system(size: 11))
                 .foregroundColor(DS.Colors.textTertiary)
         }
@@ -422,7 +422,7 @@ struct GuidedTutorialPane: View {
                         .pointerCursor()
                 }
                 if tutorialStep == .screenActions {
-                    Button("Open Settings › Modes") { onSelectSection(.settings(.modes)) }
+                    Button("Open Settings › Controls") { onSelectSection(.settings(.controls)) }
                         .pointerCursor()
                 }
                 Spacer()

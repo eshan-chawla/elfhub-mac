@@ -3,9 +3,10 @@
 //  elfhub
 //
 //  Settings, opened from the sidebar's bottom menu. The sidebar swaps to the
-//  categories below (with "Back") and the detail pane shows one category —
-//  every configuration grouped by what it's about, instead of separate
-//  Models / Modes / Settings tabs.
+//  four categories below (with "Back") and the detail pane shows one
+//  category — every configuration grouped by what it's about: Models,
+//  Controls (input mode, keys, screen actions), Privacy & permissions, and
+//  General.
 //
 
 import AppKit
@@ -15,9 +16,7 @@ import SwiftUI
 
 enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     case models
-    case modes
-    case shortcuts
-    case permissions
+    case controls
     case privacy
     case general
 
@@ -26,10 +25,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     var displayTitle: String {
         switch self {
         case .models: return "Models"
-        case .modes: return "Modes"
-        case .shortcuts: return "Shortcuts"
-        case .permissions: return "Permissions"
-        case .privacy: return "Privacy"
+        case .controls: return "Controls"
+        case .privacy: return "Privacy & permissions"
         case .general: return "General"
         }
     }
@@ -37,10 +34,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     var systemImageName: String {
         switch self {
         case .models: return "cpu"
-        case .modes: return "slider.horizontal.3"
-        case .shortcuts: return "keyboard"
-        case .permissions: return "lock.shield"
-        case .privacy: return "hand.raised"
+        case .controls: return "slider.horizontal.3"
+        case .privacy: return "lock.shield"
         case .general: return "gearshape"
         }
     }
@@ -49,14 +44,10 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .models:
             return "Speech-to-text, the language model and the voice. Requests go straight from this app to the services you pick — or stay on this Mac with local models. Keys are kept in your Keychain."
-        case .modes:
-            return "How you talk to elfhub, and whether it may act on your screen."
-        case .shortcuts:
-            return "The push-to-talk keys, and how to stop elfhub."
-        case .permissions:
-            return "What macOS needs to allow so elfhub can hear you, see your screen and act."
+        case .controls:
+            return "How you talk to elfhub, the keys that start and stop it, and whether it may act on your screen."
         case .privacy:
-            return "Chat history, saved screenshots, and apps that are never captured."
+            return "What macOS lets elfhub use, what it keeps on this Mac, and apps that are never captured."
         case .general:
             return "Startup, sounds and the tutorial."
         }
@@ -75,18 +66,11 @@ struct SettingsCategoryPage: View {
             switch settingsCategory {
             case .models:
                 ModelsSettingsContent(companionManager: companionManager)
-            case .modes:
-                ModesSettingsContent(companionManager: companionManager)
-            case .shortcuts:
-                VStack(alignment: .leading, spacing: 12) {
-                    PushToTalkShortcutPicker(companionManager: companionManager)
-                    EscapeShortcutInfoRow()
-                }
-                .mainAppCard()
-            case .permissions:
+            case .controls:
+                ControlsSettingsContent(companionManager: companionManager)
+            case .privacy:
                 PermissionGroupView(companionManager: companionManager)
                     .mainAppCard()
-            case .privacy:
                 ChatHistorySettingsSection(chatConversationStore: companionManager.chatConversationStore)
                     .mainAppCard()
                 ScreenCaptureBlocklistEditor(screenCapturePrivacyBlocklist: ScreenCapturePrivacyBlocklist.shared)
@@ -170,10 +154,11 @@ private struct ModelsSettingsContent: View {
     }
 }
 
-// MARK: - Modes
+// MARK: - Controls
 
-/// How elfhub is used: input mode, and screen actions with their consent gate.
-private struct ModesSettingsContent: View {
+/// How elfhub is used: input mode, the keys that start and stop it, and
+/// screen actions with their consent gate.
+private struct ControlsSettingsContent: View {
     @ObservedObject var companionManager: CompanionManager
 
     var body: some View {
@@ -182,6 +167,15 @@ private struct ModesSettingsContent: View {
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundColor(DS.Colors.textTertiary)
             InputModePicker(companionManager: companionManager)
+        }
+        .mainAppCard()
+
+        VStack(alignment: .leading, spacing: 12) {
+            Text("KEYS")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundColor(DS.Colors.textTertiary)
+            PushToTalkShortcutPicker(companionManager: companionManager)
+            EscapeShortcutInfoRow()
         }
         .mainAppCard()
 
@@ -391,7 +385,7 @@ struct ChatHistorySettingsSection: View {
     }
 }
 
-/// Settings › Privacy: the local log of actions elfhub took on screen.
+/// Settings › Privacy & permissions: the local log of actions elfhub took on screen.
 struct ComputerUseAuditLogSettingsSection: View {
     @ObservedObject var computerUseAuditLog: ComputerUseAuditLog
     @State private var isConfirmingDeleteLog = false

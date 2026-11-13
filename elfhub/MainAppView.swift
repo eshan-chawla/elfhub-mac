@@ -8,8 +8,8 @@
 //    top) and, while the optional tutorial runs, a pinned Tutorial row. Its
 //    bottom menu opens on hover and offers Settings and Quit. There is no
 //    separate home page.
-//  - Settings swaps the sidebar to its categories (Models, Modes, Shortcuts,
-//    Permissions, Privacy, General) with "Back" to where the user came from
+//  - Settings swaps the sidebar to its categories (Models, Controls,
+//    Privacy & permissions, General) with "Back" to where the user came from
 //    (see MainAppSettingsViews.swift).
 //  - Until setup is complete the detail pane shows onboarding exclusively
 //    (see MainAppOnboardingViews.swift, which also holds the tutorial).

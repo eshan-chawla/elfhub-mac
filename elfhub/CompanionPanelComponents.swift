@@ -16,7 +16,7 @@ import SwiftUI
 
 /// Segmented control for choosing how the user interacts with elfhub —
 /// voice (push-to-talk), text only, or both. Shown wherever mode switching
-/// matters (Settings › Modes, onboarding and the compact panel).
+/// matters (Settings › Controls, onboarding and the compact panel).
 struct InputModePicker: View {
     @ObservedObject var companionManager: CompanionManager
 

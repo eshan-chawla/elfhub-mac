@@ -41,7 +41,7 @@ elfhub keeps itself up to date: once a day it checks GitHub Releases, and when a
 ## First launch
 
 1. **Models** — pick speech-to-text, a language model, and a voice.
-2. **Shortcuts & permissions** — keep or change the push-to-talk shortcut, grant permissions, choose what stays on your Mac (saving chats is on, screenshots off, the action log on — change them here or later in Settings › Privacy), and leave **Start tutorial** checked (or uncheck it) before finishing.
+2. **Shortcuts & permissions** — keep or change the push-to-talk shortcut, grant permissions, choose what stays on your Mac (saving chats is on, screenshots off, the action log on — change them here or later in Settings › Privacy & permissions), and leave **Start tutorial** checked (or uncheck it) before finishing.
 3. **Tutorial (optional)** — a short hands-on walkthrough: talk, get pointed at something, clear it with Esc, and chat. Skip any step or end it anytime; replay it from Settings.
 
 ## Build and run
