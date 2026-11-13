@@ -3,6 +3,15 @@ Copyright (c) 2026 Eshan Chawla and elfhub contributors
 
 elfhub is licensed under the GNU Affero General Public License v3.0 (see LICENSE).
 
+Except: the elfhub app icon and artwork
+=======================================
+The app icon and igloo artwork — everything in brand/ and the images in
+elfhub/Assets.xcassets/AppIcon.appiconset/, in any format — are Copyright (c)
+2026 Eshan Chawla, all rights reserved. They are not licensed under the AGPL
+or any other open-source licence and may not be used, copied or modified
+without written permission. Forks and other builds must use their own icon.
+See brand/LICENSE.md.
+
 
 Third-party code
 ================

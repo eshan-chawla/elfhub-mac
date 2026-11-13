@@ -1,5 +1,15 @@
 # Release Scripts
 
+## `icon/make-app-icon.swift` — Rebuild the app icon
+
+```bash
+swift scripts/icon/make-app-icon.swift
+```
+
+Builds every size in `elfhub/Assets.xcassets/AppIcon.appiconset` (16–1024 px) from `brand/source/elfhub-icon-source.jpg`. It removes the dark background, fits the rounded square to Apple's macOS icon grid (824 px on a 1024 px canvas, with a soft shadow), and writes `brand/elfhub-icon-1024.png` and `brand/elfhub-icon.svg`. It also writes `brand/elfhub-igloo-1024.png` and `brand/elfhub-igloo.svg` from the igloo cut-out. Run it after changing the source artwork.
+
+The icon artwork is all rights reserved, not AGPL — see `brand/LICENSE.md`.
+
 ## `release.sh` — Ship a new version of elfhub
 
 Automates the full release pipeline: build → sign → DMG → notarize → GitHub Release.
