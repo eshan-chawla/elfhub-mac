@@ -199,6 +199,33 @@ final class TextChatViewModel: ObservableObject {
                 assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier
             )
             conversation.recordNotepad(turnResult.shownNotepad, assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier)
+            conversation.recordFileChanges(
+                turnResult.elfFileChanges.map { fileChange in
+                    SavedElfFileChange(
+                        changeEntryIdentifier: fileChange.id,
+                        elfIdentifier: turnResult.elfIdentifier ?? ElfManager.mainElfIdentifier,
+                        note: ElfFileTools.chatNote(for: fileChange)
+                    )
+                },
+                assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier
+            )
+        }
+    }
+
+    /// Undoes a file change shown under a reply, through that elf's change
+    /// log. Throws `ElfChangeLogError.fileChangedSinceThisChange` when the
+    /// file changed since, so the user can choose to undo anyway (`force`).
+    func undoFileChange(_ savedFileChange: SavedElfFileChange, force: Bool) throws {
+        guard let changedElf = companionManager.elfManager.elf(withIdentifier: savedFileChange.elfIdentifier) else {
+            throw ElfManagerError.unknownElf(savedFileChange.elfIdentifier)
+        }
+        do {
+            try ElfChangeLog(home: changedElf.home).undo(entryIdentifier: savedFileChange.changeEntryIdentifier, force: force)
+        } catch ElfChangeLogError.alreadyUndone {
+            // Undone from the hub already: just show it as undone.
+        }
+        updateConversation(withIdentifier: activeConversation.id, savingToDisk: true) { conversation in
+            conversation.markFileChangeUndone(changeEntryIdentifier: savedFileChange.changeEntryIdentifier)
         }
     }
 
@@ -456,6 +483,12 @@ struct TextChatView: View {
 
                 if !isFromUser, let savedNotepad = message.notepad {
                     SavedNotepadCard(notepad: savedNotepad)
+                }
+
+                if !isFromUser {
+                    ForEach(message.fileChanges, id: \.changeEntryIdentifier) { savedFileChange in
+                        ChatFileChangeRow(viewModel: viewModel, savedFileChange: savedFileChange)
+                    }
                 }
 
                 if showsScreenshotRow, let exchangeScreenshotFileURL {
@@ -744,3 +777,63 @@ private struct ConversationListRow: View {
     }
 }
 
+// MARK: - File changes under a reply
+
+/// "saved files/trip.md · Undo" under a reply. When the file changed since,
+/// the user is asked before the earlier version is put back.
+private struct ChatFileChangeRow: View {
+    @ObservedObject var viewModel: TextChatViewModel
+    let savedFileChange: SavedElfFileChange
+
+    @State private var isConfirmingForcedUndo = false
+    @State private var undoErrorMessage: String?
+    @State private var isUndoHovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: savedFileChange.isUndone ? "arrow.uturn.backward" : "doc.text")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(DS.Colors.textTertiary)
+                Text(savedFileChange.note)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.textTertiary)
+                    .strikethrough(savedFileChange.isUndone)
+                if savedFileChange.isUndone {
+                    Text("undone")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textTertiary)
+                } else {
+                    Button("Undo") { undo(force: false) }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(isUndoHovered ? DS.Colors.textPrimary : DS.Colors.accentText)
+                        .onHover { isUndoHovered = $0 }
+                        .pointerCursor()
+                        .help("Put the file back the way it was")
+                }
+            }
+            if let undoErrorMessage {
+                Text(undoErrorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+        }
+        .confirmationDialog("This file changed since then.", isPresented: $isConfirmingForcedUndo) {
+            Button("Undo anyway", role: .destructive) { undo(force: true) }
+        } message: {
+            Text("Undoing puts back the earlier version. The newer one is kept in the elf's changes, so you can undo this too.")
+        }
+    }
+
+    private func undo(force: Bool) {
+        do {
+            try viewModel.undoFileChange(savedFileChange, force: force)
+            undoErrorMessage = nil
+        } catch ElfChangeLogError.fileChangedSinceThisChange {
+            isConfirmingForcedUndo = true
+        } catch {
+            undoErrorMessage = error.localizedDescription
+        }
+    }
+}

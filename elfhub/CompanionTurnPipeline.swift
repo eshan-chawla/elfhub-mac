@@ -42,6 +42,8 @@ final class CompanionTurnPipeline {
         let shownNotepad: SavedNotepad?
         /// Files the elf changed in its folder this turn, each undoable.
         var elfFileChanges: [ElfChangeLogEntry] = []
+        /// The elf whose folder those changes are in.
+        var elfIdentifier: String? = nil
     }
 
     private let providerConfigurationStore: ProviderConfigurationStore
@@ -445,7 +447,8 @@ final class CompanionTurnPipeline {
                 }
                 : nil,
             shownNotepad: shownNotepad,
-            elfFileChanges: elfToolOutcomes.flatMap(\.fileChanges)
+            elfFileChanges: elfToolOutcomes.flatMap(\.fileChanges),
+            elfIdentifier: elfToolContextForTurn?.id
         )
     }
 

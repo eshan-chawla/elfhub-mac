@@ -362,6 +362,8 @@ struct ElfSettingsContent: View {
         .mainAppCard()
         ElfSkillsSection(elfEditor: elfEditor)
             .mainAppCard()
+        ElfChangesSection(elfEditor: elfEditor)
+            .mainAppCard()
         ElfHomeAndExportSection(companionManager: companionManager, elfEditor: elfEditor)
             .mainAppCard()
         if !elfEditor.isMainElf {
@@ -374,6 +376,135 @@ struct ElfSettingsContent: View {
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 elfEditor.reload()
             }
+    }
+}
+
+// MARK: - Changes
+
+/// The elf's newest changes to its files, each with Undo (Redo for an
+/// undo). Changes made after the elf read a file or a web page carry a
+/// warning, since that text may have steered it.
+private struct ElfChangesSection: View {
+    @ObservedObject var elfEditor: ElfEditor
+
+    @State private var changeLogEntries: [ElfChangeLogEntry] = []
+    @State private var entryAwaitingForcedUndo: ElfChangeLogEntry?
+    @State private var undoErrorMessage: String?
+
+    private static let listedEntryLimit = 50
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LayerFieldLabel(text: "Changes")
+            Text("What this elf changed in its folder, newest first. Undo puts a file back the way it was.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            if changeLogEntries.isEmpty {
+                Text("No changes yet.")
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textTertiary)
+                    .padding(.vertical, 4)
+            }
+            ForEach(changeLogEntries) { changeLogEntry in
+                ElfChangeRow(
+                    changeLogEntry: changeLogEntry,
+                    onUndo: { undo(changeLogEntry, force: false) }
+                )
+            }
+            if let undoErrorMessage {
+                Text(undoErrorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+        }
+        .onAppear { reloadEntries() }
+        .onChange(of: elfEditor.elfFileCount) { _, _ in reloadEntries() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            reloadEntries()
+        }
+        .confirmationDialog(
+            "This file changed since then.",
+            isPresented: Binding(
+                get: { entryAwaitingForcedUndo != nil },
+                set: { isPresented in if !isPresented { entryAwaitingForcedUndo = nil } }
+            )
+        ) {
+            Button("Undo anyway", role: .destructive) {
+                if let entryAwaitingForcedUndo { undo(entryAwaitingForcedUndo, force: true) }
+            }
+        } message: {
+            Text("Undoing puts back the earlier version. The newer one is kept here, so you can undo this too.")
+        }
+    }
+
+    private func reloadEntries() {
+        changeLogEntries = Array(ElfChangeLog(home: elfEditor.home).entries().prefix(Self.listedEntryLimit))
+    }
+
+    private func undo(_ changeLogEntry: ElfChangeLogEntry, force: Bool) {
+        do {
+            try ElfChangeLog(home: elfEditor.home).undo(entryIdentifier: changeLogEntry.id, force: force)
+            undoErrorMessage = nil
+            entryAwaitingForcedUndo = nil
+            elfEditor.reload()
+        } catch ElfChangeLogError.fileChangedSinceThisChange {
+            entryAwaitingForcedUndo = changeLogEntry
+        } catch {
+            undoErrorMessage = error.localizedDescription
+        }
+        reloadEntries()
+    }
+}
+
+private struct ElfChangeRow: View {
+    let changeLogEntry: ElfChangeLogEntry
+    let onUndo: () -> Void
+
+    @State private var isUndoHovered = false
+
+    private var wasSteeredByWhatItRead: Bool {
+        changeLogEntry.influencedBy.contains(.file) || changeLogEntry.influencedBy.contains(.web)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: changeLogEntry.operation == .revert ? "arrow.uturn.backward" : "doc.text")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(ElfFileTools.chatNote(for: changeLogEntry))
+                    .font(.system(size: 12))
+                    .foregroundColor(changeLogEntry.isUndone ? DS.Colors.textTertiary : DS.Colors.textSecondary)
+                    .strikethrough(changeLogEntry.isUndone)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(changeLogEntry.date.formatted(.relative(presentation: .named)))
+                    .font(.system(size: 10))
+                    .foregroundColor(DS.Colors.textTertiary)
+            }
+            if wasSteeredByWhatItRead {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 10))
+                    .foregroundColor(DS.Colors.warning)
+                    .help("Made after the elf read a file or a web page, which may have steered it. Check it's what you wanted.")
+            }
+            Spacer()
+            if changeLogEntry.isUndone {
+                Text("undone")
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.textTertiary)
+            } else {
+                Button(changeLogEntry.operation == .revert ? "Redo" : "Undo") { onUndo() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(isUndoHovered ? DS.Colors.textPrimary : DS.Colors.accentText)
+                    .onHover { isUndoHovered = $0 }
+                    .pointerCursor()
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 

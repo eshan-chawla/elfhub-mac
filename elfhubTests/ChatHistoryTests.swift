@@ -54,6 +54,25 @@ struct ChatHistoryTests {
         #expect(decodedMessage.screenshotFileName == nil)
     }
 
+    @Test func oldChatsDecodeWithoutFileChanges() throws {
+        let savedMessageJSON = #"{"id":"6B1C5A3E-0000-4000-8000-000000000001","role":"assistant","text":"hi","createdAt":0}"#
+        let decodedMessage = try JSONDecoder().decode(StoredChatMessage.self, from: Data(savedMessageJSON.utf8))
+        #expect(decodedMessage.fileChanges.isEmpty)
+    }
+
+    @Test func fileChangesRoundTripAndCanBeMarkedUndone() throws {
+        var conversation = ChatConversation()
+        let exchangeIdentifiers = conversation.appendExchange(userText: "note that I prefer metric", inputSource: .typed)
+        let savedFileChange = SavedElfFileChange(changeEntryIdentifier: UUID(), elfIdentifier: "main", note: "saved profile.md")
+        conversation.recordFileChanges([savedFileChange], assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier)
+        conversation.markFileChangeUndone(changeEntryIdentifier: savedFileChange.changeEntryIdentifier)
+
+        let decodedConversation = try JSONDecoder().decode(ChatConversation.self, from: JSONEncoder().encode(conversation))
+        let replyFileChanges = decodedConversation.messages.last?.fileChanges
+        #expect(replyFileChanges?.map(\.note) == ["saved profile.md"])
+        #expect(replyFileChanges?.first?.isUndone == true)
+    }
+
     @Test func appendingAnExchangeAddsTheQuestionAndAnEmptyReply() {
         var conversation = ChatConversation()
         let exchangeIdentifiers = conversation.appendExchange(userText: "open my downloads", inputSource: .spoken)

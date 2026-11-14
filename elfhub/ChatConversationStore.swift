@@ -45,6 +45,8 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
     var userInk: SavedUserInk?
     /// On a reply: the notepad it wrote on screen, kept whole with the chat.
     var notepad: SavedNotepad?
+    /// On a reply: files the elf changed in its folder, each with Undo.
+    var fileChanges: [SavedElfFileChange]
 
     init(
         id: UUID = UUID(),
@@ -56,7 +58,8 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         screenshotFileName: String? = nil,
         screenGuidance: SavedScreenGuidance? = nil,
         userInk: SavedUserInk? = nil,
-        notepad: SavedNotepad? = nil
+        notepad: SavedNotepad? = nil,
+        fileChanges: [SavedElfFileChange] = []
     ) {
         self.id = id
         self.role = role
@@ -68,10 +71,11 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         self.screenGuidance = screenGuidance
         self.userInk = userInk
         self.notepad = notepad
+        self.fileChanges = fileChanges
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, role, text, createdAt, isError, inputSource, screenshotFileName, screenGuidance, userInk, notepad
+        case id, role, text, createdAt, isError, inputSource, screenshotFileName, screenGuidance, userInk, notepad, fileChanges
     }
 
     init(from decoder: Decoder) throws {
@@ -87,6 +91,24 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         screenGuidance = try container.decodeIfPresent(SavedScreenGuidance.self, forKey: .screenGuidance)
         userInk = try container.decodeIfPresent(SavedUserInk.self, forKey: .userInk)
         notepad = try container.decodeIfPresent(SavedNotepad.self, forKey: .notepad)
+        fileChanges = try container.decodeIfPresent([SavedElfFileChange].self, forKey: .fileChanges) ?? []
+    }
+}
+
+/// A file an elf changed in its folder during a reply, shown under the
+/// reply with Undo. The change itself is in the elf's change log.
+struct SavedElfFileChange: Codable, Equatable {
+    let changeEntryIdentifier: UUID
+    let elfIdentifier: String
+    /// "saved files/trip.md"
+    let note: String
+    var isUndone: Bool
+
+    init(changeEntryIdentifier: UUID, elfIdentifier: String, note: String, isUndone: Bool = false) {
+        self.changeEntryIdentifier = changeEntryIdentifier
+        self.elfIdentifier = elfIdentifier
+        self.note = note
+        self.isUndone = isUndone
     }
 }
 
@@ -149,6 +171,21 @@ struct ChatConversation: Codable, Identifiable, Equatable {
     }
 
     /// Keeps the notepad a reply wrote with that reply.
+    mutating func recordFileChanges(_ fileChanges: [SavedElfFileChange], assistantMessageIdentifier: UUID) {
+        guard !fileChanges.isEmpty,
+              let assistantMessageIndex = messages.firstIndex(where: { $0.id == assistantMessageIdentifier }) else { return }
+        messages[assistantMessageIndex].fileChanges += fileChanges
+    }
+
+    mutating func markFileChangeUndone(changeEntryIdentifier: UUID) {
+        for messageIndex in messages.indices {
+            for fileChangeIndex in messages[messageIndex].fileChanges.indices
+            where messages[messageIndex].fileChanges[fileChangeIndex].changeEntryIdentifier == changeEntryIdentifier {
+                messages[messageIndex].fileChanges[fileChangeIndex].isUndone = true
+            }
+        }
+    }
+
     mutating func recordNotepad(_ notepad: SavedNotepad?, assistantMessageIdentifier: UUID) {
         guard let notepad,
               let assistantMessageIndex = messages.firstIndex(where: { $0.id == assistantMessageIdentifier }) else { return }
