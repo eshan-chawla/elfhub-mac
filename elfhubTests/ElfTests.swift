@@ -43,6 +43,41 @@ struct ElfTests {
         #expect(configuration.schemaVersion == ElfConfiguration.currentSchemaVersion)
     }
 
+    // MARK: - Names
+
+    @Test func elfNamesRejectEmptyLongTagCharactersReservedAndDuplicates() {
+        #expect(ElfNameRules.problems(forName: "  ", otherElfNames: []) == [.empty])
+        #expect(ElfNameRules.problems(forName: String(repeating: "a", count: 33), otherElfNames: []) == [.tooLong(characterLimit: 32)])
+        #expect(ElfNameRules.problems(forName: "Pip [1]", otherElfNames: []) == [.containsTagCharacters])
+        #expect(ElfNameRules.problems(forName: "Ju:niper", otherElfNames: []) == [.containsTagCharacters])
+        #expect(ElfNameRules.problems(forName: "MAIN", otherElfNames: []) == [.reservedWord("main")])
+        #expect(ElfNameRules.problems(forName: "José", otherElfNames: ["jose"]) == [.duplicateOf(elfName: "jose")])
+        #expect(ElfNameRules.problems(forName: "Juniper", otherElfNames: ["Pip"]) == [])
+    }
+
+    @Test func aWholeWordPrefixIsOnlyAWarning() {
+        let problems = ElfNameRules.problems(forName: "Will", otherElfNames: ["Will Smith"])
+        #expect(problems == [.wholeWordPrefixOf(elfName: "Will Smith")])
+        #expect(problems.allSatisfy { problem in problem.isWarning })
+        #expect(ElfNameRules.problems(forName: "Jun", otherElfNames: ["Juniper"]) == [])
+    }
+
+    @Test func identifiersAreSlugsThatCountUpAndNeverClaimMain() {
+        #expect(ElfNameRules.uniqueIdentifier(forName: "Juniper", existingIdentifiers: ["main"]) == "juniper")
+        #expect(ElfNameRules.uniqueIdentifier(forName: "Juniper", existingIdentifiers: ["main", "juniper", "juniper-2"]) == "juniper-3")
+        #expect(ElfNameRules.uniqueIdentifier(forName: "🧝", existingIdentifiers: ["main"]) == "elf")
+        #expect(ElfNameRules.uniqueIdentifier(forName: "!!!", existingIdentifiers: ["main", "elf"]) == "elf-2")
+        #expect(ElfNameRules.uniqueIdentifier(forName: "Main", existingIdentifiers: ["main"]) == "main-2")
+    }
+
+    @Test func aliasesRoundTripAndDefaultToNone() throws {
+        let identity = ElfConfiguration.Identity(name: "Juniper", aliases: ["June", "Juni"])
+        let decodedIdentity = try JSONDecoder().decode(ElfConfiguration.Identity.self, from: JSONEncoder().encode(identity))
+        #expect(decodedIdentity.aliases == ["June", "Juni"])
+        let olderIdentity = try JSONDecoder().decode(ElfConfiguration.Identity.self, from: Data(#"{"name":"Pip"}"#.utf8))
+        #expect(olderIdentity.aliases.isEmpty)
+    }
+
     // MARK: - Skills
 
     @Test func skillRoundTripsThroughSkillMarkdownAndKeepsUnknownKeys() {

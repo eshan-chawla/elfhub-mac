@@ -49,11 +49,15 @@ nonisolated struct ElfConfiguration: Codable, Equatable, Sendable {
         var emoji: String
         /// A line about what this elf is for.
         var description: String
+        /// Other names the elf answers to when the user talks to it ("June"
+        /// for Juniper), checked with the same rules as its name.
+        var aliases: [String]
 
-        init(name: String = "elf", emoji: String = "", description: String = "") {
+        init(name: String = "elf", emoji: String = "", description: String = "", aliases: [String] = []) {
             self.name = name
             self.emoji = emoji
             self.description = description
+            self.aliases = aliases
         }
 
         init(from decoder: Decoder) throws {
@@ -61,6 +65,7 @@ nonisolated struct ElfConfiguration: Codable, Equatable, Sendable {
             name = try container.decodeIfPresent(String.self, forKey: .name) ?? "elf"
             emoji = try container.decodeIfPresent(String.self, forKey: .emoji) ?? ""
             description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+            aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
         }
     }
 

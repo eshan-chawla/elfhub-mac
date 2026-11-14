@@ -22,7 +22,7 @@ final class ElfManager: ObservableObject {
 
     private let userDefaults: UserDefaults
     private static let activeElfIdentifierKey = "activeElfIdentifier"
-    static let mainElfIdentifier = "main"
+    nonisolated static let mainElfIdentifier = "main"
 
     init(elvesDirectory: URL = ElfHome.defaultElvesDirectory, userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
