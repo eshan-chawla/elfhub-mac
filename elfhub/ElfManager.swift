@@ -204,8 +204,20 @@ final class ElfManager: ObservableObject {
     /// a slow disk or many skills never hold up the interface.
     func promptContext() async -> ElfPromptContext {
         let mainElfHome = mainElf.home
+        let otherElves = elves.filter { $0.id != Self.mainElfIdentifier }
         return await Task.detached(priority: .userInitiated) {
-            ElfPromptContext.reading(home: mainElfHome)
+            var mainElfPromptContext = ElfPromptContext.reading(home: mainElfHome)
+            // The main elf is told about its elves, so it can hand them work.
+            mainElfPromptContext.roster = otherElves.map { otherElf in
+                ElfRosterEntry(
+                    name: otherElf.configuration.identity.name,
+                    emoji: otherElf.configuration.identity.emoji,
+                    description: otherElf.configuration.identity.description,
+                    topSkillNames: Array(otherElf.home.readSkills().prefix(3).map(\.name)),
+                    canWorkInBackground: true
+                )
+            }
+            return mainElfPromptContext
         }.value
     }
 }

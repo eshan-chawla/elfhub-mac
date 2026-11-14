@@ -33,7 +33,7 @@ struct SpokenSentenceSegmenter {
         "POINT", "CLICK", "DOUBLECLICK", "SCROLL", "TYPE", "KEY",
         "HIGHLIGHT", "CIRCLE", "ARROW", "UNDERLINE", "NOTE",
         "NOTEPAD", "NOTEPAD_LINE",
-        "DELETE_FILE",
+        "DELETE_FILE", "ASSIGN_TASK", "CANCEL_TASK",
     ]
 
     /// Elf tag blocks ([FILE:…]…[/FILE], [SKILL:…]…[/SKILL]) whose content is

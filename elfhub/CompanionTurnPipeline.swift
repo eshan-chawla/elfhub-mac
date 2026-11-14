@@ -106,20 +106,33 @@ final class CompanionTurnPipeline {
     /// The elf whose tools (its notes, files, skills) this turn may use;
     /// nil gives the model no elf tools.
     private let elfForToolsProvider: () -> Elf?
-    private let elfToolRegistry = ElfToolRegistry.standard()
+    /// The main elf's extra tools as manager (assigning and checking
+    /// tasks, searching chats), added to its turns only.
+    private let mainElfManagerToolsProvider: () -> [ElfTool]
+    /// What the main elf should hear about background work before the
+    /// user's newest message, if anything (see ElfStatusBlock).
+    private let mainElfStatusProvider: () -> ElfMainStatusUpdate?
+    /// Told which tasks a delivered status block reported.
+    private let onMainElfStatusDelivered: ([UUID]) -> Void
 
     init(
         providerConfigurationStore: ProviderConfigurationStore,
         screenActionCoordinator: ScreenActionCoordinator,
         companionEventBus: CompanionEventBus,
         elfPromptContextProvider: @escaping () async -> ElfPromptContext = { .starter },
-        elfForToolsProvider: @escaping () -> Elf? = { nil }
+        elfForToolsProvider: @escaping () -> Elf? = { nil },
+        mainElfManagerToolsProvider: @escaping () -> [ElfTool] = { [] },
+        mainElfStatusProvider: @escaping () -> ElfMainStatusUpdate? = { nil },
+        onMainElfStatusDelivered: @escaping ([UUID]) -> Void = { _ in }
     ) {
         self.providerConfigurationStore = providerConfigurationStore
         self.screenActionCoordinator = screenActionCoordinator
         self.companionEventBus = companionEventBus
         self.elfPromptContextProvider = elfPromptContextProvider
         self.elfForToolsProvider = elfForToolsProvider
+        self.mainElfManagerToolsProvider = mainElfManagerToolsProvider
+        self.mainElfStatusProvider = mainElfStatusProvider
+        self.onMainElfStatusDelivered = onMainElfStatusDelivered
     }
 
     func clearConversationHistory() {
@@ -326,6 +339,10 @@ final class CompanionTurnPipeline {
     ) async throws -> TurnResult {
         let capabilities = languageModelProvider.capabilities
         let coordinateConvention = capabilities.visionProfile.coordinateConvention
+        // The main elf also manages its elves (tasks) and searches chats.
+        let elfToolRegistry = ElfToolRegistry(
+            tools: ElfFileTools.allTools + (elfTurnSetup.role == .mainForeground ? mainElfManagerToolsProvider() : [])
+        )
         var screenCaptures = capturedScreenCaptures
 
         // What the user drew while talking goes into the screenshot itself
@@ -333,6 +350,12 @@ final class CompanionTurnPipeline {
         // The screenshot was taken without elfhub's overlay, so the live
         // trail isn't in it — the ink is drawn in here instead.
         var userTextForModel = userText
+        // News about background work reaches the main elf in front of the
+        // user's message (not the system prompt, so the prompt cache holds).
+        let mainElfStatusUpdate = elfTurnSetup.role == .mainForeground ? mainElfStatusProvider() : nil
+        if let mainElfStatusUpdate {
+            userTextForModel = mainElfStatusUpdate.text + "\n\n" + userTextForModel
+        }
         let originalScreenshotJPEGData = capabilities.supportsVision ? screenCaptures.first?.imageData : nil
         var shownUserInk: SavedUserInk?
         if capabilities.supportsVision, !userInkStrokes.isEmpty, let cursorScreenCapture = screenCaptures.first {
@@ -402,7 +425,8 @@ final class CompanionTurnPipeline {
             guidanceEncoding: usesNativeGuidanceTools ? .nativeTools : .textTags,
             includesScreenActions: isActionModeEnabled,
             elfPromptContext: elfPromptContext,
-            includesElfFileTags: usesElfFileTags
+            includesElfFileTags: usesElfFileTags,
+            includesTaskTags: usesElfFileTags && elfTurnSetup.role == .mainForeground && !mainElfManagerToolsProvider().isEmpty
         )
 
         let initialRequest = LanguageModelRequest(
@@ -523,6 +547,10 @@ final class CompanionTurnPipeline {
         ))
         if conversationHistory.count > Self.maximumHistoryTurns {
             conversationHistory.removeFirst(conversationHistory.count - Self.maximumHistoryTurns)
+        }
+
+        if let mainElfStatusUpdate {
+            onMainElfStatusDelivered(mainElfStatusUpdate.reportedTaskIdentifiers)
         }
 
         return TurnResult(
@@ -649,7 +677,8 @@ enum CompanionPromptBuilder {
         guidanceEncoding: GuidanceEncoding,
         includesScreenActions: Bool,
         elfPromptContext: ElfPromptContext = .starter,
-        includesElfFileTags: Bool = false
+        includesElfFileTags: Bool = false,
+        includesTaskTags: Bool = false
     ) -> String {
         // Who the elf is (its name, soul.md, settings, profile.md, skills)
         // comes first; the mechanics below are the app's and stay fixed.
@@ -671,6 +700,9 @@ enum CompanionPromptBuilder {
         // streamed, and notepad lines must appear while elfhub is talking.
         if includesElfFileTags && guidanceEncoding == .textTags {
             promptSections.append(ElfToolTags.promptInstructions)
+            if includesTaskTags {
+                promptSections.append(ElfToolTags.taskTagInstructions)
+            }
         }
         promptSections.append(notepadInstructions)
         return promptSections.joined(separator: "\n\n")

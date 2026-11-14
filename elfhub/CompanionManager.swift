@@ -130,8 +130,38 @@ final class CompanionManager: ObservableObject {
         screenActionCoordinator: screenActionCoordinator,
         companionEventBus: companionEventBus,
         elfPromptContextProvider: { [elfManager] in await elfManager.promptContext() },
-        elfForToolsProvider: { [elfManager] in elfManager.mainElf }
+        elfForToolsProvider: { [elfManager] in elfManager.mainElf },
+        mainElfManagerToolsProvider: { [weak self] in
+            guard let self else { return [] }
+            return ElfTaskTools.tools(
+                elfManager: self.elfManager,
+                scheduler: self.elfTaskScheduler,
+                savedConversationsProvider: { [weak self] in self?.chatConversationStore.conversations ?? [] }
+            )
+        },
+        mainElfStatusProvider: { [weak self] in self?.mainElfStatusUpdate() },
+        onMainElfStatusDelivered: { [weak self] reportedTaskIdentifiers in
+            self?.elfTaskScheduler.markReported(taskIdentifiers: reportedTaskIdentifiers)
+        }
     )
+
+    /// What the main elf should hear about background work before the
+    /// user's next message: results not yet told, work under way, questions.
+    private func mainElfStatusUpdate() -> ElfMainStatusUpdate? {
+        let allTasks = elfTaskScheduler.tasks
+        let unreportedFinishedTasks = allTasks.filter { ($0.status == .done || $0.status == .failed) && !$0.reportedToUser }
+        guard let statusText = ElfStatusBlock.text(
+            unreportedFinishedTasks: unreportedFinishedTasks,
+            runningTasks: allTasks.filter { $0.status == .running || $0.status == .queued },
+            tasksWaitingForAnswers: allTasks.filter { $0.status == .needsInput },
+            elfNameForIdentifier: { [elfManager] elfIdentifier in
+                elfIdentifier == ElfManager.mainElfIdentifier
+                    ? "a background copy of you"
+                    : ElfTaskTools.elfName(forIdentifier: elfIdentifier, in: elfManager)
+            }
+        ) else { return nil }
+        return ElfMainStatusUpdate(text: statusText, reportedTaskIdentifiers: unreportedFinishedTasks.map(\.id))
+    }
 
     /// The main-window section another surface (e.g. the menu bar panel)
     /// asked to show; MainAppView switches to it and clears the request.
