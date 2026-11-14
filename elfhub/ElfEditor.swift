@@ -21,6 +21,8 @@ final class ElfEditor: ObservableObject {
     @Published private(set) var profileText: String
     @Published private(set) var skills: [ElfSkill]
     @Published private(set) var elfFileCount: Int
+    /// Which of this Mac's models and voices the elf uses.
+    @Published private(set) var localSettings: ElfLocalSettings
 
     private let elfManager: ElfManager
 
@@ -43,6 +45,7 @@ final class ElfEditor: ObservableObject {
         self.profileText = openedElf.home.readProfile()
         self.skills = openedElf.home.readSkills()
         self.elfFileCount = openedElf.home.fileCount()
+        self.localSettings = openedElf.home.readLocalSettings()
     }
 
     var home: ElfHome { elf.home }
@@ -57,6 +60,7 @@ final class ElfEditor: ObservableObject {
         profileText = home.readProfile()
         skills = home.readSkills()
         elfFileCount = home.fileCount()
+        localSettings = home.readLocalSettings()
     }
 
     // MARK: Identity and behaviour
@@ -121,6 +125,15 @@ final class ElfEditor: ObservableObject {
         try home.writeConfiguration(updatedConfiguration)
         elf.configuration = updatedConfiguration
         elfManager.reloadRoster()
+    }
+
+    /// Changes which of this Mac's models and voices the elf uses.
+    func updateLocalSettings(_ updateLocalSettings: (inout ElfLocalSettings) -> Void) throws {
+        try requireElfFolder()
+        var updatedLocalSettings = home.readLocalSettings()
+        updateLocalSettings(&updatedLocalSettings)
+        try home.writeLocalSettings(updatedLocalSettings)
+        localSettings = updatedLocalSettings
     }
 
     // MARK: Soul and profile

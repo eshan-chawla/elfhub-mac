@@ -10,6 +10,7 @@
 //
 
 import AppKit
+import AVFoundation
 import Combine
 import SwiftUI
 import UniformTypeIdentifiers
@@ -330,6 +331,7 @@ struct ElfSettingsContent: View {
             .mainAppCard()
         ElfModelAndVoiceSummarySection(
             elfEditor: elfEditor,
+            providerConfigurationStore: companionManager.providerConfigurationStore,
             mainElfName: companionManager.elfManager.mainElf.configuration.identity.name,
             onOpenModelSettings: onOpenModelSettings
         )
@@ -510,28 +512,177 @@ private struct ElfChangeRow: View {
 
 // MARK: - Model and voice
 
-/// Which language model and voice the elf uses. Every elf uses the ones in
-/// Settings › Models for now; per-elf choices come with side elves.
+/// Which language model and voice the elf uses. The main elf uses the ones
+/// in Settings › Models; another elf can pick its own from those already
+/// set up on this Mac (kept per Mac, never exported), or follow main's.
 private struct ElfModelAndVoiceSummarySection: View {
     @ObservedObject var elfEditor: ElfEditor
+    @ObservedObject var providerConfigurationStore: ProviderConfigurationStore
     let mainElfName: String
     let onOpenModelSettings: () -> Void
 
+    @State private var isShowingSystemVoiceChooser = false
+    @State private var errorMessage: String?
+
+    private var selectedConfiguration: ProviderConfiguration? {
+        elfEditor.localSettings.languageModelConfigurationIdentifier.flatMap { configurationIdentifier in
+            providerConfigurationStore.configurations.first { $0.id == configurationIdentifier }
+        }
+    }
+
+    private var selectedSpeechOutputMode: SpeechOutputMode? {
+        elfEditor.localSettings.voice.flatMap { SpeechOutputMode(rawValue: $0.speechOutputModeRawValue) }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             LayerFieldLabel(text: "Model & voice")
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(elfEditor.isMainElf
-                     ? "Uses your language model and voice from Settings › Models."
-                     : "Uses the same model and voice as \(mainElfName) for now.")
-                    .font(.system(size: 12))
-                    .foregroundColor(DS.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                Button("Open Settings › Models") { onOpenModelSettings() }
-                    .pointerCursor()
+            if elfEditor.isMainElf {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Uses your language model and voice from Settings › Models.")
+                        .font(.system(size: 12))
+                        .foregroundColor(DS.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Open Settings › Models") { onOpenModelSettings() }
+                        .pointerCursor()
+                }
+            } else {
+                languageModelRow
+                if let selectedConfiguration, !selectedConfiguration.supportsToolCalling {
+                    Text("This model can't use tools, so \(elfEditor.elf.configuration.identity.name)'s background work will run on \(mainElfName)'s model.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if elfEditor.localSettings.languageModelConfigurationIdentifier != nil, selectedConfiguration == nil {
+                    Text("That model isn't set up on this Mac any more, so \(mainElfName)'s is used.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.warning)
+                }
+                voiceRow
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.warning)
+                }
             }
         }
+        .sheet(isPresented: $isShowingSystemVoiceChooser) {
+            SystemVoiceChooserSheet(
+                selectedVoiceIdentifier: Binding(
+                    get: { elfEditor.localSettings.voice?.voiceIdentifier ?? "" },
+                    set: { newVoiceIdentifier in
+                        updateVoice(speechOutputMode: .system, voiceIdentifier: newVoiceIdentifier.isEmpty ? nil : newVoiceIdentifier)
+                    }
+                ),
+                elfName: elfEditor.elf.configuration.identity.name
+            )
+        }
+    }
+
+    private var languageModelRow: some View {
+        HStack {
+            Text("Language model")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(DS.Colors.textSecondary)
+            Spacer()
+            Picker("", selection: Binding<UUID?>(
+                get: { elfEditor.localSettings.languageModelConfigurationIdentifier },
+                set: { newConfigurationIdentifier in
+                    perform { try elfEditor.updateLocalSettings { $0.languageModelConfigurationIdentifier = newConfigurationIdentifier } }
+                }
+            )) {
+                Text("Same as \(mainElfName)").tag(UUID?.none)
+                ForEach(providerConfigurationStore.configurations) { configuration in
+                    Text(configuration.displayName + (configuration.model.isEmpty ? "" : " · " + configuration.model))
+                        .tag(UUID?.some(configuration.id))
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+            .pointerCursor()
+        }
+    }
+
+    private var voiceRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Voice")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(DS.Colors.textSecondary)
+                Spacer()
+                Picker("", selection: Binding<SpeechOutputMode?>(
+                    get: { selectedSpeechOutputMode },
+                    set: { newSpeechOutputMode in
+                        if let newSpeechOutputMode {
+                            updateVoice(speechOutputMode: newSpeechOutputMode, voiceIdentifier: nil)
+                        } else {
+                            perform { try elfEditor.updateLocalSettings { $0.voice = nil } }
+                        }
+                    }
+                )) {
+                    Text("Same as \(mainElfName)").tag(SpeechOutputMode?.none)
+                    ForEach(SpeechOutputMode.allCases) { speechOutputMode in
+                        Text(speechOutputMode.displayLabel).tag(SpeechOutputMode?.some(speechOutputMode))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+                .pointerCursor()
+            }
+            switch selectedSpeechOutputMode {
+            case .system:
+                HStack {
+                    Text(elfEditor.localSettings.voice?.voiceIdentifier.flatMap { AVSpeechSynthesisVoiceName.name(forIdentifier: $0) } ?? "The voice in Settings › Models")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textTertiary)
+                    Spacer()
+                    Button("Choose…") { isShowingSystemVoiceChooser = true }
+                        .pointerCursor()
+                }
+            case .elevenLabs, .openAICompatibleSpeech:
+                ElfCommittingTextField(
+                    placeholder: selectedSpeechOutputMode == .elevenLabs ? "ElevenLabs voice id (empty: the one in Settings)" : "Voice name (empty: the one in Settings)",
+                    savedText: elfEditor.localSettings.voice?.voiceIdentifier ?? "",
+                    onCommit: { voiceIdentifierText in
+                        let trimmedVoiceIdentifier = voiceIdentifierText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        try elfEditor.updateLocalSettings { localSettings in
+                            localSettings.voice?.voiceIdentifier = trimmedVoiceIdentifier.isEmpty ? nil : trimmedVoiceIdentifier
+                        }
+                        return elfEditor.localSettings.voice?.voiceIdentifier ?? ""
+                    }
+                )
+            case .off, .none:
+                EmptyView()
+            }
+        }
+    }
+
+    private func updateVoice(speechOutputMode: SpeechOutputMode, voiceIdentifier: String?) {
+        perform {
+            try elfEditor.updateLocalSettings { localSettings in
+                localSettings.voice = ElfVoiceSelection(speechOutputModeRawValue: speechOutputMode.rawValue, voiceIdentifier: voiceIdentifier)
+            }
+        }
+    }
+
+    private func perform(_ edit: () throws -> Void) {
+        do {
+            try edit()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// An installed Apple voice's name, for showing which one an elf uses.
+enum AVSpeechSynthesisVoiceName {
+    static func name(forIdentifier voiceIdentifier: String) -> String? {
+        AVSpeechSynthesisVoice(identifier: voiceIdentifier)?.name
     }
 }
 

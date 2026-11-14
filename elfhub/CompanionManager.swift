@@ -321,6 +321,43 @@ final class CompanionManager: ObservableObject {
         }
     }
 
+    /// The voice an elf speaks with: its own, set up on this Mac, or the
+    /// voice in Settings › Models. A service that isn't ready falls back to
+    /// the on-device voice.
+    func speechProvider(for elf: Elf) -> SpeechSynthesisProvider? {
+        let elfSpeechChoice = ElfSpeechChoice.choice(
+            for: elf.home.readLocalSettings(),
+            isMainElf: elf.id == ElfManager.mainElfIdentifier
+        )
+        switch elfSpeechChoice {
+        case .sameAsMain:
+            return speechProviderForCurrentSettings()
+        case .off:
+            return nil
+        case let .system(voiceIdentifier):
+            return SystemSpeechSynthesisProvider(voiceIdentifierOverride: voiceIdentifier)
+        case let .elevenLabs(voiceIdentifier):
+            guard let elevenLabsAPIKey = KeychainSecretStore.secret(for: .elevenLabs), !elevenLabsAPIKey.isEmpty else {
+                return systemSpeechProvider
+            }
+            let elevenLabsTTSClient = ElevenLabsTTSClient(apiKey: elevenLabsAPIKey, voiceIdentifier: voiceIdentifier ?? elevenLabsVoiceIdentifier)
+            return NetworkAudioSpeechSynthesisProvider(synthesizeSpeechAudio: { sentence in
+                try await elevenLabsTTSClient.synthesizeSpeechAudio(for: sentence)
+            })
+        case let .openAICompatible(voiceName):
+            guard OpenAICompatibleSpeechSettings.isReady else { return systemSpeechProvider }
+            let openAICompatibleSpeechClient = OpenAICompatibleSpeechClient(
+                baseURL: OpenAICompatibleSpeechSettings.baseURL,
+                apiKey: KeychainSecretStore.secret(for: .openAICompatibleSpeech),
+                modelName: OpenAICompatibleSpeechSettings.modelName,
+                voiceName: voiceName ?? OpenAICompatibleSpeechSettings.voiceName
+            )
+            return NetworkAudioSpeechSynthesisProvider(synthesizeSpeechAudio: { sentence in
+                try await openAICompatibleSpeechClient.synthesizeSpeechAudio(for: sentence)
+            })
+        }
+    }
+
     /// Speaks a short sample with the current voice settings ("Preview").
     func previewCurrentVoice() {
         stopSpeech()

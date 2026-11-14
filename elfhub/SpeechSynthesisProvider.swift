@@ -229,10 +229,18 @@ final class NetworkAudioSpeechSynthesisProvider: NSObject, SpeechSynthesisProvid
 final class SystemSpeechSynthesisProvider: NSObject, SpeechSynthesisProvider, AVSpeechSynthesizerDelegate {
     private let speechSynthesizer = AVSpeechSynthesizer()
     private var utteranceFinishedContinuation: CheckedContinuation<Void, Never>?
+    /// An elf's own Apple voice; nil speaks with the voice chosen in
+    /// Settings › Models.
+    private let voiceIdentifierOverride: String?
 
-    override init() {
+    init(voiceIdentifierOverride: String? = nil) {
+        self.voiceIdentifierOverride = voiceIdentifierOverride
         super.init()
         speechSynthesizer.delegate = self
+    }
+
+    var voiceIdentifierToSpeakWith: String? {
+        voiceIdentifierOverride ?? SystemVoiceSettings.selectedVoiceIdentifier
     }
 
     func prepareSpeech(for sentence: String) async throws -> PreparedSpeech {
@@ -244,7 +252,7 @@ final class SystemSpeechSynthesisProvider: NSObject, SpeechSynthesisProvider, AV
         await withCheckedContinuation { continuation in
             utteranceFinishedContinuation = continuation
             let utterance = AVSpeechUtterance(string: sentence)
-            if let selectedVoiceIdentifier = SystemVoiceSettings.selectedVoiceIdentifier,
+            if let selectedVoiceIdentifier = voiceIdentifierToSpeakWith,
                let selectedVoice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
                 utterance.voice = selectedVoice
             }
@@ -310,5 +318,32 @@ enum CompanionEarcon {
         guard Self.areSoundCuesEnabled, let sound = NSSound(named: systemSoundName) else { return }
         sound.volume = 0.35
         sound.play()
+    }
+}
+
+// MARK: - An elf's own voice
+
+/// Which voice an elf speaks with: its own (from the voice services set up
+/// on this Mac) when it has one, otherwise the voice in Settings › Models.
+/// The main elf always uses Settings › Models.
+enum ElfSpeechChoice: Equatable {
+    case sameAsMain
+    case off
+    case system(voiceIdentifier: String?)
+    case elevenLabs(voiceIdentifier: String?)
+    case openAICompatible(voiceName: String?)
+
+    static func choice(for localSettings: ElfLocalSettings, isMainElf: Bool) -> ElfSpeechChoice {
+        guard !isMainElf,
+              let voice = localSettings.voice,
+              let speechOutputMode = SpeechOutputMode(rawValue: voice.speechOutputModeRawValue) else { return .sameAsMain }
+        let trimmedVoiceIdentifier = voice.voiceIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let voiceIdentifier = trimmedVoiceIdentifier?.isEmpty == false ? trimmedVoiceIdentifier : nil
+        switch speechOutputMode {
+        case .off: return .off
+        case .system: return .system(voiceIdentifier: voiceIdentifier)
+        case .elevenLabs: return .elevenLabs(voiceIdentifier: voiceIdentifier)
+        case .openAICompatibleSpeech: return .openAICompatible(voiceName: voiceIdentifier)
+        }
     }
 }
