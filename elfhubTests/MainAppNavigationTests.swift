@@ -51,4 +51,39 @@ struct MainAppNavigationTests {
         #expect(Set(categoryIcons).count == categoryIcons.count)
         #expect(SettingsCategory.allCases.allSatisfy { !$0.subtitle.isEmpty })
     }
+
+    @Test func settingsBackReturnsToTheElfPage() {
+        var mainAppNavigation = MainAppNavigation()
+        mainAppNavigation.open(.elf("ada"))
+        mainAppNavigation.open(.settings(.models))
+        mainAppNavigation.leaveSettings()
+        #expect(mainAppNavigation.selectedSection == .elf("ada"))
+    }
+
+    @Test func anElfPageWhoseElfIsGoneFallsBackToMain() {
+        var mainAppNavigation = MainAppNavigation()
+        mainAppNavigation.open(.elf("ada"))
+        mainAppNavigation.showMainElfIfElfIsGone(existingElfIdentifiers: ["main"])
+        #expect(mainAppNavigation.selectedSection == .elf("main"))
+    }
+
+    @Test func settingsBackDoesNotReturnToAnElfThatIsGone() {
+        var mainAppNavigation = MainAppNavigation()
+        mainAppNavigation.open(.elf("ada"))
+        mainAppNavigation.open(.settings(.models))
+        mainAppNavigation.showMainElfIfElfIsGone(existingElfIdentifiers: ["main"])
+        mainAppNavigation.leaveSettings()
+        #expect(mainAppNavigation.selectedSection == .elf("main"))
+    }
+
+    @Test func otherPagesAreLeftAloneWhenAnElfIsGone() {
+        var mainAppNavigation = MainAppNavigation()
+        mainAppNavigation.showMainElfIfElfIsGone(existingElfIdentifiers: ["main"])
+        #expect(mainAppNavigation.selectedSection == .chat)
+    }
+
+    @Test func settingsNoLongerHasAnElfCategory() {
+        #expect(SettingsCategory.allCases.first == .models)
+        #expect(!SettingsCategory.allCases.map(\.rawValue).contains("elf"))
+    }
 }

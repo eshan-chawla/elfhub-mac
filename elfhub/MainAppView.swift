@@ -30,6 +30,8 @@ enum MainAppSection: Hashable {
     case chat
     /// The optional walkthrough; reachable from the sidebar only while it runs.
     case tutorial
+    /// One elf's page in the Elves hub, by elf identifier.
+    case elf(String)
     case settings(SettingsCategory)
 
     var isSettings: Bool {
@@ -62,6 +64,18 @@ struct MainAppNavigation: Equatable {
 
     mutating func leaveSettings() {
         selectedSection = lastMainSection
+    }
+
+    /// An elf deleted in the hub or removed in Finder can't keep its page:
+    /// its page — and "Back" from Settings — go to the main elf instead.
+    mutating func showMainElfIfElfIsGone(existingElfIdentifiers: Set<String>) {
+        let mainElfSection = MainAppSection.elf(ElfManager.mainElfIdentifier)
+        if case let .elf(selectedElfIdentifier) = selectedSection, !existingElfIdentifiers.contains(selectedElfIdentifier) {
+            selectedSection = mainElfSection
+        }
+        if case let .elf(lastElfIdentifier) = lastMainSection, !existingElfIdentifiers.contains(lastElfIdentifier) {
+            lastMainSection = mainElfSection
+        }
     }
 }
 
@@ -266,6 +280,10 @@ struct MainAppView: View {
                         ? nil
                         : { mainAppNavigation.open(.settings(.models)) }
                 )
+            case .elf:
+                MainAppPage(title: "Elf") {
+                    MainElfSettingsContent(companionManager: companionManager)
+                }
             case let .settings(settingsCategory):
                 SettingsCategoryPage(companionManager: companionManager, settingsCategory: settingsCategory)
             }
