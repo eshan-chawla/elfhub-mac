@@ -145,6 +145,52 @@ final class CompanionManager: ObservableObject {
         }
     )
 
+    /// When the user calls a side elf by name with something long ("Juniper,
+    /// research flights to Lisbon"), the elf takes it on as a background
+    /// task and says so; returns that short reply, or nil to answer the turn
+    /// as usual (quick questions, and screen work — done in the foreground
+    /// until the multi-step screen loop exists).
+    private func turnResultIfHandedToBackgroundTask(
+        speakingElf: Elf?,
+        userText: String,
+        originConversationIdentifier: UUID?
+    ) async -> CompanionTurnPipeline.TurnResult? {
+        guard let speakingElf, speakingElf.id != ElfManager.mainElfIdentifier else { return nil }
+        let requestKind: ElfTaskKind
+        if let shortcutKind = ElfTaskClassifier.shortcutKind(for: userText) {
+            requestKind = shortcutKind
+        } else if let classifierConfiguration = providerConfigurationStore.configurationForNextTurn(
+            preferredConfigurationIdentifier: speakingElf.home.readLocalSettings().languageModelConfigurationIdentifier
+        ), let classifierProvider = try? providerConfigurationStore.makeProvider(for: classifierConfiguration) {
+            requestKind = await ElfTaskClassifier.classify(requestText: userText, languageModelProvider: classifierProvider)
+        } else {
+            requestKind = .quick
+        }
+        guard requestKind == .long else { return nil }
+        let recentExchanges = textChatViewModel.activeConversation
+            .historyTurns(maximumTurnCount: 3)
+            .map { ElfTaskConversationTurn(userText: $0.userText, assistantText: $0.assistantText) }
+        do {
+            try elfTaskScheduler.enqueue(
+                elfIdentifier: speakingElf.id,
+                instruction: userText,
+                conversationExcerpt: recentExchanges,
+                originConversationIdentifier: originConversationIdentifier
+            )
+        } catch {
+            return nil
+        }
+        return CompanionTurnPipeline.TurnResult(
+            spokenText: "on it. i'll let you know when it's done.",
+            consentCardIsPending: false,
+            originalScreenshotJPEGData: nil,
+            shownUserInk: nil,
+            shownScreenGuidance: nil,
+            shownNotepad: nil,
+            elfIdentifier: speakingElf.id
+        )
+    }
+
     /// What the main elf should hear about background work before the
     /// user's next message: results not yet told, work under way, questions.
     private func mainElfStatusUpdate() -> ElfMainStatusUpdate? {
@@ -1088,7 +1134,18 @@ final class CompanionManager: ObservableObject {
                     prefetchedScreenCaptures,
                     cursorDisplayIDWhenTurnIsSent: cursorDisplayIDWhenTurnIsSent
                 ) ? prefetchedScreenCaptures : nil
-                let turnResult = try await companionTurnPipeline.runTurn(
+                // A long request to a side elf becomes a background task:
+                // the elf says it's on it, and the turn ends there.
+                let turnResult: CompanionTurnPipeline.TurnResult
+                if let backgroundTaskTurnResult = await turnResultIfHandedToBackgroundTask(
+                    speakingElf: speakingElf,
+                    userText: transcript,
+                    originConversationIdentifier: recordedVoiceExchange.conversationIdentifier
+                ) {
+                    streamingReplyPresenter.receive(replyTextDelta: backgroundTaskTurnResult.spokenText)
+                    turnResult = backgroundTaskTurnResult
+                } else {
+                turnResult = try await companionTurnPipeline.runTurn(
                     userText: transcript,
                     prefetchedScreenCaptures: reusablePrefetchedScreenCaptures,
                     userInkStrokes: userInkStrokes,
@@ -1136,6 +1193,7 @@ final class CompanionManager: ObservableObject {
                         )
                     }
                 )
+                }
                 streamingReplyPresenter.finish(finalSpokenText: turnResult.spokenText)
                 textChatViewModel.completeExchange(recordedVoiceExchange, with: turnResult)
                 if turnResult.consentCardIsPending {
@@ -1209,7 +1267,17 @@ final class CompanionManager: ObservableObject {
             speechProvider: speechProviderForTurn(answeredBy: speakingElf)
         )
         do {
-            let turnResult = try await companionTurnPipeline.runTurn(
+            let turnResult: CompanionTurnPipeline.TurnResult
+            if let backgroundTaskTurnResult = await turnResultIfHandedToBackgroundTask(
+                speakingElf: speakingElf,
+                userText: userText,
+                originConversationIdentifier: textChatViewModel.activeConversation.id
+            ) {
+                streamingReplyPresenter.receive(replyTextDelta: backgroundTaskTurnResult.spokenText)
+                onTextChunk(backgroundTaskTurnResult.spokenText)
+                turnResult = backgroundTaskTurnResult
+            } else {
+            turnResult = try await companionTurnPipeline.runTurn(
                 userText: userText,
                 prefetchedScreenCaptures: nil,
                 speakingElf: speakingElf,
@@ -1237,6 +1305,7 @@ final class CompanionManager: ObservableObject {
                     onLanguageModelSwitched(switchNotice)
                 }
             )
+            }
             streamingReplyPresenter.finish(finalSpokenText: turnResult.spokenText)
             if turnResult.consentCardIsPending {
                 CompanionEarcon.needsConfirmation.play()

@@ -108,4 +108,20 @@ struct ElfTaskReportingTests {
         #expect(ElfTaskClassifier.kind(fromModelAnswer: "I think it's quick") == .quick)
         #expect(ElfTaskClassifier.kind(fromModelAnswer: "garbage") == .quick)
     }
+
+    @MainActor
+    @Test func aSlowClassifierCountsAsQuick() async {
+        let slowProvider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply(#"{"kind":"long"}"#)])
+        slowProvider.responseDelayInSeconds = 3
+        let startDate = Date()
+        let requestKind = await ElfTaskClassifier.classify(requestText: "how tall is the Eiffel tower", languageModelProvider: slowProvider)
+        #expect(requestKind == .quick)
+        #expect(Date().timeIntervalSince(startDate) < 2.5)
+    }
+
+    @MainActor
+    @Test func aClassifierAnswerInTimeIsUsed() async {
+        let provider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply(#"{"kind":"long"}"#)])
+        #expect(await ElfTaskClassifier.classify(requestText: "how tall is the Eiffel tower", languageModelProvider: provider) == .long)
+    }
 }

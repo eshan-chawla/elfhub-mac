@@ -17,6 +17,8 @@ final class ScriptedLanguageModelProvider: LanguageModelProvider {
     private(set) var receivedRequests: [LanguageModelRequest] = []
     /// Runs before each response is returned (e.g. to cancel the task).
     var beforeEachResponse: (() -> Void)?
+    /// How long each answer takes (to test time limits).
+    var responseDelayInSeconds: Double = 0
 
     init(scriptedResponses: [LanguageModelResponse], supportsToolCalling: Bool = true) {
         self.scriptedResponses = scriptedResponses
@@ -33,6 +35,9 @@ final class ScriptedLanguageModelProvider: LanguageModelProvider {
     ) async throws -> LanguageModelResponse {
         receivedRequests.append(request)
         beforeEachResponse?()
+        if responseDelayInSeconds > 0 {
+            try await Task.sleep(nanoseconds: UInt64(responseDelayInSeconds * 1_000_000_000))
+        }
         guard !scriptedResponses.isEmpty else {
             return Self.reply("(no more scripted replies)")
         }
