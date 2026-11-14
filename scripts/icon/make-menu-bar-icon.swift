@@ -1,5 +1,7 @@
-// Builds elfhub's menu bar icon: a one-colour igloo glyph (dome with block
-// lines, the entrance tunnel and its doorway) that matches the app icon.
+// Builds elfhub's menu bar icon: a one-colour igloo glyph that matches the
+// app icon: a dome of blocks with the entrance tunnel coming out of it at an
+// angle, toward the viewer and to the left, its doorway on the tunnel's
+// front face.
 //
 // The igloo artwork, this glyph included, is NOT covered by the AGPL — see
 // brand/LICENSE.md. Copyright (c) 2026 Eshan Chawla. All rights reserved.
@@ -44,18 +46,26 @@ let firstBlockRowTopY: CGFloat = groundLineY + 3
 let secondBlockRowTopY: CGFloat = firstBlockRowTopY + gapBetweenBlocks + 2.4
 let firstBlockRowJointX: CGFloat = 13.6
 let secondBlockRowJointX: CGFloat = 12.4
-// The entrance tunnel sits a little left of the dome's middle, like the
-// artwork's, but stays inside the dome's outline: a tunnel sticking out of
-// the side makes the glyph look like a turtle with its head out.
-let tunnelCenterX: CGFloat = 7.0
-let tunnelHorizontalRadius: CGFloat = 3.3
-let tunnelHeight: CGFloat = 5
+// The entrance tunnel comes out of the dome at an angle, as in the artwork:
+// its front face (a narrower arch, because it's seen from the side) is left
+// of where the tunnel meets the dome, and the tunnel's side shows between
+// them. The front face stays inside the dome's outline; a tunnel sticking out
+// of the dome's side makes the glyph look like a turtle with its head out.
+let tunnelFrontCenterX: CGFloat = 4.6
+let tunnelFrontHorizontalRadius: CGFloat = 2.4
+let tunnelBackCenterX: CGFloat = 8.0
+let tunnelBackHorizontalRadius: CGFloat = 3.2
 let tunnelOutlineGap: CGFloat = 0.8
-// The doorway: straight sides with a round top, about 60% of the tunnel's
-// height, with walls thick enough to read as a tunnel at menu bar size.
-let doorwayCenterX: CGFloat = tunnelCenterX
-let doorwayWidth: CGFloat = 2.4
-let doorwayHeight: CGFloat = 3.0
+// Tall enough that the gap above the tunnel runs straight into the gap above
+// the first row of blocks, so no thin strip of dome is left over the tunnel.
+let tunnelHeight: CGFloat = secondBlockRowTopY - groundLineY - tunnelOutlineGap
+// One block line along the tunnel's side, like the artwork's tunnel blocks.
+let tunnelSideBlockLineY: CGFloat = groundLineY + 2.2
+// The doorway: straight sides with a round top, in the middle of the front
+// face, with walls thick enough to read as an entrance at menu bar size.
+let doorwayCenterX: CGFloat = tunnelFrontCenterX
+let doorwayWidth: CGFloat = 2.0
+let doorwayHeight: CGFloat = 3.2
 
 func failAndExit(_ message: String) -> Never {
     FileHandle.standardError.write(Data("make-menu-bar-icon: \(message)\n".utf8))
@@ -72,6 +82,27 @@ func archAboveGround(centerX: CGFloat, horizontalRadius: CGFloat, height: CGFloa
     return fullEllipse.intersection(aboveGround)
 }
 
+/// The tunnel seen from the side: its front arch, the arch where it meets
+/// the dome, and the flat roof between their tops. `outlineGap` grows it by
+/// that much all round, to cut a gap around it.
+func tunnelOutline(outlineGap: CGFloat) -> CGPath {
+    let frontArch = archAboveGround(
+        centerX: tunnelFrontCenterX,
+        horizontalRadius: tunnelFrontHorizontalRadius + outlineGap,
+        height: tunnelHeight + outlineGap
+    )
+    let backArch = archAboveGround(
+        centerX: tunnelBackCenterX,
+        horizontalRadius: tunnelBackHorizontalRadius + outlineGap,
+        height: tunnelHeight + outlineGap
+    )
+    let roofBetweenTheArches = CGPath(
+        rect: CGRect(x: tunnelFrontCenterX, y: groundLineY, width: tunnelBackCenterX - tunnelFrontCenterX, height: tunnelHeight + outlineGap),
+        transform: nil
+    )
+    return frontArch.union(backArch).union(roofBetweenTheArches)
+}
+
 let canvasWidth = glyphCanvasSizeInPoints
 let drawingGridWidth = drawingGridSizeInPoints
 let blockGaps = CGMutablePath()
@@ -85,13 +116,30 @@ blockGaps.addRect(CGRect(
     height: secondBlockRowTopY - firstBlockRowTopY - gapBetweenBlocks
 ))
 
+// The dome left of the tunnel's front face is cut away up to the first block
+// gap (where the cut's edge disappears into the gap), so no thin sliver of
+// dome shows beside the tunnel.
+let domeBesideTunnelFront = CGPath(
+    rect: CGRect(x: 0, y: groundLineY, width: tunnelFrontCenterX, height: firstBlockRowTopY + gapBetweenBlocks - groundLineY),
+    transform: nil
+)
 let dome = archAboveGround(centerX: domeCenterX, horizontalRadius: domeHorizontalRadius, height: domeHeight)
-let tunnel = archAboveGround(centerX: tunnelCenterX, horizontalRadius: tunnelHorizontalRadius, height: tunnelHeight)
-let tunnelWithOutlineGap = archAboveGround(
-    centerX: tunnelCenterX,
-    horizontalRadius: tunnelHorizontalRadius + tunnelOutlineGap,
+let domeWithBlocks = dome
+    .subtracting(blockGaps)
+    .subtracting(tunnelOutline(outlineGap: tunnelOutlineGap))
+    .subtracting(domeBesideTunnelFront)
+
+let tunnelFrontFace = archAboveGround(centerX: tunnelFrontCenterX, horizontalRadius: tunnelFrontHorizontalRadius, height: tunnelHeight)
+let tunnelFrontFaceWithOutlineGap = archAboveGround(
+    centerX: tunnelFrontCenterX,
+    horizontalRadius: tunnelFrontHorizontalRadius + tunnelOutlineGap,
     height: tunnelHeight + tunnelOutlineGap
 )
+let tunnelSideBlockLine = CGPath(rect: CGRect(x: 0, y: tunnelSideBlockLineY, width: drawingGridWidth, height: gapBetweenBlocks), transform: nil)
+let tunnelSide = tunnelOutline(outlineGap: 0)
+    .subtracting(tunnelFrontFaceWithOutlineGap)
+    .subtracting(tunnelSideBlockLine)
+
 let doorwayTopRadius = doorwayWidth / 2
 let doorwayStraightSides = CGPath(
     rect: CGRect(x: doorwayCenterX - doorwayTopRadius, y: groundLineY, width: doorwayWidth, height: doorwayHeight - doorwayTopRadius),
@@ -102,10 +150,9 @@ let doorwayRoundTop = CGPath(
     transform: nil
 )
 let doorway = doorwayStraightSides.union(doorwayRoundTop)
+let tunnelFrontFaceWithDoorway = tunnelFrontFace.subtracting(doorway)
 
-let domeWithBlocks = dome.subtracting(blockGaps).subtracting(tunnelWithOutlineGap)
-let tunnelWithDoorway = tunnel.subtracting(doorway)
-let iglooOnDrawingGrid = domeWithBlocks.union(tunnelWithDoorway)
+let iglooOnDrawingGrid = domeWithBlocks.union(tunnelSide).union(tunnelFrontFaceWithDoorway)
 
 // Scale up and centre on the canvas.
 let iglooBoundsOnDrawingGrid = iglooOnDrawingGrid.boundingBoxOfPath
