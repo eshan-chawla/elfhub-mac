@@ -69,6 +69,15 @@ final class ElfEditor: ObservableObject {
         elf.configuration = home.readConfiguration()
     }
 
+    /// A warning about the elf's current name that doesn't block it (it's the
+    /// start of another elf's name, or the other way round), or nil.
+    var nameWarningMessage: String? {
+        let otherElfNames = ElfNameRules.namesInUse(byElves: elfManager.elves, excludingElfWithIdentifier: elf.id)
+        return ElfNameRules.problems(forName: elf.configuration.identity.name, otherElfNames: otherElfNames)
+            .first(where: \.isWarning)?
+            .message
+    }
+
     /// Other names the elf answers to, cleaned and checked with the name
     /// rules against every other elf's names and aliases.
     func updateAliases(_ proposedAliases: [String]) throws {

@@ -1,10 +1,12 @@
 //
-//  ElfSettingsViews.swift
+//  ElfHubViews.swift
 //  elfhub
 //
-//  Settings › Elf: who the elf is (name, how it answers), its soul.md, its
-//  notes about the user (profile.md), the skills it learned, its home
-//  folder, and exporting it as a `.elf` file.
+//  The Elves hub: the Elves section of the main window's sidebar (every elf,
+//  main first, with "+" to make a new elf or add a starter one) and each
+//  elf's page — who it is (name, emoji, what it's for, other names), how it
+//  answers, its soul.md, its notes about the user (profile.md), its skills,
+//  its home folder, exporting it as a `.elf` file, and deleting it.
 //
 
 import AppKit
@@ -12,28 +14,312 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Settings › Elf for the main elf, until the Elves hub gives every elf a
-/// page. Owns the editor so it lives as long as the page.
-struct MainElfSettingsContent: View {
-    @ObservedObject var companionManager: CompanionManager
-    @StateObject private var mainElfEditor: ElfEditor
+// MARK: - Sidebar section
 
-    init(companionManager: CompanionManager) {
-        self.companionManager = companionManager
-        _mainElfEditor = StateObject(wrappedValue: ElfEditor(editingMainElfOf: companionManager.elfManager))
+/// The Elves section of the sidebar: a collapsible list of every elf (main
+/// first) and a "+" menu. It scrolls past about six elves so the chats
+/// below always keep room.
+struct ElvesSidebarSection: View {
+    @ObservedObject var elfManager: ElfManager
+    /// The elf whose page is showing, if any.
+    let selectedElfIdentifier: String?
+    let onOpenElf: (String) -> Void
+
+    @AppStorage("elvesSidebarSectionIsExpanded") private var isExpanded = true
+    @State private var isShowingNewElfSheet = false
+    @State private var addStarterElfErrorMessage: String?
+    @State private var isSectionHeaderHovered = false
+
+    private static let elfListMaximumHeight: CGFloat = 200
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .frame(width: 10)
+                        Text("Elves")
+                            .font(.system(size: 11, weight: .semibold))
+                        Spacer()
+                    }
+                    .foregroundColor(isSectionHeaderHovered ? DS.Colors.textSecondary : DS.Colors.textTertiary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { isSectionHeaderHovered = $0 }
+                .pointerCursor()
+                .help(isExpanded ? "Hide your elves" : "Show your elves")
+
+                Menu {
+                    Button("New elf…") { isShowingNewElfSheet = true }
+                    let availableStarterTemplates = elfManager.availableStarterTemplates
+                    if !availableStarterTemplates.isEmpty {
+                        Divider()
+                        ForEach(availableStarterTemplates) { starterTemplate in
+                            Button("Add \(starterTemplate.identity.emoji) \(starterTemplate.identity.name)") {
+                                addStarterElf(starterTemplate)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(DS.Colors.textTertiary)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .pointerCursor()
+                .help("Add an elf")
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 4)
+
+            if isExpanded {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(elfManager.elves) { elf in
+                            ElfSidebarRow(
+                                elf: elf,
+                                isSelected: elf.id == selectedElfIdentifier,
+                                action: { onOpenElf(elf.id) }
+                            )
+                        }
+                    }
+                }
+                .frame(maxHeight: Self.elfListMaximumHeight)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .sheet(isPresented: $isShowingNewElfSheet) {
+            NewElfSheet(elfManager: elfManager, onCreated: { createdElf in onOpenElf(createdElf.id) })
+        }
+        .alert(
+            "Couldn't add that elf",
+            isPresented: Binding(
+                get: { addStarterElfErrorMessage != nil },
+                set: { isPresented in if !isPresented { addStarterElfErrorMessage = nil } }
+            )
+        ) {
+            Button("OK") { addStarterElfErrorMessage = nil }
+        } message: {
+            Text(addStarterElfErrorMessage ?? "")
+        }
+    }
+
+    private func addStarterElf(_ starterTemplate: ElfStarterTemplate) {
+        do {
+            let createdElf = try elfManager.createElf(fromStarterTemplate: starterTemplate)
+            onOpenElf(createdElf.id)
+        } catch {
+            addStarterElfErrorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// One elf in the sidebar: its emoji (or a sparkle) and name.
+private struct ElfSidebarRow: View {
+    let elf: Elf
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Group {
+                    if elf.configuration.identity.emoji.isEmpty {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(isSelected ? DS.Colors.accentText : DS.Colors.textTertiary)
+                    } else {
+                        Text(elf.configuration.identity.emoji)
+                            .font(.system(size: 12))
+                    }
+                }
+                .frame(width: 16)
+
+                Text(elf.configuration.identity.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isSelected || isHovered ? DS.Colors.textPrimary : DS.Colors.textSecondary)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.08) : Color.white.opacity(isHovered ? 0.05 : 0))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .pointerCursor()
+        .padding(.horizontal, 10)
+    }
+}
+
+// MARK: - New elf
+
+/// Name a new elf (with an optional emoji and line about what it's for).
+/// The name is checked as it's typed; problems that block it disable Create,
+/// a warning (it's the start of another elf's name) only shows.
+struct NewElfSheet: View {
+    @ObservedObject var elfManager: ElfManager
+    let onCreated: (Elf) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var emoji = ""
+    @State private var name = ""
+    @State private var description = ""
+    @State private var createErrorMessage: String?
+
+    private var nameProblems: [ElfNameProblem] {
+        ElfNameRules.problems(
+            forName: name,
+            otherElfNames: ElfNameRules.namesInUse(byElves: elfManager.elves, excludingElfWithIdentifier: nil)
+        )
+    }
+
+    private var canCreate: Bool {
+        nameProblems.allSatisfy(\.isWarning)
+    }
+
+    /// The empty name is shown only as a disabled Create, not as an error.
+    private var nameProblemMessage: String? {
+        nameProblems.first { $0 != .empty }?.message
     }
 
     var body: some View {
-        ElfSettingsContent(companionManager: companionManager, elfEditor: mainElfEditor)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("New elf")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(DS.Colors.textPrimary)
+            Text("Give it a name you'd call it by. You can shape its soul, notes and skills on its page.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                TextField("Emoji", text: $emoji)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 56)
+                TextField("Name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { if canCreate { create() } }
+            }
+            if let nameProblemMessage {
+                Text(nameProblemMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+            TextField("What this elf is for (optional)", text: $description)
+                .textFieldStyle(.roundedBorder)
+            if let createErrorMessage {
+                Text(createErrorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .pointerCursor()
+                Button("Create") { create() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canCreate)
+                    .pointerCursor(isEnabled: canCreate)
+            }
+        }
+        .padding(16)
+        .frame(width: 420)
+        .background(DS.Colors.background)
+    }
+
+    private func create() {
+        do {
+            let createdElf = try elfManager.createElf(identity: ElfConfiguration.Identity(
+                name: name,
+                emoji: ElfNameRules.normalizedEmoji(emoji),
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines)
+            ))
+            dismiss()
+            onCreated(createdElf)
+        } catch {
+            createErrorMessage = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Elf page
+
+/// One elf's page in the hub. The caller gives it `.id(elfIdentifier)` so
+/// switching elves builds a fresh editor. An elf that's gone by the time the
+/// page opens shows the main elf instead.
+struct ElfHubPage: View {
+    @ObservedObject var companionManager: CompanionManager
+    @StateObject private var elfEditor: ElfEditor
+    let onOpenModelSettings: () -> Void
+    let onElfDeleted: () -> Void
+
+    init(
+        companionManager: CompanionManager,
+        elfIdentifier: String,
+        onOpenModelSettings: @escaping () -> Void,
+        onElfDeleted: @escaping () -> Void
+    ) {
+        self.companionManager = companionManager
+        self.onOpenModelSettings = onOpenModelSettings
+        self.onElfDeleted = onElfDeleted
+        let elfManager = companionManager.elfManager
+        _elfEditor = StateObject(wrappedValue: (try? ElfEditor(elfIdentifier: elfIdentifier, elfManager: elfManager))
+            ?? ElfEditor(editingMainElfOf: elfManager))
+    }
+
+    private var pageTitle: String {
+        let identity = elfEditor.elf.configuration.identity
+        return identity.emoji.isEmpty ? identity.name : "\(identity.emoji) \(identity.name)"
+    }
+
+    private var pageSubtitle: String {
+        let trimmedDescription = elfEditor.elf.configuration.identity.description
+        if !trimmedDescription.isEmpty { return trimmedDescription }
+        return elfEditor.isMainElf ? "Your main elf — the one you talk to." : "One of your elves."
+    }
+
+    var body: some View {
+        MainAppPage(title: pageTitle, subtitle: pageSubtitle) {
+            if !elfEditor.isMainElf {
+                Text("You'll be able to talk to \(elfEditor.elf.configuration.identity.name) by name soon. For now you can shape its soul, notes and skills.")
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ElfSettingsContent(
+                companionManager: companionManager,
+                elfEditor: elfEditor,
+                onOpenModelSettings: onOpenModelSettings,
+                onElfDeleted: onElfDeleted
+            )
+        }
     }
 }
 
 struct ElfSettingsContent: View {
     @ObservedObject var companionManager: CompanionManager
     @ObservedObject var elfEditor: ElfEditor
+    let onOpenModelSettings: () -> Void
+    let onElfDeleted: () -> Void
 
     var body: some View {
-        Text("Your elf's soul, its notes about you and its skills go to your language model with every question, like the rest of the conversation. They're plain files in its home folder — edit them here or in any text editor.")
+        Text("An elf's soul, its notes about you and its skills go to your language model with every question, like the rest of the conversation. They're plain files in its home folder — edit them here or in any text editor.")
             .font(.system(size: 11))
             .foregroundColor(DS.Colors.textTertiary)
             .fixedSize(horizontal: false, vertical: true)
@@ -42,10 +328,16 @@ struct ElfSettingsContent: View {
             .mainAppCard()
         ElfBehaviourSection(elfEditor: elfEditor)
             .mainAppCard()
+        ElfModelAndVoiceSummarySection(
+            elfEditor: elfEditor,
+            mainElfName: companionManager.elfManager.mainElf.configuration.identity.name,
+            onOpenModelSettings: onOpenModelSettings
+        )
+        .mainAppCard()
         ElfMarkdownFileSection(
             title: "Soul",
             fileName: "soul.md",
-            explanation: "Instructions your elf follows in every reply. Only you change this file — the elf can suggest changes for you to approve.",
+            explanation: "Instructions this elf follows in every reply. Only you change this file — the elf can suggest changes for you to approve.",
             savedText: elfEditor.soulText,
             characterLimit: ElfHome.soulCharacterLimit,
             editorHeight: 240,
@@ -58,7 +350,7 @@ struct ElfSettingsContent: View {
         ElfMarkdownFileSection(
             title: "What it knows about you",
             fileName: "profile.md",
-            explanation: "Your personal preferences, as your elf noted them. Edit or clear anything. Never shared in an export unless you include it.",
+            explanation: "Your personal preferences, as this elf noted them. Edit or clear anything. Never shared in an export unless you include it.",
             savedText: elfEditor.profileText,
             characterLimit: ElfHome.profileCharacterLimit,
             editorHeight: 140,
@@ -72,10 +364,84 @@ struct ElfSettingsContent: View {
             .mainAppCard()
         ElfHomeAndExportSection(companionManager: companionManager, elfEditor: elfEditor)
             .mainAppCard()
+        if !elfEditor.isMainElf {
+            ElfDeleteSection(elfManager: companionManager.elfManager, elfEditor: elfEditor, onElfDeleted: onElfDeleted)
+                .mainAppCard()
+        }
+        Color.clear
+            .frame(height: 0)
             .onAppear { elfEditor.reload() }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 elfEditor.reload()
             }
+    }
+}
+
+// MARK: - Model and voice
+
+/// Which language model and voice the elf uses. Every elf uses the ones in
+/// Settings › Models for now; per-elf choices come with side elves.
+private struct ElfModelAndVoiceSummarySection: View {
+    @ObservedObject var elfEditor: ElfEditor
+    let mainElfName: String
+    let onOpenModelSettings: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LayerFieldLabel(text: "Model & voice")
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(elfEditor.isMainElf
+                     ? "Uses your language model and voice from Settings › Models."
+                     : "Uses the same model and voice as \(mainElfName) for now.")
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                Button("Open Settings › Models") { onOpenModelSettings() }
+                    .pointerCursor()
+            }
+        }
+    }
+}
+
+// MARK: - Delete
+
+/// Deleting a side elf: its folder goes to the Trash, so it can be put back.
+private struct ElfDeleteSection: View {
+    @ObservedObject var elfManager: ElfManager
+    @ObservedObject var elfEditor: ElfEditor
+    let onElfDeleted: () -> Void
+
+    @State private var isConfirmingDelete = false
+    @State private var deleteErrorMessage: String?
+
+    private var elfName: String { elfEditor.elf.configuration.identity.name }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LayerFieldLabel(text: "Delete")
+            HStack {
+                Button("Delete \(elfName)…", role: .destructive) { isConfirmingDelete = true }
+                    .pointerCursor()
+                if let deleteErrorMessage {
+                    Text(deleteErrorMessage)
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.warning)
+                }
+            }
+        }
+        .confirmationDialog("Delete \(elfName)?", isPresented: $isConfirmingDelete) {
+            Button("Delete \(elfName)", role: .destructive) {
+                do {
+                    try elfManager.deleteElf(withIdentifier: elfEditor.elf.id)
+                    onElfDeleted()
+                } catch {
+                    deleteErrorMessage = error.localizedDescription
+                }
+            }
+        } message: {
+            Text("\(elfName) and its folder go to the Trash. You can put the folder back in Elves to restore it.")
+        }
     }
 }
 
@@ -98,7 +464,10 @@ private struct ElfIdentitySection: View {
                 ElfCommittingTextField(
                     placeholder: "Emoji",
                     savedText: elfEditor.elf.configuration.identity.emoji,
-                    onCommit: { proposedEmoji in try elfEditor.updateEmoji(proposedEmoji) }
+                    onCommit: { proposedEmoji in
+                        try elfEditor.updateEmoji(proposedEmoji)
+                        return elfEditor.elf.configuration.identity.emoji
+                    }
                 )
                 .frame(width: 56)
                 TextField("Name", text: $nameDraft)
@@ -117,10 +486,29 @@ private struct ElfIdentitySection: View {
             ElfCommittingTextField(
                 placeholder: "What this elf is for (optional)",
                 savedText: elfEditor.elf.configuration.identity.description,
-                onCommit: { newDescription in try elfEditor.updateDescription(newDescription) }
+                onCommit: { newDescription in
+                    try elfEditor.updateDescription(newDescription)
+                    return elfEditor.elf.configuration.identity.description
+                }
             )
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Other names it answers to, separated by commas (optional)")
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.textTertiary)
+                ElfCommittingTextField(
+                    placeholder: "For example \"June, Juni\"",
+                    savedText: elfEditor.elf.configuration.identity.aliases.joined(separator: ", "),
+                    onCommit: { aliasesText in
+                        try elfEditor.updateAliases(aliasesText.components(separatedBy: ","))
+                        return elfEditor.elf.configuration.identity.aliases.joined(separator: ", ")
+                    }
+                )
+            }
         }
-        .onAppear { nameDraft = elfEditor.elf.configuration.identity.name }
+        .onAppear {
+            nameDraft = elfEditor.elf.configuration.identity.name
+            nameProblemMessage = elfEditor.nameWarningMessage
+        }
     }
 
     private func saveNameDraft() {
@@ -131,7 +519,9 @@ private struct ElfIdentitySection: View {
         do {
             try elfEditor.rename(to: nameDraft)
             nameDraft = elfEditor.elf.configuration.identity.name
-            nameProblemMessage = nil
+            // A name that's the start of another elf's is allowed, with a
+            // warning that saying it may reach either elf.
+            nameProblemMessage = elfEditor.nameWarningMessage
         } catch {
             nameProblemMessage = error.localizedDescription
         }
@@ -145,7 +535,9 @@ private struct ElfIdentitySection: View {
 struct ElfCommittingTextField: View {
     let placeholder: String
     let savedText: String
-    let onCommit: (String) throws -> Void
+    /// Saves the typed text and returns the text as saved, which may differ
+    /// (trimmed, or only the first emoji kept).
+    let onCommit: (String) throws -> String
 
     @State private var draftText = ""
     @State private var errorMessage: String?
@@ -178,11 +570,8 @@ struct ElfCommittingTextField: View {
             return
         }
         do {
-            try onCommit(draftText)
+            draftText = try onCommit(draftText)
             errorMessage = nil
-            // The saved value may differ from what was typed (trimmed, or
-            // only the first emoji kept).
-            draftText = savedText
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -218,12 +607,18 @@ private struct ElfBehaviourSection: View {
             ElfCommittingTextField(
                 placeholder: "Tone, for example \"calm and encouraging\" (optional)",
                 savedText: elfEditor.elf.configuration.behaviour.tone,
-                onCommit: { newTone in try elfEditor.updateBehaviour { $0.tone = newTone } }
+                onCommit: { newTone in
+                    try elfEditor.updateBehaviour { $0.tone = newTone }
+                    return elfEditor.elf.configuration.behaviour.tone
+                }
             )
             ElfCommittingTextField(
                 placeholder: "Always reply in… (optional, for example \"British English\")",
                 savedText: elfEditor.elf.configuration.behaviour.language,
-                onCommit: { newLanguage in try elfEditor.updateBehaviour { $0.language = newLanguage } }
+                onCommit: { newLanguage in
+                    try elfEditor.updateBehaviour { $0.language = newLanguage }
+                    return elfEditor.elf.configuration.behaviour.language
+                }
             )
 
             SettingsToggleRow(

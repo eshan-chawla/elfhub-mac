@@ -4,8 +4,10 @@
 //
 //  The native main-window experience, chat first: a sidebar and a detail pane.
 //
-//  - The window opens on the chat. The sidebar lists every chat (New chat on
-//    top) and, while the optional tutorial runs, a pinned Tutorial row. Its
+//  - The window opens on the chat. The sidebar lists every elf (the Elves
+//    hub, see ElfHubViews.swift — main first, each with its own page), then
+//    every chat (New chat on top) and, while the optional tutorial runs, a
+//    pinned Tutorial row. Its
 //    bottom menu opens on hover and offers Settings and Quit. There is no
 //    separate home page.
 //  - Settings swaps the sidebar to its categories (Models, Modes, Shortcuts,
@@ -85,6 +87,7 @@ struct MainAppView: View {
     @ObservedObject var companionManager: CompanionManager
     @ObservedObject private var chatViewModel: TextChatViewModel
     @ObservedObject private var guidedTutorialController: GuidedTutorialController
+    @ObservedObject private var elfManager: ElfManager
 
     @State private var mainAppNavigation = MainAppNavigation()
 
@@ -97,6 +100,12 @@ struct MainAppView: View {
         // the conversation persists across navigation and the chat window.
         self.chatViewModel = companionManager.textChatViewModel
         self.guidedTutorialController = companionManager.guidedTutorialController
+        self.elfManager = companionManager.elfManager
+    }
+
+    private var selectedElfIdentifier: String? {
+        if case let .elf(elfIdentifier) = mainAppNavigation.selectedSection { return elfIdentifier }
+        return nil
     }
 
     /// Whether the user is fully ready to use the app's active modes.
@@ -128,6 +137,14 @@ struct MainAppView: View {
             mainAppNavigation.open(requestedMainAppSection)
             companionManager.requestedMainAppSection = nil
         }
+        // An elf deleted in the hub or removed in Finder can't keep its page.
+        .onReceive(elfManager.$elves) { rosterElves in
+            mainAppNavigation.showMainElfIfElfIsGone(existingElfIdentifiers: Set(rosterElves.map(\.id)))
+        }
+        // Folders added or removed in Finder show up when elfhub comes back.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            elfManager.reloadRoster()
+        }
         // When the tutorial ends while its page is showing, go back to chat.
         .onReceive(guidedTutorialController.$isActive) { isTutorialActive in
             if !isTutorialActive && mainAppNavigation.selectedSection == .tutorial {
@@ -158,8 +175,21 @@ struct MainAppView: View {
                         .padding(.bottom, 6)
                     }
 
-                    // The sidebar is the chat list: every saved chat, newest
-                    // first. It scrolls and takes the space down to the menu.
+                    ElvesSidebarSection(
+                        elfManager: elfManager,
+                        selectedElfIdentifier: selectedElfIdentifier,
+                        onOpenElf: { elfIdentifier in mainAppNavigation.open(.elf(elfIdentifier)) }
+                    )
+                    .padding(.bottom, 6)
+
+                    Text("Chats")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(DS.Colors.textTertiary)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 4)
+
+                    // Below the elves, every saved chat, newest first. It
+                    // scrolls and takes the space down to the menu.
                     ChatConversationSidebarList(
                         viewModel: chatViewModel,
                         onShowChat: { mainAppNavigation.open(.chat) }
@@ -280,10 +310,14 @@ struct MainAppView: View {
                         ? nil
                         : { mainAppNavigation.open(.settings(.models)) }
                 )
-            case .elf:
-                MainAppPage(title: "Elf") {
-                    MainElfSettingsContent(companionManager: companionManager)
-                }
+            case let .elf(elfIdentifier):
+                ElfHubPage(
+                    companionManager: companionManager,
+                    elfIdentifier: elfIdentifier,
+                    onOpenModelSettings: { mainAppNavigation.open(.settings(.models)) },
+                    onElfDeleted: { mainAppNavigation.open(.elf(ElfManager.mainElfIdentifier)) }
+                )
+                .id(elfIdentifier)
             case let .settings(settingsCategory):
                 SettingsCategoryPage(companionManager: companionManager, settingsCategory: settingsCategory)
             }
