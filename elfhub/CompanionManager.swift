@@ -101,7 +101,7 @@ final class CompanionManager: ObservableObject {
         providerConfigurationStore: providerConfigurationStore,
         screenActionCoordinator: screenActionCoordinator,
         companionEventBus: companionEventBus,
-        elfPromptContextProvider: { [elfManager] in elfManager.promptContext() }
+        elfPromptContextProvider: { [elfManager] in await elfManager.promptContext() }
     )
 
     /// The main-window section another surface (e.g. the menu bar panel)

@@ -248,14 +248,15 @@ struct ElfTests {
         }
     }
 
-    @Test func theMainElfsPromptStillComesFromMainAfterOtherElvesAreEdited() throws {
+    @Test func theMainElfsPromptStillComesFromMainAfterOtherElvesAreEdited() async throws {
         let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
         defer { cleanUp() }
         let elfManager = ElfManager(elvesDirectory: elvesDirectory)
         try elfManager.createElf(identity: .init(name: "Ada"))
         try ElfEditor(elfIdentifier: "ada", elfManager: elfManager).saveSoul("# soul\n\nada only")
-        #expect(elfManager.promptContext().soulText == ElfHome.starterSoul)
-        #expect(elfManager.promptContext().elfName == "elf")
+        let elfPromptContext = await elfManager.promptContext()
+        #expect(elfPromptContext.soulText == ElfHome.starterSoul)
+        #expect(elfPromptContext.elfName == "elf")
     }
 
     // MARK: - Aliases
@@ -623,6 +624,84 @@ struct ElfTests {
         #expect(promptText.contains("## Big one"))
         #expect(!promptText.contains("## Second"))
         #expect(promptText.contains("listed by title only"))
+    }
+
+    @Test func theSkillsIndexIsCapped() {
+        var elfPromptContext = ElfPromptContext.starter
+        elfPromptContext.skills = (1...300).map { skillNumber in
+            ElfSkill(name: "Skill number \(skillNumber)", description: String(repeating: "d", count: 40), body: "")
+        }
+        let promptText = elfPromptContext.promptSections.joined(separator: "\n\n")
+        let indexLineCount = promptText.components(separatedBy: "\n").filter { $0.hasPrefix("- Skill number") }.count
+        #expect(indexLineCount < 300)
+        #expect(indexLineCount > 0)
+        #expect(promptText.contains("\(300 - indexLineCount) more skills — ask for them by name"))
+    }
+
+    // MARK: - Gaps closed before elf tools
+
+    @Test func aPathResolvesToTheRealFileNotTheLink() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        let realFileURL = home.filesDirectory.appendingPathComponent("real.md")
+        try Data("real".utf8).write(to: realFileURL)
+        try FileManager.default.createSymbolicLink(
+            at: home.filesDirectory.appendingPathComponent("link.md"),
+            withDestinationURL: realFileURL
+        )
+        let resolvedURL = try home.resolvedURLInsideHome("files/link.md")
+        #expect(resolvedURL.lastPathComponent == "real.md")
+        #expect(resolvedURL.path == realFileURL.resolvingSymlinksInPath().path)
+    }
+
+    @Test func aMarkdownFileDroppedIntoSkillsLaterIsNotMigrated() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        let droppedReadmeURL = home.skillsDirectory.appendingPathComponent("README.md")
+        try Data("# Read me\n\nnot a skill".utf8).write(to: droppedReadmeURL)
+        try home.createIfNeeded()
+        #expect(FileManager.default.fileExists(atPath: droppedReadmeURL.path))
+        #expect(home.readSkills().isEmpty)
+    }
+
+    @Test func multiLineDescriptionsKeepTheirLineBreaksWhenSaved() {
+        let skill = ElfSkill(slug: "deploy", name: "Deploy", description: "first line\nsecond line", body: "steps")
+        let parsedSkill = ElfSkill.parse(slug: "deploy", skillMarkdown: skill.skillMarkdown)
+        #expect(parsedSkill.description == "first line\nsecond line")
+        #expect(parsedSkill.name == "Deploy")
+        #expect(parsedSkill.body == "steps")
+    }
+
+    @Test func trailingCommentsAreNotPartOfAPlainValue() {
+        let parsedSkill = ElfSkill.parse(slug: "deploy", skillMarkdown: "---\nname: Deploy # the main one\ndescription: uses C# daily # a note\n---\nbody")
+        #expect(parsedSkill.name == "Deploy")
+        #expect(parsedSkill.description == "uses C# daily")
+    }
+
+    @Test func unicodeEscapesAreDecodedInDoubleQuotedValues() {
+        let parsedSkill = ElfSkill.parse(slug: "cafe", skillMarkdown: "---\nname: \"Caf\\u00e9 notes\"\ndescription: \"\\u2014 dash\"\n---\nbody")
+        #expect(parsedSkill.name == "Café notes")
+        #expect(parsedSkill.description == "— dash")
+    }
+
+    @Test func multiLineQuotedValuesLoseTheirQuotes() {
+        let parsedSkill = ElfSkill.parse(slug: "deploy", skillMarkdown: "---\nname: Deploy\ndescription: \"first part\n  second part\"\n---\nbody")
+        #expect(parsedSkill.description == "first part second part")
+    }
+
+    @Test func anIndentedDashLineInsideABlockValueDoesNotCloseTheFrontmatter() {
+        let parsedSkill = ElfSkill.parse(slug: "deploy", skillMarkdown: "---\nname: Deploy\ndescription: |\n  before\n  ---\n  after\n---\nbody")
+        #expect(parsedSkill.description == "before\n---\nafter")
+        #expect(parsedSkill.body == "body")
+    }
+
+    @Test func thePromptIsReadOffTheMainActor() async throws {
+        let elvesDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("elves-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: elvesDirectory) }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        try ElfEditor(editingMainElfOf: elfManager).saveSoul("# soul\n\nbe kind")
+        let elfPromptContext = await elfManager.promptContext()
+        #expect(elfPromptContext.soulText == "# soul\n\nbe kind")
     }
 
     // MARK: - Export

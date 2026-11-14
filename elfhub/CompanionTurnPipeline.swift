@@ -56,13 +56,13 @@ final class CompanionTurnPipeline {
 
     /// The active elf's part of each prompt (soul, profile, skills…), read
     /// at the start of every turn.
-    private let elfPromptContextProvider: () -> ElfPromptContext
+    private let elfPromptContextProvider: () async -> ElfPromptContext
 
     init(
         providerConfigurationStore: ProviderConfigurationStore,
         screenActionCoordinator: ScreenActionCoordinator,
         companionEventBus: CompanionEventBus,
-        elfPromptContextProvider: @escaping () -> ElfPromptContext = { .starter }
+        elfPromptContextProvider: @escaping () async -> ElfPromptContext = { .starter }
     ) {
         self.providerConfigurationStore = providerConfigurationStore
         self.screenActionCoordinator = screenActionCoordinator
@@ -284,7 +284,7 @@ final class CompanionTurnPipeline {
             coordinateConvention: coordinateConvention,
             guidanceEncoding: usesNativeGuidanceTools ? .nativeTools : .textTags,
             includesScreenActions: isActionModeEnabled,
-            elfPromptContext: elfPromptContextProvider()
+            elfPromptContext: await elfPromptContextProvider()
         )
 
         let initialRequest = LanguageModelRequest(

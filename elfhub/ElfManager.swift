@@ -199,17 +199,14 @@ final class ElfManager: ObservableObject {
 
     // MARK: Prompt
 
-    /// The elf's part of the next prompt, read fresh from disk so edits made
-    /// outside the app count straight away.
-    func promptContext() -> ElfPromptContext {
-        let home = mainElf.home
-        return ElfPromptContext(
-            elfName: home.readConfiguration().identity.name,
-            soulText: home.readSoul(),
-            profileText: home.readProfile(),
-            behaviour: home.readConfiguration().behaviour,
-            skills: home.readSkills()
-        )
+    /// The main elf's part of the next prompt, read fresh from disk so edits
+    /// made outside the app count straight away. Read off the main actor so
+    /// a slow disk or many skills never hold up the interface.
+    func promptContext() async -> ElfPromptContext {
+        let mainElfHome = mainElf.home
+        return await Task.detached(priority: .userInitiated) {
+            ElfPromptContext.reading(home: mainElfHome)
+        }.value
     }
 }
 
@@ -227,6 +224,21 @@ nonisolated struct ElfPromptContext: Equatable, Sendable {
 
     /// Skill bodies beyond this are listed by title only.
     static let inlineSkillsCharacterBudget = 6_000
+    /// The index of skill names and descriptions stops here, ending with
+    /// how many more there are.
+    static let skillsIndexCharacterBudget = 4_000
+
+    /// Reads an elf's prompt context from its home folder.
+    static func reading(home: ElfHome) -> ElfPromptContext {
+        let configuration = home.readConfiguration()
+        return ElfPromptContext(
+            elfName: configuration.identity.name,
+            soulText: home.readSoul(),
+            profileText: home.readProfile(),
+            behaviour: configuration.behaviour,
+            skills: home.readSkills()
+        )
+    }
 
     /// A fresh elf: today's elfhub behaviour.
     static let starter = ElfPromptContext(
@@ -301,9 +313,16 @@ nonisolated struct ElfPromptContext: Equatable, Sendable {
     private var skillsSection: String? {
         guard !skills.isEmpty else { return nil }
         var sectionLines = ["skills you've learned (your skills folder):"]
-        for skill in skills {
+        var remainingIndexCharacterBudget = Self.skillsIndexCharacterBudget
+        for (skillIndex, skill) in skills.enumerated() {
             let trimmedDescription = skill.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            sectionLines.append(trimmedDescription.isEmpty ? "- \(skill.name)" : "- \(skill.name): \(trimmedDescription)")
+            let indexLine = trimmedDescription.isEmpty ? "- \(skill.name)" : "- \(skill.name): \(trimmedDescription)"
+            guard indexLine.count <= remainingIndexCharacterBudget else {
+                sectionLines.append("(\(skills.count - skillIndex) more skills — ask for them by name)")
+                break
+            }
+            sectionLines.append(indexLine)
+            remainingIndexCharacterBudget -= indexLine.count
         }
 
         var remainingCharacterBudget = Self.inlineSkillsCharacterBudget

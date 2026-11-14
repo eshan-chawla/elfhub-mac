@@ -100,7 +100,17 @@ nonisolated struct ElfHome: Equatable, Sendable {
         if !fileManager.fileExists(atPath: profileURL.path) {
             try writeProfile(Self.starterProfile)
         }
+        migrateLegacySkillFilesOnce()
+    }
+
+    /// Marks that phase-1 skill files were moved once, so a markdown file
+    /// dropped into skills/ later (a README, say) isn't turned into a skill.
+    var legacySkillsMigratedMarkerURL: URL { appDataDirectory.appendingPathComponent("legacy-skills-migrated") }
+
+    private func migrateLegacySkillFilesOnce() {
+        guard !FileManager.default.fileExists(atPath: legacySkillsMigratedMarkerURL.path) else { return }
         migrateLegacySkillFilesIfNeeded()
+        try? Data().write(to: legacySkillsMigratedMarkerURL)
     }
 
     // MARK: elf.json
@@ -232,7 +242,9 @@ nonisolated struct ElfHome: Equatable, Sendable {
 
     /// A path inside the home, from a relative path the elf (or the app)
     /// names. Rejects absolute paths, "..", and anything that resolves —
-    /// symlinks included — outside the home folder.
+    /// symlinks included — outside the home folder. Returns the resolved
+    /// path (links followed), so what was checked is what gets read or
+    /// written: a link swapped in after the check can't redirect a write.
     func resolvedURLInsideHome(_ relativePath: String) throws -> URL {
         let trimmedPath = relativePath.trimmingCharacters(in: .whitespacesAndNewlines)
         let pathComponents = trimmedPath.split(separator: "/").map(String.init)
@@ -249,7 +261,7 @@ nonisolated struct ElfHome: Equatable, Sendable {
         guard resolvedCandidatePath.hasPrefix(resolvedHomePath + "/") else {
             throw ElfHomeError.pathOutsideHome(relativePath)
         }
-        return candidateURL
+        return URL(fileURLWithPath: resolvedCandidatePath, isDirectory: candidateURL.hasDirectoryPath)
     }
 
     /// A path an elf's own tools name (reading or writing its notes, for

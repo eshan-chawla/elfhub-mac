@@ -52,7 +52,7 @@ nonisolated struct ElfSkill: Identifiable, Equatable, Sendable {
         var markdownLines = [
             "---",
             "name: " + Self.frontmatterScalar(name),
-            "description: " + Self.frontmatterScalar(description),
+            "description: " + Self.frontmatterBlockOrScalar(description),
         ]
         markdownLines.append(contentsOf: unrecognizedFrontmatterLines)
         markdownLines.append("---")
@@ -96,6 +96,19 @@ nonisolated struct ElfSkill: Identifiable, Equatable, Sendable {
         }
         let slug = String(slugCharacters.prefix(64)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         return slug.isEmpty ? fallback : slug
+    }
+
+    /// A value with line breaks as a `|` block (indented lines keep the
+    /// breaks); anything else on one line.
+    private static func frontmatterBlockOrScalar(_ value: String) -> String {
+        let normalizedValue = value
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedValue.contains("\n") else { return frontmatterScalar(normalizedValue) }
+        let indentedLines = normalizedValue
+            .components(separatedBy: "\n")
+            .map { valueLine in valueLine.trimmingCharacters(in: .whitespaces).isEmpty ? "" : "  " + valueLine }
+        return "|\n" + indentedLines.joined(separator: "\n")
     }
 
     /// A frontmatter value on one line, double-quoted when YAML would
@@ -142,9 +155,11 @@ nonisolated enum SkillFrontmatterParser {
 
         // Frontmatter only counts when it opens the file and is closed; an
         // unclosed block is ordinary markdown.
+        // The closing "---" starts at the line's beginning; an indented one
+        // is text inside a block value.
         guard markdownLines.first?.trimmingCharacters(in: .whitespaces) == "---",
               let closingLineIndex = markdownLines.indices.dropFirst().first(where: {
-                  markdownLines[$0].trimmingCharacters(in: .whitespaces) == "---"
+                  markdownLines[$0].hasPrefix("---") && markdownLines[$0].trimmingCharacters(in: .whitespaces) == "---"
               }) else {
             return ParsedSkillFile(
                 frontmatterValues: [:],
@@ -228,27 +243,53 @@ nonisolated enum SkillFrontmatterParser {
             return foldedParagraphs.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        if valueOnKeyLine.count >= 2, valueOnKeyLine.hasPrefix("\""), valueOnKeyLine.hasSuffix("\"") {
-            return unescapedDoubleQuotedText(String(valueOnKeyLine.dropFirst().dropLast()))
-        }
-        if valueOnKeyLine.count >= 2, valueOnKeyLine.hasPrefix("'"), valueOnKeyLine.hasSuffix("'") {
-            return String(valueOnKeyLine.dropFirst().dropLast()).replacingOccurrences(of: "''", with: "'")
-        }
-
-        // A plain value may run on over indented lines; they join with spaces.
-        return ([valueOnKeyLine] + continuationTexts)
+        // A quoted value may run on over indented lines; they join with
+        // spaces, as YAML folds them.
+        let joinedValue = ([valueOnKeyLine] + continuationTexts)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+        if joinedValue.count >= 2, joinedValue.hasPrefix("\""), joinedValue.hasSuffix("\"") {
+            return unescapedDoubleQuotedText(String(joinedValue.dropFirst().dropLast()))
+        }
+        if joinedValue.count >= 2, joinedValue.hasPrefix("'"), joinedValue.hasSuffix("'") {
+            return String(joinedValue.dropFirst().dropLast()).replacingOccurrences(of: "''", with: "'")
+        }
+
+        // A plain value may run on over indented lines too. " #" starts a
+        // comment, which isn't part of the value ("C#" is).
+        return ([valueOnKeyLine] + continuationTexts)
+            .map(Self.textBeforeComment)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// A plain value's text before a " #" comment, trimmed.
+    private static func textBeforeComment(_ plainText: String) -> String {
+        if plainText.hasPrefix("#") { return "" }
+        guard let commentRange = plainText.range(of: " #") else { return plainText }
+        return String(plainText[..<commentRange.lowerBound]).trimmingCharacters(in: .whitespaces)
     }
 
     private static func unescapedDoubleQuotedText(_ quotedText: String) -> String {
         var unescapedText = ""
         var isAfterBackslash = false
-        for character in quotedText {
+        var remainingCharacters = Substring(quotedText)
+        while let character = remainingCharacters.popFirst() {
             if isAfterBackslash {
                 switch character {
                 case "n": unescapedText.append("\n")
                 case "t": unescapedText.append("\t")
+                case "u":
+                    // \uXXXX: four hex digits naming a character.
+                    let hexDigits = String(remainingCharacters.prefix(4))
+                    if hexDigits.count == 4,
+                       let scalarValue = UInt32(hexDigits, radix: 16),
+                       let unicodeScalar = Unicode.Scalar(scalarValue) {
+                        unescapedText.unicodeScalars.append(unicodeScalar)
+                        remainingCharacters = remainingCharacters.dropFirst(4)
+                    } else {
+                        unescapedText.append(character)
+                    }
                 default: unescapedText.append(character)
                 }
                 isAfterBackslash = false
