@@ -51,6 +51,8 @@ final class FakeAuthenticationServer {
     var beforeCodeExchange: (@MainActor () throws -> Void)?
     /// Lets a test hold the refresh response until both callers are waiting.
     var refreshDelayInNanoseconds: UInt64 = 0
+    /// When set, the code exchange fails with this status and body.
+    var codeExchangeFailure: (statusCode: Int, body: String)?
 
     static let discoveryJSON = #"""
     {"issuer":"https://auth.openai.com",
@@ -73,6 +75,7 @@ final class FakeAuthenticationServer {
             return response(200, String(decoding: jwksData, as: UTF8.self))
         case "/api/accounts/oauth/token" where String(decoding: urlRequest.httpBody ?? Data(), as: UTF8.self).contains("grant_type=authorization_code"):
             try beforeCodeExchange?()
+            if let codeExchangeFailure { return response(codeExchangeFailure.statusCode, codeExchangeFailure.body) }
             guard let makeIDTokenForCodeExchange, let nonceFromAuthorizeURL else { return response(400, "{}") }
             let idToken = try makeIDTokenForCodeExchange(nonceFromAuthorizeURL)
             let scopeField = grantedScopeForCodeExchange.map { #","scope":"\#($0)""# } ?? ""
@@ -383,6 +386,26 @@ struct ChatGPTPlanAccountTests {
         #expect(server.revokedRefreshTokens.contains("refresh-2"))
         #expect(storageBox.credentials == nil)
         #expect(account.signInStatus == .signedOut)
+    }
+
+    @Test func rejectedCodeExchangeShowsOpenAIsReason() async throws {
+        let server = try signingServer(audience: "oaiapp_new")
+        server.codeExchangeFailure = (400, #"{"error":"invalid_grant","error_description":"Invalid authorization code."}"#)
+        let storageBox = InMemoryChatGPTPlanStorageBox()
+        let account = ChatGPTPlanAccount(
+            storage: storageBox.storage,
+            performHTTPRequest: { try await server.perform($0) },
+            openURLInBrowser: makeSimulatedBrowser(server: server, openedURLs: { _ in }),
+            currentDate: { [referenceDate] in referenceDate }
+        )
+
+        account.startSignIn()
+        await waitUntilSignInFinishes(account)
+
+        let problemMessage = try #require(account.lastProblemMessage)
+        #expect(problemMessage.contains("HTTP 400"))
+        #expect(problemMessage.contains("invalid_grant"))
+        #expect(problemMessage.contains("Invalid authorization code."))
     }
 
     @Test func choosingADifferentAccountKeepsTheRegistrationWhenTheSignInFails() async throws {

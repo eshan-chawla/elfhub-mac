@@ -16,6 +16,7 @@
 import AppKit
 import Combine
 import Foundation
+import os
 
 /// Where the account keeps what must survive a relaunch. The real one uses
 /// the Keychain (tokens, registration) and UserDefaults (non-secret ids);
@@ -510,7 +511,11 @@ final class ChatGPTPlanAccount: ObservableObject {
         let (responseData, response) = try await performHTTPRequest(tokenRequest)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         guard (200...299).contains(statusCode) else {
-            throw ChatGPTPlanSignInError.tokenRequestFailed(statusCode: statusCode)
+            let openAIReason = ChatGPTPlanTokenRequests.oauthErrorReason(
+                fromResponseBody: String(decoding: responseData, as: UTF8.self)
+            )
+            companionLogger.error("ChatGPT code exchange rejected: HTTP \(statusCode, privacy: .public) \(openAIReason ?? "no reason given", privacy: .public)")
+            throw ChatGPTPlanSignInError.codeExchangeRejected(statusCode: statusCode, openAIReason: openAIReason)
         }
         guard let tokenResponse = try? JSONDecoder().decode(ChatGPTPlanTokenResponse.self, from: responseData) else {
             throw ChatGPTPlanSignInError.invalidTokenResponse
