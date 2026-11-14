@@ -278,6 +278,13 @@ final class StreamingReplyPresenter {
         present(sentenceSegmenter.append(replyTextDelta))
     }
 
+    /// A model round ended and another may follow: speak what was held
+    /// back waiting for its sentence to end.
+    func markEndOfModelRound() {
+        rawReplyText += "\n"
+        present(sentenceSegmenter.endOfModelRound())
+    }
+
     /// The reply is complete. `finalSpokenText` is the decoder's tag-free text,
     /// used for the final caption.
     func finish(finalSpokenText: String) {

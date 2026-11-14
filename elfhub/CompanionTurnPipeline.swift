@@ -40,6 +40,8 @@ final class CompanionTurnPipeline {
         /// The notepad this reply wrote (the window stays open on screen),
         /// saved on the reply in chat. Nil when it wrote none.
         let shownNotepad: SavedNotepad?
+        /// Files the elf changed in its folder this turn, each undoable.
+        var elfFileChanges: [ElfChangeLogEntry] = []
     }
 
     private let providerConfigurationStore: ProviderConfigurationStore
@@ -50,24 +52,31 @@ final class CompanionTurnPipeline {
     private var conversationHistory: [LanguageModelHistoryTurn] = []
     static let maximumHistoryTurns = 10
 
-    /// What elfhub tells the model a guidance tool call "returned", when it has
-    /// to ask the model for the spoken reply after a tools-only answer.
-    private static let guidanceToolResultText = "shown to the user on their screen"
+    /// How many model rounds the main elf gets per turn to use its tools
+    /// (usually one is enough).
+    static let mainElfMaximumModelRounds = 3
 
     /// The active elf's part of each prompt (soul, profile, skills…), read
     /// at the start of every turn.
     private let elfPromptContextProvider: () async -> ElfPromptContext
 
+    /// The elf whose tools (its notes, files, skills) this turn may use;
+    /// nil gives the model no elf tools.
+    private let elfForToolsProvider: () -> Elf?
+    private let elfToolRegistry = ElfToolRegistry.standard()
+
     init(
         providerConfigurationStore: ProviderConfigurationStore,
         screenActionCoordinator: ScreenActionCoordinator,
         companionEventBus: CompanionEventBus,
-        elfPromptContextProvider: @escaping () async -> ElfPromptContext = { .starter }
+        elfPromptContextProvider: @escaping () async -> ElfPromptContext = { .starter },
+        elfForToolsProvider: @escaping () -> Elf? = { nil }
     ) {
         self.providerConfigurationStore = providerConfigurationStore
         self.screenActionCoordinator = screenActionCoordinator
         self.companionEventBus = companionEventBus
         self.elfPromptContextProvider = elfPromptContextProvider
+        self.elfForToolsProvider = elfForToolsProvider
     }
 
     func clearConversationHistory() {
@@ -102,8 +111,13 @@ final class CompanionTurnPipeline {
         userInkStrokes: [UserInkStroke] = [],
         isSpokenTurn: Bool = false,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
+        onModelRoundEnded: @escaping @MainActor () -> Void = {},
         onLanguageModelSwitched: @escaping @MainActor (LanguageModelSwitchNotice) -> Void = { _ in }
     ) async throws -> TurnResult {
+        // Kept across the fallback restart below, so a file the first try
+        // already saved isn't saved twice.
+        let turnEffectLedger = ElfTurnEffectLedger()
+        let elfForTools = elfForToolsProvider()
         // This turn replaces whatever the previous one was doing on screen,
         // and only this turn's actions may run from now on.
         let screenActionTurnToken = screenActionCoordinator.beginTurn()
@@ -130,7 +144,10 @@ final class CompanionTurnPipeline {
                 userInkStrokes: userInkStrokes,
                 isSpokenTurn: isSpokenTurn,
                 screenActionTurnToken: screenActionTurnToken,
-                onReplyTextDelta: onReplyTextDelta
+                elfToolContextForTurn: elfForTools,
+                turnEffectLedger: turnEffectLedger,
+                onReplyTextDelta: onReplyTextDelta,
+                onModelRoundEnded: onModelRoundEnded
             )
             if turnConfiguration.kind == .chatGPTPlan, providerConfigurationStore.chatGPTPlanUnavailableSince != nil {
                 providerConfigurationStore.clearChatGPTPlanUnavailable()
@@ -180,7 +197,10 @@ final class CompanionTurnPipeline {
                 userInkStrokes: userInkStrokes,
                 isSpokenTurn: isSpokenTurn,
                 screenActionTurnToken: screenActionTurnToken,
-                onReplyTextDelta: onReplyTextDelta
+                elfToolContextForTurn: elfForTools,
+                turnEffectLedger: turnEffectLedger,
+                onReplyTextDelta: onReplyTextDelta,
+                onModelRoundEnded: onModelRoundEnded
             )
         }
     }
@@ -227,7 +247,10 @@ final class CompanionTurnPipeline {
         userInkStrokes: [UserInkStroke],
         isSpokenTurn: Bool,
         screenActionTurnToken: ScreenActionTurnToken,
-        onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void
+        elfToolContextForTurn: Elf?,
+        turnEffectLedger: ElfTurnEffectLedger,
+        onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
+        onModelRoundEnded: @escaping @MainActor () -> Void
     ) async throws -> TurnResult {
         let capabilities = languageModelProvider.capabilities
         let coordinateConvention = capabilities.visionProfile.coordinateConvention
@@ -280,6 +303,11 @@ final class CompanionTurnPipeline {
         let guidanceTools = usesNativeGuidanceTools
             ? GuidanceToolDefinitions.toolDefinitions(includingScreenActions: isActionModeEnabled)
             : []
+        let elfToolDefinitions = usesNativeGuidanceTools
+            ? elfToolContextForTurn.map { elfRegistryElf in
+                elfToolRegistry.toolDefinitions(for: .mainForeground, configuration: elfRegistryElf.configuration)
+            } ?? []
+            : []
         let systemPrompt = CompanionPromptBuilder.systemPrompt(
             coordinateConvention: coordinateConvention,
             guidanceEncoding: usesNativeGuidanceTools ? .nativeTools : .textTags,
@@ -292,51 +320,38 @@ final class CompanionTurnPipeline {
             history: conversationHistory,
             userText: userTextForModel,
             images: imagesForModel,
-            tools: guidanceTools,
+            tools: guidanceTools + elfToolDefinitions,
             reasoningEffort: Self.reasoningEffort(isActionModeEnabled: isActionModeEnabled, isSpokenTurn: isSpokenTurn)
         )
-        let initialResponse = try await languageModelProvider.streamResponse(initialRequest) { streamEvent in
-            if case let .textDelta(textDelta) = streamEvent {
-                onReplyTextDelta(textDelta)
-            }
+        // The model may use its tools (its notes, files and skills) over a
+        // few rounds; guidance calls from every round are drawn once below.
+        let elfToolContext = elfToolContextForTurn.map { elfToolSetup in
+            ElfToolContext(
+                elf: elfToolSetup,
+                changeLog: ElfChangeLog(home: elfToolSetup.home),
+                origin: .turn(conversationIdentifier: nil),
+                userUtterance: userText,
+                // The screenshot is the user's own view, sent every turn with
+                // them watching, so it isn't counted; files and web pages the
+                // elf reads are (see the tools).
+                influencedBy: [],
+                turnEffectLedger: turnEffectLedger
+            )
         }
+        let agentLoopResult = try await ElfAgentLoop.run(
+            initialRequest: initialRequest,
+            languageModelProvider: languageModelProvider,
+            toolRegistry: elfToolRegistry,
+            toolContext: elfToolContext,
+            guidanceToolNames: GuidanceToolDefinitions.toolNames,
+            maximumRounds: usesNativeGuidanceTools ? Self.mainElfMaximumModelRounds : 1,
+            onReplyTextDelta: onReplyTextDelta,
+            onModelRoundEnded: onModelRoundEnded
+        )
         try Task.checkCancellation()
 
-        var replyText = initialResponse.text
-        var toolCalls = initialResponse.toolCalls
-
-        // Some models call guidance tools and stop without saying anything,
-        // waiting for tool results. Return "shown" for each and ask once more
-        // for the spoken reply, replaying the assistant turn unchanged.
-        if usesNativeGuidanceTools,
-           !toolCalls.isEmpty,
-           replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let toolResultBlocks = toolCalls.map { toolCall in
-                LanguageModelContentBlock.toolResult(
-                    toolCallIdentifier: toolCall.toolCallIdentifier,
-                    toolName: toolCall.toolName,
-                    resultText: Self.guidanceToolResultText
-                )
-            }
-            let followUpRequest = LanguageModelRequest(
-                systemPrompt: systemPrompt,
-                messages: initialRequest.messages + [
-                    LanguageModelMessage(role: .assistant, content: initialResponse.assistantContent),
-                    LanguageModelMessage(role: .user, content: toolResultBlocks),
-                ],
-                tools: guidanceTools,
-                maxOutputTokens: initialRequest.maxOutputTokens,
-                reasoningEffort: initialRequest.reasoningEffort
-            )
-            let followUpResponse = try await languageModelProvider.streamResponse(followUpRequest) { streamEvent in
-                if case let .textDelta(textDelta) = streamEvent {
-                    onReplyTextDelta(textDelta)
-                }
-            }
-            try Task.checkCancellation()
-            replyText = followUpResponse.text
-            toolCalls += followUpResponse.toolCalls
-        }
+        let replyText = agentLoopResult.replyText
+        let toolCalls = agentLoopResult.guidanceToolCalls
 
         let guidanceDecodeResult = Self.decodeGuidance(
             replyText: replyText,
@@ -378,7 +393,11 @@ final class CompanionTurnPipeline {
 
         // The notepad window isn't in screenshots, so the model remembers
         // what it wrote there through its history.
-        let assistantTextForHistory = shownNotepad.map { spokenText + "\n\n" + $0.textForConversationHistory } ?? spokenText
+        let assistantTextForHistory = Self.assistantTextForHistory(
+            spokenText: spokenText,
+            notepad: shownNotepad,
+            toolOutcomes: agentLoopResult.toolOutcomes
+        )
         conversationHistory.append(LanguageModelHistoryTurn(userText: userText, assistantText: assistantTextForHistory))
         if conversationHistory.count > Self.maximumHistoryTurns {
             conversationHistory.removeFirst(conversationHistory.count - Self.maximumHistoryTurns)
@@ -398,8 +417,26 @@ final class CompanionTurnPipeline {
                     )
                 }
                 : nil,
-            shownNotepad: shownNotepad
+            shownNotepad: shownNotepad,
+            elfFileChanges: agentLoopResult.toolOutcomes.flatMap(\.fileChanges)
         )
+    }
+
+    /// What the model remembers of its reply: what it said, the notepad it
+    /// wrote (the window isn't in screenshots), and a footnote of what it
+    /// changed ("(you saved files/trip.md)") — so the history stays one
+    /// plain exchange per turn, without the tool calls.
+    static func assistantTextForHistory(
+        spokenText: String,
+        notepad: SavedNotepad?,
+        toolOutcomes: [ElfToolOutcome]
+    ) -> String {
+        var assistantTextForHistory = notepad.map { spokenText + "\n\n" + $0.textForConversationHistory } ?? spokenText
+        let chatNotes = toolOutcomes.flatMap(\.chatNotes)
+        if !chatNotes.isEmpty {
+            assistantTextForHistory += "\n\n(you " + chatNotes.joined(separator: "; ") + ")"
+        }
+        return assistantTextForHistory
     }
 
     /// Speed versus depth for this turn, on models that support it. A spoken

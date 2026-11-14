@@ -101,7 +101,8 @@ final class CompanionManager: ObservableObject {
         providerConfigurationStore: providerConfigurationStore,
         screenActionCoordinator: screenActionCoordinator,
         companionEventBus: companionEventBus,
-        elfPromptContextProvider: { [elfManager] in await elfManager.promptContext() }
+        elfPromptContextProvider: { [elfManager] in await elfManager.promptContext() },
+        elfForToolsProvider: { [elfManager] in elfManager.mainElf }
     )
 
     /// The main-window section another surface (e.g. the menu bar panel)
@@ -946,6 +947,12 @@ final class CompanionManager: ObservableObject {
                         rawReplyText += replyTextDelta
                         textChatViewModel.showStreamingReply(rawReplyText: rawReplyText, for: recordedVoiceExchange)
                     },
+                    onModelRoundEnded: {
+                        // The model used a tool and may say more: speak what
+                        // it said so far, and keep the rounds apart in chat.
+                        streamingReplyPresenter.markEndOfModelRound()
+                        rawReplyText += "\n"
+                    },
                     onLanguageModelSwitched: { [weak self] switchNotice in
                         guard let self else { return }
                         languageModelSwitchNotice = switchNotice
@@ -1049,6 +1056,10 @@ final class CompanionManager: ObservableObject {
                     turnLatencyTimeline.mark(.firstReplyText)
                     streamingReplyPresenter.receive(replyTextDelta: replyTextDelta)
                     onTextChunk(replyTextDelta)
+                },
+                onModelRoundEnded: {
+                    streamingReplyPresenter.markEndOfModelRound()
+                    onTextChunk("\n")
                 },
                 onLanguageModelSwitched: { [weak self] switchNotice in
                     guard let self else { return }

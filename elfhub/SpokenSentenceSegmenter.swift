@@ -57,6 +57,15 @@ struct SpokenSentenceSegmenter {
         takeCompleteSentences(isFinal: true)
     }
 
+    /// One model round ended and another may follow (it used a tool): the
+    /// text held back waiting for the sentence to end is spoken now, so it
+    /// isn't glued to the next round's first words.
+    mutating func endOfModelRound() -> [SpokenSentenceSegment] {
+        let heldBackSegments = takeCompleteSentences(isFinal: true)
+        rawResponseText += "\n"
+        return heldBackSegments + takeCompleteSentences(isFinal: false)
+    }
+
     // MARK: - Speakable text
 
     /// The reply with complete guidance tags removed and any unfinished tag at

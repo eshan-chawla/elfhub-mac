@@ -145,6 +145,8 @@ enum GuidanceToolDefinitions {
     static let pointToolName = "point_at"
     static let annotateToolName = "annotate"
     static let screenActionToolName = "perform_screen_action"
+    /// Every guidance tool's name — calls to these are drawn on screen, not run.
+    static let toolNames: Set<String> = [pointToolName, annotateToolName, screenActionToolName]
 
     /// The tools offered this turn. Screen actions are only offered when the
     /// user has turned action mode on — observation stays free, acting is opt-in.
