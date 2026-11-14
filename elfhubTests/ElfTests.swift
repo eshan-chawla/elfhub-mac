@@ -363,6 +363,34 @@ struct ElfTests {
         }
     }
 
+    // MARK: - Naming the main elf
+
+    @Test func theNamingCardIsOfferedOnceToElvesStillCalledElf() {
+        #expect(ElfNamingPrompt.shouldOffer(hasCompletedOnboarding: true, mainElfName: "elf", wasOffered: false))
+        #expect(ElfNamingPrompt.shouldOffer(hasCompletedOnboarding: true, mainElfName: " Elf ", wasOffered: false))
+        #expect(!ElfNamingPrompt.shouldOffer(hasCompletedOnboarding: true, mainElfName: "elf", wasOffered: true))
+        #expect(!ElfNamingPrompt.shouldOffer(hasCompletedOnboarding: true, mainElfName: "Juniper", wasOffered: false))
+        #expect(!ElfNamingPrompt.shouldOffer(hasCompletedOnboarding: false, mainElfName: "elf", wasOffered: false))
+    }
+
+    @Test func keepingTheDefaultNameInOnboardingMeansNoCardLater() throws {
+        let userDefaultsSuiteName = "ElfNamingPromptTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: userDefaultsSuiteName))
+        defer { userDefaults.removePersistentDomain(forName: userDefaultsSuiteName) }
+        #expect(!ElfNamingPrompt.wasOffered(userDefaults: userDefaults))
+        ElfNamingPrompt.markOffered(userDefaults: userDefaults)
+        #expect(!ElfNamingPrompt.shouldOffer(
+            hasCompletedOnboarding: true,
+            mainElfName: "elf",
+            wasOffered: ElfNamingPrompt.wasOffered(userDefaults: userDefaults)
+        ))
+    }
+
+    @Test func theVoicePreviewSaysTheElfsName() {
+        #expect(ElfVoicePreview.sentence(forElfName: " Juniper ") == "Hi, I'm Juniper. This is how I'll sound.")
+        #expect(ElfVoicePreview.sentence(forElfName: "") == "Hi, I'm elf. This is how I'll sound.")
+    }
+
     @Test func emojiFieldKeepsOnlyTheFirstEmoji() {
         #expect(ElfNameRules.normalizedEmoji("🧝‍♀️ Juniper") == "🧝‍♀️")
         #expect(ElfNameRules.normalizedEmoji("👍🏽👍") == "👍🏽")

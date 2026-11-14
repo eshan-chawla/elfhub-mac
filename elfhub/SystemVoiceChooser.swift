@@ -219,7 +219,6 @@ final class SystemVoicePreviewPlayer: NSObject, ObservableObject, AVSpeechSynthe
     private let speechSynthesizer = AVSpeechSynthesizer()
     private var currentPreviewUtteranceIdentifier: ObjectIdentifier?
 
-    static let previewSentence = "Hi, I'm elfhub. This is how I'll sound."
 
     override init() {
         super.init()
@@ -227,12 +226,13 @@ final class SystemVoicePreviewPlayer: NSObject, ObservableObject, AVSpeechSynthe
     }
 
     /// Plays the sample in this voice, or stops it if it's already playing.
-    func togglePreview(ofVoiceWithIdentifier voiceIdentifier: String) {
+    /// `previewSentence` introduces the elf by its name ("Hi, I'm Juniper…").
+    func togglePreview(ofVoiceWithIdentifier voiceIdentifier: String, previewSentence: String) {
         let wasPreviewingThisVoice = previewingVoiceIdentifier == voiceIdentifier
         stop()
         guard !wasPreviewingThisVoice else { return }
 
-        let previewUtterance = AVSpeechUtterance(string: Self.previewSentence)
+        let previewUtterance = AVSpeechUtterance(string: previewSentence)
         if !voiceIdentifier.isEmpty {
             previewUtterance.voice = AVSpeechSynthesisVoice(identifier: voiceIdentifier)
         }
@@ -277,6 +277,8 @@ final class SystemVoicePreviewPlayer: NSObject, ObservableObject, AVSpeechSynthe
 struct SystemVoiceChooserSheet: View {
     /// The chosen voice's identifier; "" follows the system default voice.
     @Binding var selectedVoiceIdentifier: String
+    /// The main elf's name, for the sample sentence ("Hi, I'm Juniper").
+    let elfName: String
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var voicePreviewPlayer = SystemVoicePreviewPlayer()
@@ -364,7 +366,7 @@ struct SystemVoiceChooserSheet: View {
                     isSelected: selectedVoiceIdentifier.isEmpty,
                     isPreviewing: voicePreviewPlayer.previewingVoiceIdentifier == "",
                     onSelect: { selectedVoiceIdentifier = "" },
-                    onTogglePreview: { voicePreviewPlayer.togglePreview(ofVoiceWithIdentifier: "") }
+                    onTogglePreview: { voicePreviewPlayer.togglePreview(ofVoiceWithIdentifier: "", previewSentence: ElfVoicePreview.sentence(forElfName: elfName)) }
                 )
             }
 
@@ -382,7 +384,7 @@ struct SystemVoiceChooserSheet: View {
                         isSelected: selectedVoiceIdentifier == voiceOption.id,
                         isPreviewing: voicePreviewPlayer.previewingVoiceIdentifier == voiceOption.id,
                         onSelect: { selectedVoiceIdentifier = voiceOption.id },
-                        onTogglePreview: { voicePreviewPlayer.togglePreview(ofVoiceWithIdentifier: voiceOption.id) }
+                        onTogglePreview: { voicePreviewPlayer.togglePreview(ofVoiceWithIdentifier: voiceOption.id, previewSentence: ElfVoicePreview.sentence(forElfName: elfName)) }
                     )
                 }
             }

@@ -7,8 +7,10 @@
 //  other page, so the window never resizes and the content never shifts
 //  between steps.
 //
-//  Onboarding: 1. Models (speech-to-text, language model, text-to-speech) →
-//  2. Shortcuts & permissions, your data on this Mac (saving chats,
+//  Onboarding: 1. Your elf (name the main elf, with an optional emoji and
+//  description, and optionally add the Researcher and Writer starter elves)
+//  → 2. Models (speech-to-text, language model, text-to-speech) →
+//  3. Shortcuts & permissions, your data on this Mac (saving chats,
 //  screenshots, the action log) and a "Start tutorial" checkbox (checked by
 //  default). If permissions are revoked later, only the checklist returns.
 //
@@ -27,11 +29,20 @@ struct OnboardingPane: View {
     @ObservedObject private var providerConfigurationStore: ProviderConfigurationStore
 
     private enum OnboardingStep {
+        case meetYourElf
         case models
         case shortcutsAndPermissions
     }
 
-    @State private var currentStep: OnboardingStep = .models
+    @State private var currentStep: OnboardingStep = .meetYourElf
+    /// Step 1's fields, filled from the main elf when the step appears.
+    @State private var mainElfEmojiDraft = ""
+    @State private var mainElfNameDraft = ""
+    @State private var mainElfDescriptionDraft = ""
+    @State private var mainElfStepErrorMessage: String?
+    /// Starter elves to add at Finish (none by default), so going Back
+    /// never leaves stray elves behind.
+    @State private var chosenStarterTemplates: Set<ElfStarterTemplate> = []
     /// "Start tutorial" — checked by default, never forced.
     @State private var shouldStartTutorial = true
 
@@ -47,6 +58,8 @@ struct OnboardingPane: View {
             } else {
                 stepIndicator
                 switch currentStep {
+                case .meetYourElf:
+                    meetYourElfStep
                 case .models:
                     modelsStep
                 case .shortcutsAndPermissions:
@@ -62,11 +75,15 @@ struct OnboardingPane: View {
 
     private var stepIndicator: some View {
         HStack(spacing: 8) {
-            stepIndicatorItem(number: 1, title: "Models", isCurrent: currentStep == .models)
+            stepIndicatorItem(number: 1, title: "Your elf", isCurrent: currentStep == .meetYourElf)
             Rectangle()
                 .fill(DS.Colors.borderSubtle)
                 .frame(width: 24, height: 1)
-            stepIndicatorItem(number: 2, title: "Shortcuts & permissions", isCurrent: currentStep == .shortcutsAndPermissions)
+            stepIndicatorItem(number: 2, title: "Models", isCurrent: currentStep == .models)
+            Rectangle()
+                .fill(DS.Colors.borderSubtle)
+                .frame(width: 24, height: 1)
+            stepIndicatorItem(number: 3, title: "Shortcuts & permissions", isCurrent: currentStep == .shortcutsAndPermissions)
         }
     }
 
@@ -83,7 +100,147 @@ struct OnboardingPane: View {
         }
     }
 
-    // MARK: Step 1 — models
+    // MARK: Step 1 — your elf
+
+    private var otherElfNames: [String] {
+        ElfNameRules.namesInUse(byElves: companionManager.elfManager.elves, excludingElfWithIdentifier: ElfManager.mainElfIdentifier)
+    }
+
+    private var mainElfNameProblems: [ElfNameProblem] {
+        ElfNameRules.problems(forName: mainElfNameDraft, otherElfNames: otherElfNames)
+    }
+
+    private var canContinueFromMeetYourElfStep: Bool {
+        mainElfNameProblems.allSatisfy(\.isWarning)
+    }
+
+    private var meetYourElfStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Welcome to elfhub.")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(DS.Colors.textPrimary)
+
+                Text("An open-source companion that hears you, sees your screen when you ask, talks you through things, points at what matters, and can act for you when you allow it.")
+                    .font(.system(size: 13))
+                    .foregroundColor(DS.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                LayerFieldLabel(text: "Meet your elf")
+                Text("Your elf is who you'll talk to. Give it a name — you'll call it by name, and it introduces itself with it.")
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    TextField("Emoji", text: $mainElfEmojiDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 56)
+                    TextField("Name", text: $mainElfNameDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { continueFromMeetYourElfStep() }
+                }
+                if let nameProblemMessage = mainElfNameProblems.first?.message {
+                    Text(nameProblemMessage)
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.warning)
+                }
+                TextField("What it's for (optional)", text: $mainElfDescriptionDraft)
+                    .textFieldStyle(.roundedBorder)
+                if let mainElfStepErrorMessage {
+                    Text(mainElfStepErrorMessage)
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.warning)
+                }
+            }
+            .mainAppCard()
+
+            let availableStarterTemplates = companionManager.elfManager.availableStarterTemplates
+            if !availableStarterTemplates.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    LayerFieldLabel(text: "Starter elves (optional)")
+                    Text("They're ready to shape now and to talk to when side elves arrive. You can add them later from the Elves list too.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ForEach(availableStarterTemplates) { starterTemplate in
+                        Toggle(isOn: Binding(
+                            get: { chosenStarterTemplates.contains(starterTemplate) },
+                            set: { isChosen in
+                                if isChosen {
+                                    chosenStarterTemplates.insert(starterTemplate)
+                                } else {
+                                    chosenStarterTemplates.remove(starterTemplate)
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(starterTemplate.identity.emoji) \(starterTemplate.identity.name)")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(DS.Colors.textPrimary)
+                                Text(starterTemplate.identity.description)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(DS.Colors.textTertiary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        .pointerCursor()
+                    }
+                }
+                .mainAppCard()
+            }
+
+            HStack {
+                Spacer()
+                OnboardingPrimaryButton(title: "Next", isEnabled: canContinueFromMeetYourElfStep) {
+                    continueFromMeetYourElfStep()
+                }
+                .frame(width: 160)
+            }
+        }
+        .onAppear {
+            let mainElfIdentity = companionManager.elfManager.mainElf.configuration.identity
+            if mainElfNameDraft.isEmpty {
+                mainElfEmojiDraft = mainElfIdentity.emoji
+                mainElfNameDraft = mainElfIdentity.name
+                mainElfDescriptionDraft = mainElfIdentity.description
+            }
+        }
+    }
+
+    /// Saves the main elf's name (through the name rules), emoji and
+    /// description, then moves on. Stays on the step if anything fails.
+    private func continueFromMeetYourElfStep() {
+        guard canContinueFromMeetYourElfStep else { return }
+        let mainElfEditor = ElfEditor(editingMainElfOf: companionManager.elfManager)
+        do {
+            let trimmedName = mainElfNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedName != mainElfEditor.elf.configuration.identity.name {
+                try mainElfEditor.rename(to: trimmedName)
+            }
+            try mainElfEditor.updateEmoji(mainElfEmojiDraft)
+            try mainElfEditor.updateDescription(mainElfDescriptionDraft)
+            mainElfEmojiDraft = mainElfEditor.elf.configuration.identity.emoji
+            mainElfStepErrorMessage = nil
+            currentStep = .models
+        } catch {
+            mainElfStepErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Adds the starter elves chosen in step 1 that aren't there yet.
+    private func addChosenStarterElves() {
+        let elfManager = companionManager.elfManager
+        for starterTemplate in ElfStarterTemplate.allCases
+        where chosenStarterTemplates.contains(starterTemplate) && elfManager.availableStarterTemplates.contains(starterTemplate) {
+            try? elfManager.createElf(fromStarterTemplate: starterTemplate)
+        }
+    }
+
+    // MARK: Step 2 — models
 
     private var isSpeechToTextReady: Bool {
         !companionManager.interactionInputMode.isVoiceInputEnabled
@@ -96,16 +253,10 @@ struct OnboardingPane: View {
 
     private var modelsStep: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Welcome to elfhub.")
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Your models")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(DS.Colors.textPrimary)
-
-                Text("An open-source companion that hears you, sees your screen when you ask, talks you through things, points at what matters, and can act for you when you allow it.")
-                    .font(.system(size: 13))
-                    .foregroundColor(DS.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
                 Text("elfhub runs on your Mac with your own keys, your ChatGPT plan, or local models. There's no elfhub account or server — the only things that leave this app are the requests to the services you pick below.")
                     .font(.system(size: 12))
                     .foregroundColor(DS.Colors.textTertiary)
@@ -147,6 +298,8 @@ struct OnboardingPane: View {
             }
 
             HStack {
+                Button("Back") { currentStep = .meetYourElf }
+                    .pointerCursor()
                 if !canContinueFromModelsStep {
                     Text(providerConfigurationStore.isActiveConfigurationReady
                          ? "Finish setting up speech-to-text to continue."
@@ -163,7 +316,7 @@ struct OnboardingPane: View {
         }
     }
 
-    // MARK: Step 2 — shortcuts & permissions
+    // MARK: Step 3 — shortcuts & permissions
 
     private var shortcutsAndPermissionsStep: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -224,6 +377,7 @@ struct OnboardingPane: View {
                         title: shouldStartTutorial ? "Finish & start tutorial" : "Finish",
                         isEnabled: companionManager.hasPermissionsRequiredForActiveModes
                     ) {
+                        addChosenStarterElves()
                         companionManager.completeOnboarding(startTutorial: shouldStartTutorial)
                     }
                     .frame(width: 210)
@@ -248,6 +402,63 @@ struct OnboardingPane: View {
             }
             PermissionGroupView(companionManager: companionManager)
                 .mainAppCard()
+        }
+    }
+}
+
+// MARK: - Name your elf card
+
+/// Shown once above the chat to people who finished onboarding before it
+/// asked for the elf's name, while their main elf is still called "elf".
+struct NameYourElfCard: View {
+    @ObservedObject var elfManager: ElfManager
+    /// Called after Save or "Keep", once the answer is recorded.
+    let onAnswered: () -> Void
+
+    @State private var nameDraft = ""
+    @State private var errorMessage: String?
+
+    private var defaultElfName: String { ElfConfiguration.Identity().name }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Give your elf a name. You'll call it by name, and it introduces itself with it.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(DS.Colors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                TextField("Name", text: $nameDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 240)
+                    .onSubmit { saveName() }
+                Button("Save") { saveName() }
+                    .disabled(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .pointerCursor(isEnabled: !nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("Keep \u{201C}\(defaultElfName)\u{201D}") {
+                    ElfNamingPrompt.markOffered()
+                    onAnswered()
+                }
+                .pointerCursor()
+            }
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+        }
+        .mainAppCard()
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+    }
+
+    private func saveName() {
+        do {
+            try elfManager.renameElf(withIdentifier: ElfManager.mainElfIdentifier, to: nameDraft)
+            ElfNamingPrompt.markOffered()
+            errorMessage = nil
+            onAnswered()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

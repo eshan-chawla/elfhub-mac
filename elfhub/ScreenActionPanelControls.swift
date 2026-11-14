@@ -117,6 +117,8 @@ struct ScreenActionModeControls: View {
 /// hands-free path is saying "go"; this card is the on-screen equivalent.
 struct ScreenActionConsentCard: View {
     @ObservedObject var coordinator: ScreenActionCoordinator
+    /// The main elf's name: "Juniper wants to".
+    let elfName: String
 
     var body: some View {
         if let pendingConsent = coordinator.pendingConsent {
@@ -128,7 +130,7 @@ struct ScreenActionConsentCard: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(pendingConsent.includesHighRiskAction ? DS.Colors.warning : DS.Colors.accent)
 
-                    Text(pendingConsent.includesHighRiskAction ? "Confirm this action" : "elfhub wants to")
+                    Text(pendingConsent.includesHighRiskAction ? "Confirm this action" : "\(elfName) wants to")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(DS.Colors.textSecondary)
                 }

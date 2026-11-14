@@ -54,7 +54,10 @@ struct CompanionPanelView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 4)
 
-                ScreenActionConsentCard(coordinator: companionManager.screenActionCoordinator)
+                ScreenActionConsentCard(
+                coordinator: companionManager.screenActionCoordinator,
+                elfName: companionManager.elfManager.mainElf.configuration.identity.name
+            )
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
             }

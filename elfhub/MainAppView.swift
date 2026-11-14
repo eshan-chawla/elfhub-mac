@@ -90,6 +90,9 @@ struct MainAppView: View {
     @ObservedObject private var elfManager: ElfManager
 
     @State private var mainAppNavigation = MainAppNavigation()
+    /// Set when the one-time "Name your elf" card is answered in this run
+    /// (the answer is also saved, see ElfNamingPrompt).
+    @State private var namingCardWasAnswered = false
 
     /// Wide enough for chat titles in the sidebar list.
     private static let sidebarWidth: CGFloat = 240
@@ -303,13 +306,12 @@ struct MainAppView: View {
                     onSelectSection: { mainAppNavigation.open($0) }
                 )
             case .chat, .tutorial:
-                TextChatView(
-                    viewModel: chatViewModel,
-                    showsRecentChatsMenu: false,
-                    onOpenModelSettings: companionManager.isLanguageModelReady
-                        ? nil
-                        : { mainAppNavigation.open(.settings(.models)) }
-                )
+                VStack(spacing: 0) {
+                    if shouldShowNamingCard {
+                        NameYourElfCard(elfManager: elfManager, onAnswered: { namingCardWasAnswered = true })
+                    }
+                    chatView
+                }
             case let .elf(elfIdentifier):
                 ElfHubPage(
                     companionManager: companionManager,
@@ -324,6 +326,24 @@ struct MainAppView: View {
         } else {
             OnboardingPane(companionManager: companionManager)
         }
+    }
+
+    private var chatView: some View {
+        TextChatView(
+            viewModel: chatViewModel,
+            showsRecentChatsMenu: false,
+            onOpenModelSettings: companionManager.isLanguageModelReady
+                ? nil
+                : { mainAppNavigation.open(.settings(.models)) }
+        )
+    }
+
+    private var shouldShowNamingCard: Bool {
+        ElfNamingPrompt.shouldOffer(
+            hasCompletedOnboarding: companionManager.hasCompletedOnboarding,
+            mainElfName: elfManager.mainElf.configuration.identity.name,
+            wasOffered: namingCardWasAnswered || ElfNamingPrompt.wasOffered()
+        )
     }
 
     private var statusDotColor: Color {

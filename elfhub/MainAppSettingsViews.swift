@@ -195,7 +195,10 @@ private struct ModesSettingsContent: View {
                 isAccessibilityGranted: companionManager.hasAccessibilityPermission
             )
 
-            ScreenActionConsentCard(coordinator: companionManager.screenActionCoordinator)
+            ScreenActionConsentCard(
+                coordinator: companionManager.screenActionCoordinator,
+                elfName: companionManager.elfManager.mainElf.configuration.identity.name
+            )
         }
         .mainAppCard()
     }

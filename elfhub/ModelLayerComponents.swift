@@ -723,7 +723,7 @@ struct TextToSpeechLayerSection: View {
                     selectedSystemVoiceIdentifier = newVoiceIdentifier
                     SystemVoiceSettings.selectedVoiceIdentifier = newVoiceIdentifier.isEmpty ? nil : newVoiceIdentifier
                 }
-            ))
+            ), elfName: companionManager.elfManager.mainElf.configuration.identity.name)
         }
     }
 

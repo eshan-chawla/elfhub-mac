@@ -323,7 +323,7 @@ final class CompanionManager: ObservableObject {
     /// Speaks a short sample with the current voice settings ("Preview").
     func previewCurrentVoice() {
         stopSpeech()
-        let previewSentence = "Hi, I'm elfhub. This is how I'll sound."
+        let previewSentence = ElfVoicePreview.sentence(forElfName: elfManager.mainElf.configuration.identity.name)
         companionEventBus.emit(.responseCaptionAvailable(previewSentence))
         streamingSpeechPlayer.speakCompleteText(previewSentence, using: speechProviderForCurrentSettings() ?? systemSpeechProvider)
     }
@@ -489,8 +489,10 @@ final class CompanionManager: ObservableObject {
     func completeOnboarding(startTutorial: Bool) {
         NotificationCenter.default.post(name: .dismissCompanionPanel, object: nil)
 
-        // Mark onboarding as completed so setup won't appear again.
+        // Mark onboarding as completed so setup won't appear again. Naming
+        // the elf was part of it, so the one-time naming card never shows.
         hasCompletedOnboarding = true
+        ElfNamingPrompt.markOffered()
         objectWillChange.send()
 
         updateOverlayMounting()
