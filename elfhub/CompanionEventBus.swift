@@ -28,6 +28,9 @@ enum CompanionEvent {
     /// The pointer moved to where an action is about to land.
     case actionPreviewed(PlacedPointer)
     case actionsStarted(summary: String)
+    /// The screen changed hands: a side elf (by name) holds it, or nil for
+    /// the main elf.
+    case screenHolderChanged(elfName: String?)
     case actionsFinished
     case turnFinished
     /// The user pressed Esc or otherwise dismissed elfhub's marks.
@@ -102,6 +105,12 @@ final class ScreenGuidanceOverlayModel: ObservableObject {
     /// After speech ends, the pointer lingers this long.
     private static let pointerLingerAfterSpeechSeconds: TimeInterval = 1
     /// Annotations stay longer than the pointer — they're meant to be read.
+    /// "Juniper is acting: clicking Save" when a side elf holds the screen.
+    static func actingSummary(_ summary: String, screenHolderElfName: String?) -> String {
+        guard let screenHolderElfName else { return summary }
+        return "\(screenHolderElfName) is acting: \(summary)"
+    }
+
     private static let annotationLingerAfterSpeechSeconds: TimeInterval = 8
     private static let pillLingerAfterTurnSeconds: TimeInterval = 2.5
     private static let hintDisplaySeconds: TimeInterval = 8
@@ -112,6 +121,8 @@ final class ScreenGuidanceOverlayModel: ObservableObject {
     private var pointerPlacedDate: Date?
     private var isSpeaking = false
     private var isActing = false
+    /// The side elf holding the screen, named in the pill while it acts.
+    private var screenHolderElfName: String?
     private var isListening = false
     private var pointerHideTask: Task<Void, Never>?
     private var annotationsHideTask: Task<Void, Never>?
@@ -198,7 +209,10 @@ final class ScreenGuidanceOverlayModel: ObservableObject {
             if statusPillScreenFrame == nil {
                 statusPillScreenFrame = Self.screenFrameContainingMouse()
             }
-            statusPillPhase = .acting(summary: summary)
+            statusPillPhase = .acting(summary: Self.actingSummary(summary, screenHolderElfName: screenHolderElfName))
+
+        case let .screenHolderChanged(elfName):
+            screenHolderElfName = elfName
 
         case .actionsFinished:
             isActing = false

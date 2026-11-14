@@ -497,6 +497,16 @@ final class CompanionManager: ObservableObject {
 
     private var elfNamesForDictationCancellable: AnyCancellable?
 
+    /// Which elf may point, annotate and act: whoever the user is talking to.
+    @Published private(set) var elfScreenHolder = ElfScreenHolder()
+
+    /// A turn starts: the elf answering it holds the screen, and the pill
+    /// names it while it acts (nil: the main elf).
+    private func handOverScreen(to speakingElf: Elf?) {
+        guard elfScreenHolder.beginTurn(answeredBy: speakingElf?.id) else { return }
+        companionEventBus.emit(.screenHolderChanged(elfName: speakingElf?.configuration.identity.name))
+    }
+
     /// The speech recognizer listens for every elf's names, so "Juniper, …"
     /// is heard as Juniper.
     private func bindElfNamesForDictation() {
@@ -639,6 +649,10 @@ final class CompanionManager: ObservableObject {
     /// Running screen actions are stopped by `ScreenActionCoordinator`'s own
     /// Esc tap.
     private func stopEverythingOnEscape() {
+        // Esc hands the screen back to the main elf.
+        if elfScreenHolder.returnToMainElf() {
+            companionEventBus.emit(.screenHolderChanged(elfName: nil))
+        }
         // Recording: drop it without sending. The key release that follows
         // does nothing, because the dictation session is already gone.
         pendingKeyboardShortcutStartTask?.cancel()
@@ -982,8 +996,10 @@ final class CompanionManager: ObservableObject {
         // ones. Recorded before the turn runs: after a quiet spell this starts
         // a new conversation, which also clears what the model remembers.
         var recordedVoiceExchange = textChatViewModel.beginExchange(userText: transcript, inputSource: .spoken)
-        // "Juniper, …" goes to Juniper: its model, voice, folder and history.
+        // "Juniper, …" goes to Juniper: its model, voice, folder and history,
+        // and it holds the screen for this turn.
         let speakingElf = addressedElf(for: transcript)
+        handOverScreen(to: speakingElf)
         let userInkStrokes = pendingUserInkStrokes
         pendingUserInkStrokes = []
 
@@ -1116,6 +1132,7 @@ final class CompanionManager: ObservableObject {
         }
 
         let speakingElf = addressedElf(for: userText, chosenElfIdentifier: chosenElfIdentifier)
+        handOverScreen(to: speakingElf)
         var streamingReplyPresenter = StreamingReplyPresenter(
             companionEventBus: companionEventBus,
             streamingSpeechPlayer: streamingSpeechPlayer,
