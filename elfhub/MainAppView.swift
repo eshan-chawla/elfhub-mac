@@ -180,6 +180,7 @@ struct MainAppView: View {
 
                     ElvesSidebarSection(
                         elfManager: elfManager,
+                        elfTaskScheduler: companionManager.elfTaskScheduler,
                         selectedElfIdentifier: selectedElfIdentifier,
                         onOpenElf: { elfIdentifier in mainAppNavigation.open(.elf(elfIdentifier)) }
                     )

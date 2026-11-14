@@ -22,6 +22,7 @@ import UniformTypeIdentifiers
 /// below always keep room.
 struct ElvesSidebarSection: View {
     @ObservedObject var elfManager: ElfManager
+    @ObservedObject var elfTaskScheduler: ElfTaskScheduler
     /// The elf whose page is showing, if any.
     let selectedElfIdentifier: String?
     let onOpenElf: (String) -> Void
@@ -87,6 +88,9 @@ struct ElvesSidebarSection: View {
                         ForEach(elfManager.elves) { elf in
                             ElfSidebarRow(
                                 elf: elf,
+                                activeTaskCount: elfTaskScheduler.tasks.filter { elfTask in
+                                    elfTask.elfIdentifier == elf.id && !elfTask.status.isFinished
+                                }.count,
                                 isSelected: elf.id == selectedElfIdentifier,
                                 action: { onOpenElf(elf.id) }
                             )
@@ -126,6 +130,8 @@ struct ElvesSidebarSection: View {
 /// One elf in the sidebar: its emoji (or a sparkle) and name.
 private struct ElfSidebarRow: View {
     let elf: Elf
+    /// Tasks it's working on or that wait for an answer.
+    let activeTaskCount: Int
     let isSelected: Bool
     let action: () -> Void
 
@@ -152,6 +158,16 @@ private struct ElfSidebarRow: View {
                     .lineLimit(1)
 
                 Spacer()
+
+                if activeTaskCount > 0 {
+                    Text("\(activeTaskCount)")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(DS.Colors.textOnAccent)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(DS.Colors.accent))
+                        .help("\(activeTaskCount) task\(activeTaskCount == 1 ? "" : "s") in the background")
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -364,6 +380,8 @@ struct ElfSettingsContent: View {
         .mainAppCard()
         ElfSkillsSection(elfEditor: elfEditor)
             .mainAppCard()
+        ElfTasksSection(elfEditor: elfEditor, elfTaskScheduler: companionManager.elfTaskScheduler)
+            .mainAppCard()
         ElfChangesSection(elfEditor: elfEditor)
             .mainAppCard()
         ElfHomeAndExportSection(companionManager: companionManager, elfEditor: elfEditor)
@@ -378,6 +396,157 @@ struct ElfSettingsContent: View {
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 elfEditor.reload()
             }
+    }
+}
+
+// MARK: - Tasks
+
+/// The elf's background tasks, newest first: what it's working on, what it
+/// asks (answer here), and what it finished. Unfinished ones can be stopped.
+private struct ElfTasksSection: View {
+    @ObservedObject var elfEditor: ElfEditor
+    @ObservedObject var elfTaskScheduler: ElfTaskScheduler
+
+    private static let listedTaskLimit = 20
+
+    private var elfTasks: [ElfTask] {
+        Array(elfTaskScheduler.tasks.filter { $0.elfIdentifier == elfEditor.elf.id }.reversed().prefix(Self.listedTaskLimit))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LayerFieldLabel(text: "Tasks")
+            Text(elfEditor.isMainElf
+                 ? "Work you handed to a background copy of this elf. Ask it to look into something and it can carry on while you do other things."
+                 : "Work this elf does in the background, newest first. Ask it by name — “\(elfEditor.elf.configuration.identity.name), research …” — or through your main elf.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            if elfTasks.isEmpty {
+                Text("No tasks yet.")
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textTertiary)
+                    .padding(.vertical, 4)
+            }
+            ForEach(elfTasks) { elfTask in
+                ElfTaskRow(elfTask: elfTask, elfTaskScheduler: elfTaskScheduler)
+            }
+        }
+    }
+}
+
+private struct ElfTaskRow: View {
+    let elfTask: ElfTask
+    @ObservedObject var elfTaskScheduler: ElfTaskScheduler
+
+    @State private var answerDraft = ""
+    @State private var answerErrorMessage: String?
+    @State private var isShowingNotes = false
+
+    private var statusText: String {
+        switch elfTask.status {
+        case .queued: return "Waiting to start"
+        case .running: return "Working…"
+        case .needsInput: return "Has a question"
+        case .done: return "Done"
+        case .failed: return "Couldn't finish"
+        case .cancelled: return "Stopped"
+        }
+    }
+
+    private var statusColor: Color {
+        switch elfTask.status {
+        case .running, .queued: return DS.Colors.blue400
+        case .needsInput: return DS.Colors.warning
+        case .done: return DS.Colors.success
+        case .failed, .cancelled: return DS.Colors.textTertiary
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Circle().fill(statusColor).frame(width: 6, height: 6)
+                Text(elfTask.instruction)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(DS.Colors.textPrimary)
+                    .lineLimit(2)
+                Spacer()
+                Text(statusText)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.textTertiary)
+                if !elfTask.status.isFinished {
+                    Button("Stop") { elfTaskScheduler.cancel(taskIdentifier: elfTask.id) }
+                        .pointerCursor()
+                        .help("Stop this task")
+                }
+            }
+            if let resultSummary = elfTask.result?.summary {
+                Text(resultSummary)
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textSecondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let filePaths = elfTask.result?.filePaths, !filePaths.isEmpty {
+                    Text("Files: " + filePaths.joined(separator: ", "))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(DS.Colors.textTertiary)
+                }
+            }
+            if let failureReason = elfTask.failureReason {
+                Text(failureReason)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+            if elfTask.status == .needsInput, let pendingQuestion = elfTask.pendingQuestion {
+                Text(pendingQuestion)
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textPrimary)
+                HStack(spacing: 8) {
+                    TextField("Your answer", text: $answerDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { sendAnswer() }
+                    Button("Answer") { sendAnswer() }
+                        .disabled(answerDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .pointerCursor(isEnabled: !answerDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if let answerErrorMessage {
+                    Text(answerErrorMessage)
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.warning)
+                }
+            }
+            if !elfTask.progressNotes.isEmpty {
+                DisclosureGroup(isExpanded: $isShowingNotes) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(elfTask.progressNotes.enumerated()), id: \.offset) { _, progressNote in
+                            Text("· " + progressNote)
+                                .font(.system(size: 11))
+                                .foregroundColor(DS.Colors.textTertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                } label: {
+                    Text("Notes (\(elfTask.progressNotes.count))")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textTertiary)
+                }
+                .pointerCursor()
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func sendAnswer() {
+        let trimmedAnswer = answerDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedAnswer.isEmpty else { return }
+        do {
+            try elfTaskScheduler.answer(taskIdentifier: elfTask.id, answer: trimmedAnswer)
+            answerDraft = ""
+            answerErrorMessage = nil
+        } catch {
+            answerErrorMessage = error.localizedDescription
+        }
     }
 }
 
