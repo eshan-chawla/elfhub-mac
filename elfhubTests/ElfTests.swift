@@ -576,7 +576,7 @@ struct ElfTests {
             guidanceEncoding: .nativeTools,
             includesScreenActions: false
         )
-        #expect(systemPrompt.hasPrefix("you're elf, an elf"))
+        #expect(systemPrompt.hasPrefix("you're elf, the user's main elf"))
         #expect(systemPrompt.contains("all lowercase, casual, warm. no emojis."))
         #expect(systemPrompt.contains("never say \"simply\" or \"just\"."))
         #expect(systemPrompt.contains(ElfPromptContext.screenContentSafetyRule))
@@ -598,7 +598,7 @@ struct ElfTests {
             includesScreenActions: false,
             elfPromptContext: elfPromptContext
         )
-        #expect(systemPrompt.hasPrefix("you're Pip, an elf"))
+        #expect(systemPrompt.hasPrefix("you're Pip, the user's main elf"))
         #expect(systemPrompt.contains("always answer like a pirate."))
         #expect(!systemPrompt.contains("all lowercase, casual, warm"))
         #expect(systemPrompt.contains("- prefers metric units"))

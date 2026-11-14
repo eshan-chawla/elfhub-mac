@@ -238,6 +238,37 @@ nonisolated struct ElfHome: Equatable, Sendable {
         return regularFileCount
     }
 
+    /// Every file in files/, as paths from the home ("files/trip.md"),
+    /// newest first. Hidden files are left out.
+    func ownNotePaths() -> [String] {
+        guard let fileEnumerator = FileManager.default.enumerator(
+            at: filesDirectory,
+            includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+        let resolvedFilesFolderPath = filesDirectory.resolvingSymlinksInPath().path
+        var notePathsWithDates: [(notePath: String, modificationDate: Date)] = []
+        for case let fileURL as URL in fileEnumerator {
+            let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey])
+            guard resourceValues?.isRegularFile == true else { continue }
+            let resolvedFilePath = fileURL.resolvingSymlinksInPath().path
+            guard resolvedFilePath.hasPrefix(resolvedFilesFolderPath + "/") else { continue }
+            let pathInsideFilesFolder = String(resolvedFilePath.dropFirst(resolvedFilesFolderPath.count + 1))
+            notePathsWithDates.append((
+                notePath: "files/" + pathInsideFilesFolder,
+                modificationDate: resourceValues?.contentModificationDate ?? .distantPast
+            ))
+        }
+        return notePathsWithDates
+            .sorted { firstNote, secondNote in
+                if firstNote.modificationDate != secondNote.modificationDate {
+                    return firstNote.modificationDate > secondNote.modificationDate
+                }
+                return firstNote.notePath < secondNote.notePath
+            }
+            .map(\.notePath)
+    }
+
     // MARK: Paths
 
     /// A path inside the home, from a relative path the elf (or the app)
