@@ -320,6 +320,14 @@ nonisolated struct ElfHome: Equatable, Sendable {
         return resolvedURL
     }
 
+    /// The path from the home an elf tool's path really lands on ("./files/a.md"
+    /// → "files/a.md"), after the same checks as `resolvedURLForElfTool`.
+    func homeRelativePathForElfTool(_ relativePath: String, access: ElfToolPathAccess) throws -> String {
+        let resolvedURL = try resolvedURLForElfTool(relativePath, access: access)
+        let resolvedHomePath = Self.resolvedPath(of: directory)
+        return String(Self.resolvedPath(of: resolvedURL).dropFirst(resolvedHomePath.count + 1))
+    }
+
     /// The real path, following symlinks in every part that exists — a file
     /// that's about to be created still has its folders resolved.
     private static func resolvedPath(of fileURL: URL) -> String {
