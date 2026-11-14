@@ -308,11 +308,19 @@ final class CompanionTurnPipeline {
                 elfToolRegistry.toolDefinitions(for: .mainForeground, configuration: elfRegistryElf.configuration)
             } ?? []
             : []
+        // Models without tool calling change their files with silent tags,
+        // and see their newest notes in the prompt since they can't open them.
+        let usesElfFileTags = !usesNativeGuidanceTools && elfToolContextForTurn != nil
+        var elfPromptContext = await elfPromptContextProvider()
+        if usesElfFileTags, let elfToolContextForTurn {
+            elfPromptContext.preloadedNotes = ElfPromptBudget.preloadedNotes(home: elfToolContextForTurn.home)
+        }
         let systemPrompt = CompanionPromptBuilder.systemPrompt(
             coordinateConvention: coordinateConvention,
             guidanceEncoding: usesNativeGuidanceTools ? .nativeTools : .textTags,
             includesScreenActions: isActionModeEnabled,
-            elfPromptContext: await elfPromptContextProvider()
+            elfPromptContext: elfPromptContext,
+            includesElfFileTags: usesElfFileTags
         )
 
         let initialRequest = LanguageModelRequest(
@@ -350,8 +358,27 @@ final class CompanionTurnPipeline {
         )
         try Task.checkCancellation()
 
-        let replyText = agentLoopResult.replyText
         let toolCalls = agentLoopResult.guidanceToolCalls
+        var elfToolOutcomes = agentLoopResult.toolOutcomes
+        // Tag-using models: their file tags run through the same tools, and
+        // never reach guidance decoding or speech.
+        if usesElfFileTags, let elfToolContext {
+            let tagInvocations = ElfToolTags.invocations(
+                fromResponseText: agentLoopResult.replyText,
+                userAskedToSaveSkill: SkillSaveRequest.userAskedToSaveSkill(userUtterance: userText)
+            )
+            for tagInvocation in tagInvocations {
+                try Task.checkCancellation()
+                let (toolName, toolArguments) = tagInvocation.toolNameAndArguments
+                guard let elfTool = elfToolRegistry.tool(named: toolName),
+                      let argumentsData = try? JSONSerialization.data(withJSONObject: toolArguments) else { continue }
+                elfToolOutcomes.append(try await elfTool.run(
+                    argumentsJSON: String(decoding: argumentsData, as: UTF8.self),
+                    context: elfToolContext
+                ))
+            }
+        }
+        let replyText = usesElfFileTags ? ElfToolTags.textWithoutElfTags(agentLoopResult.replyText) : agentLoopResult.replyText
 
         let guidanceDecodeResult = Self.decodeGuidance(
             replyText: replyText,
@@ -396,7 +423,7 @@ final class CompanionTurnPipeline {
         let assistantTextForHistory = Self.assistantTextForHistory(
             spokenText: spokenText,
             notepad: shownNotepad,
-            toolOutcomes: agentLoopResult.toolOutcomes
+            toolOutcomes: elfToolOutcomes
         )
         conversationHistory.append(LanguageModelHistoryTurn(userText: userText, assistantText: assistantTextForHistory))
         if conversationHistory.count > Self.maximumHistoryTurns {
@@ -418,7 +445,7 @@ final class CompanionTurnPipeline {
                 }
                 : nil,
             shownNotepad: shownNotepad,
-            elfFileChanges: agentLoopResult.toolOutcomes.flatMap(\.fileChanges)
+            elfFileChanges: elfToolOutcomes.flatMap(\.fileChanges)
         )
     }
 
@@ -525,7 +552,8 @@ enum CompanionPromptBuilder {
         coordinateConvention: ModelCoordinateConvention,
         guidanceEncoding: GuidanceEncoding,
         includesScreenActions: Bool,
-        elfPromptContext: ElfPromptContext = .starter
+        elfPromptContext: ElfPromptContext = .starter,
+        includesElfFileTags: Bool = false
     ) -> String {
         // Who the elf is (its name, soul.md, settings, profile.md, skills)
         // comes first; the mechanics below are the app's and stay fixed.
@@ -545,6 +573,9 @@ enum CompanionPromptBuilder {
         }
         // Tags for every model: tool calls arrive only after the reply has
         // streamed, and notepad lines must appear while elfhub is talking.
+        if includesElfFileTags && guidanceEncoding == .textTags {
+            promptSections.append(ElfToolTags.promptInstructions)
+        }
         promptSections.append(notepadInstructions)
         return promptSections.joined(separator: "\n\n")
     }

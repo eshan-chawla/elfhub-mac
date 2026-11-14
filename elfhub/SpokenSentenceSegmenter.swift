@@ -33,7 +33,15 @@ struct SpokenSentenceSegmenter {
         "POINT", "CLICK", "DOUBLECLICK", "SCROLL", "TYPE", "KEY",
         "HIGHLIGHT", "CIRCLE", "ARROW", "UNDERLINE", "NOTE",
         "NOTEPAD", "NOTEPAD_LINE",
+        "DELETE_FILE",
     ]
+
+    /// Elf tag blocks ([FILE:…]…[/FILE], [SKILL:…]…[/SKILL]) whose content is
+    /// never spoken.
+    private static let completeSilentBlockPattern = try? NSRegularExpression(
+        pattern: #"\[(FILE|SKILL):[^\]]*\][\s\S]*?\[/\1\]"#
+    )
+    private static let silentBlockOpenerPattern = try? NSRegularExpression(pattern: #"\[(FILE|SKILL):[^\]]*\]"#)
 
     private static let completeGuidanceTagPattern: NSRegularExpression? = {
         let tagNameAlternation = guidanceTagNames.joined(separator: "|")
@@ -72,6 +80,18 @@ struct SpokenSentenceSegmenter {
     /// the end cut off. Also used for the live caption.
     static func speakableText(fromPartialResponse partialResponseText: String) -> String {
         var speakableText = partialResponseText
+        // Silent blocks go first, whole; an open one holds back everything
+        // after it until it closes (and is dropped if it never does).
+        if let completeSilentBlockPattern {
+            speakableText = completeSilentBlockPattern.stringByReplacingMatches(
+                in: speakableText, range: NSRange(speakableText.startIndex..., in: speakableText), withTemplate: ""
+            )
+        }
+        if let openBlockMatch = silentBlockOpenerPattern?.firstMatch(
+            in: speakableText, range: NSRange(speakableText.startIndex..., in: speakableText)
+        ), let openBlockRange = Range(openBlockMatch.range, in: speakableText) {
+            speakableText = String(speakableText[..<openBlockRange.lowerBound])
+        }
         if let completeGuidanceTagPattern {
             let fullRange = NSRange(speakableText.startIndex..., in: speakableText)
             speakableText = completeGuidanceTagPattern.stringByReplacingMatches(
@@ -91,9 +111,10 @@ struct SpokenSentenceSegmenter {
               !text[lastOpeningBracket...].contains("]") else { return nil }
         let textAfterBracket = text[text.index(after: lastOpeningBracket)...]
         let tagNamePart = textAfterBracket.prefix { $0 != ":" }
-        let couldBeTagName = guidanceTagNames.contains { $0.hasPrefix(tagNamePart) }
+        let possibleTagNames = guidanceTagNames + ElfToolTags.silentBlockTagNames
+        let couldBeTagName = possibleTagNames.contains { $0.hasPrefix(tagNamePart) }
         // Once a colon follows a full tag name, everything up to "]" is the tag.
-        let hasCompleteTagNameAndColon = textAfterBracket.contains(":") && guidanceTagNames.contains(String(tagNamePart))
+        let hasCompleteTagNameAndColon = textAfterBracket.contains(":") && possibleTagNames.contains(String(tagNamePart))
         return (couldBeTagName || hasCompleteTagNameAndColon) ? lastOpeningBracket : nil
     }
 

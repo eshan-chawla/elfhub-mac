@@ -46,7 +46,9 @@ nonisolated enum ElfPromptAssembler {
         if let preferencesSection = context.preferencesSection { elfSections.append(preferencesSection) }
         if let profileSection = context.profileSection { elfSections.append(profileSection) }
         if let skillsSection = context.skillsSection { elfSections.append(skillsSection) }
-        if let ownNotesSection = ownNotesSection(ownNotePaths: ownNotePaths) { elfSections.append(ownNotesSection) }
+        if let ownNotesSection = ownNotesSection(ownNotePaths: ownNotePaths, preloadedNotes: context.preloadedNotes) {
+            elfSections.append(ownNotesSection)
+        }
         if role == .mainForeground, let rosterSection = rosterSection(roster: roster) {
             elfSections.append(rosterSection)
         }
@@ -70,7 +72,7 @@ nonisolated enum ElfPromptAssembler {
     }
 
     /// The elf's own files, newest first, as paths it can open.
-    private static func ownNotesSection(ownNotePaths: [String]) -> String? {
+    private static func ownNotesSection(ownNotePaths: [String], preloadedNotes: [ElfPreloadedNote]) -> String? {
         guard !ownNotePaths.isEmpty else { return nil }
         let listedNotePaths = ownNotePaths.prefix(ElfPromptContext.ownNotesIndexLimit)
         var sectionLines = ["your own notes and files (newest first):"]
@@ -78,6 +80,10 @@ nonisolated enum ElfPromptAssembler {
         let unlistedNoteCount = ownNotePaths.count - listedNotePaths.count
         if unlistedNoteCount > 0 {
             sectionLines.append("(\(unlistedNoteCount) more)")
+        }
+        for preloadedNote in preloadedNotes {
+            sectionLines.append("")
+            sectionLines.append("## \(preloadedNote.path)\n\(preloadedNote.text)")
         }
         return sectionLines.joined(separator: "\n")
     }
@@ -115,6 +121,8 @@ nonisolated struct ElfPromptContext: Equatable, Sendable {
     var ownNotePaths: [String] = []
     /// The other elves, for the main elf.
     var roster: [ElfRosterEntry] = []
+    /// For models without tool calling: its newest notes, whole.
+    var preloadedNotes: [ElfPreloadedNote] = []
 
     /// Skill bodies beyond this are listed by title only.
     static let inlineSkillsCharacterBudget = 6_000
