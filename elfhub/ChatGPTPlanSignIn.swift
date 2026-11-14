@@ -54,6 +54,9 @@ enum ChatGPTPlanSignInError: LocalizedError, Equatable {
     case invalidIDToken(String)
     case differentAccount
     case tokenRequestFailed(statusCode: Int)
+    /// OpenAI refused to swap the browser's code for tokens; `openAIReason`
+    /// is its OAuth `error` and `error_description`, when it sent them.
+    case codeExchangeRejected(statusCode: Int, openAIReason: String?)
     case invalidTokenResponse
     case discoveryFailed
     case callbackListenerFailed
@@ -71,6 +74,9 @@ enum ChatGPTPlanSignInError: LocalizedError, Equatable {
         case let .invalidIDToken(detail): return "ChatGPT's sign-in token couldn't be verified (\(detail))."
         case .differentAccount: return "That's a different ChatGPT account. Sign out first to switch accounts."
         case let .tokenRequestFailed(statusCode): return "ChatGPT sign-in failed (HTTP \(statusCode))."
+        case let .codeExchangeRejected(statusCode, openAIReason):
+            guard let openAIReason else { return "ChatGPT sign-in failed (HTTP \(statusCode))." }
+            return "ChatGPT sign-in failed (HTTP \(statusCode): \(openAIReason))."
         case .invalidTokenResponse: return "ChatGPT sent an unreadable sign-in response."
         case .discoveryFailed: return "Couldn't reach ChatGPT's sign-in service."
         case .callbackListenerFailed: return "elfhub couldn't listen for the sign-in reply on this Mac."
@@ -363,6 +369,26 @@ enum ChatGPTPlanTokenRequests {
         "invalid_grant", "invalid_refresh_token", "token_expired",
         "refresh_token_expired", "refresh_token_invalidated", "refresh_token_reused",
     ]
+
+    /// OpenAI's reason for refusing a token request, as "error: description"
+    /// (OAuth error replies carry no tokens, so this is safe to show and log).
+    static func oauthErrorReason(fromResponseBody responseBody: String) -> String? {
+        guard let bodyData = responseBody.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+            return nil
+        }
+        var errorCode: String?
+        var errorDescription = json["error_description"] as? String
+        if let errorString = json["error"] as? String {
+            errorCode = errorString
+        } else if let errorObject = json["error"] as? [String: Any] {
+            errorCode = errorObject["code"] as? String ?? errorObject["type"] as? String
+            errorDescription = errorDescription ?? errorObject["message"] as? String
+        }
+        let reasonParts = [errorCode, errorDescription].compactMap { $0 }.filter { !$0.isEmpty }
+        guard !reasonParts.isEmpty else { return nil }
+        return String(reasonParts.joined(separator: ": ").prefix(200))
+    }
 
     static func isTerminalRefreshError(responseBody: String) -> Bool {
         guard let bodyData = responseBody.data(using: .utf8),

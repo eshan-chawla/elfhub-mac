@@ -81,6 +81,8 @@ final class CompanionManager: ObservableObject {
 
     /// Text chats, saved only on this Mac.
     let chatConversationStore = ChatConversationStore()
+    /// The elf the user talks to: its home folder, soul, profile, skills and config.
+    let elfManager = ElfManager()
 
     /// Downloads and manages models that run on this Mac (Ollama, Apple speech).
     let onDeviceModelAssistant = OnDeviceModelAssistant()
@@ -98,12 +100,32 @@ final class CompanionManager: ObservableObject {
     lazy var companionTurnPipeline = CompanionTurnPipeline(
         providerConfigurationStore: providerConfigurationStore,
         screenActionCoordinator: screenActionCoordinator,
-        companionEventBus: companionEventBus
+        companionEventBus: companionEventBus,
+        elfPromptContextProvider: { [elfManager] in elfManager.promptContext() }
     )
 
     /// The main-window section another surface (e.g. the menu bar panel)
     /// asked to show; MainAppView switches to it and clears the request.
     @Published var requestedMainAppSection: MainAppSection?
+
+    /// The current setup, as an exported elf remembers it. Never includes keys.
+    func preferredModelsForElfExport() -> ElfConfiguration.PreferredModels {
+        let activeLanguageModelConfiguration = providerConfigurationStore.activeConfiguration
+        let voiceName: String?
+        switch speechOutputMode {
+        case .system: voiceName = SystemVoiceSettings.selectedVoiceIdentifier
+        case .elevenLabs: voiceName = elevenLabsVoiceIdentifier
+        case .openAICompatibleSpeech: voiceName = OpenAICompatibleSpeechSettings.voiceName
+        case .off: voiceName = nil
+        }
+        return ElfConfiguration.PreferredModels(
+            speechToText: transcriptionProviderChoice.rawValue,
+            languageModelPreset: activeLanguageModelConfiguration?.presetIdentifier,
+            languageModelName: activeLanguageModelConfiguration?.model,
+            voiceOutput: speechOutputMode.rawValue,
+            voiceName: voiceName
+        )
+    }
 
     /// Brings the main window forward, optionally on a specific section.
     func showMainWindow(section: MainAppSection? = nil) {

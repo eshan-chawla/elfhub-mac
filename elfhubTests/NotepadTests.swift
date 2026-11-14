@@ -203,7 +203,12 @@ struct NotepadTests {
         notepadPanelModel.append(markdownLine: "- three")
         #expect(notepadPanelModel.markdownLines == ["- one"])
 
-        try await Task.sleep(for: .milliseconds(500))
+        // Waits for the paced lines instead of a fixed sleep: the reveal runs
+        // on the main actor, which other tests can keep busy for a while.
+        let waitDeadline = Date().addingTimeInterval(5)
+        while notepadPanelModel.markdownLines.count < 3, Date() < waitDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(notepadPanelModel.markdownLines == ["- one", "- two", "- three"])
     }
 
