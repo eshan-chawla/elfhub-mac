@@ -24,6 +24,26 @@ nonisolated enum ElfTaskReportDelivery: Equatable, Sendable {
     case showOnlyAndMentionNextTurn
 }
 
+/// What the user is told about a task, spoken and in chat.
+nonisolated enum ElfTaskReportText {
+    static func report(for elfTask: ElfTask, elfName: String) -> String {
+        let quotedInstruction = "“\(elfTask.instruction)”"
+        switch elfTask.status {
+        case .done:
+            return "\(elfName) finished \(quotedInstruction): \(elfTask.result?.summary ?? "done.")"
+        case .failed:
+            let failureReason = (elfTask.failureReason ?? "it stopped").trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+            return "\(elfName) couldn't finish \(quotedInstruction): \(failureReason)."
+        case .needsInput:
+            return "\(elfName) asks about \(quotedInstruction): \(elfTask.pendingQuestion ?? "")"
+        case .cancelled:
+            return "\(elfName) stopped \(quotedInstruction)."
+        case .queued, .running:
+            return "\(elfName) is working on \(quotedInstruction)."
+        }
+    }
+}
+
 nonisolated enum ElfTaskReportPlanner {
     static func plan(
         isVoiceIdle: Bool,

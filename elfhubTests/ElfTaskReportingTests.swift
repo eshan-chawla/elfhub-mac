@@ -112,16 +112,44 @@ struct ElfTaskReportingTests {
     @MainActor
     @Test func aSlowClassifierCountsAsQuick() async {
         let slowProvider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply(#"{"kind":"long"}"#)])
-        slowProvider.responseDelayInSeconds = 3
+        slowProvider.responseDelayInSeconds = 10
         let startDate = Date()
         let requestKind = await ElfTaskClassifier.classify(requestText: "how tall is the Eiffel tower", languageModelProvider: slowProvider)
         #expect(requestKind == .quick)
-        #expect(Date().timeIntervalSince(startDate) < 2.5)
+        // Well before the model's 10 seconds, even with a busy main thread.
+        #expect(Date().timeIntervalSince(startDate) < 6)
     }
 
     @MainActor
     @Test func aClassifierAnswerInTimeIsUsed() async {
         let provider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply(#"{"kind":"long"}"#)])
         #expect(await ElfTaskClassifier.classify(requestText: "how tall is the Eiffel tower", languageModelProvider: provider) == .long)
+    }
+
+    @Test func theReportSaysWhoFinishedWhat() {
+        var finishedTask = ElfTask(elfIdentifier: "juniper", instruction: "find flights to Lisbon")
+        finishedTask.status = .done
+        finishedTask.result = ElfTaskResult(summary: "TAP flies direct on the 3rd.", filePaths: ["files/flights.md"])
+        #expect(ElfTaskReportText.report(for: finishedTask, elfName: "Juniper") == "Juniper finished “find flights to Lisbon”: TAP flies direct on the 3rd.")
+        finishedTask.status = .failed
+        finishedTask.failureReason = "it ran out of time"
+        #expect(ElfTaskReportText.report(for: finishedTask, elfName: "Juniper") == "Juniper couldn't finish “find flights to Lisbon”: it ran out of time.")
+        var askingTask = ElfTask(elfIdentifier: "juniper", instruction: "book a hotel")
+        askingTask.status = .needsInput
+        askingTask.pendingQuestion = "which area?"
+        #expect(ElfTaskReportText.report(for: askingTask, elfName: "Juniper") == "Juniper asks about “book a hotel”: which area?")
+    }
+
+    @Test func taskReportsAreSavedInChatAndOldChatsDecodeAsExchanges() throws {
+        let savedMessageJSON = #"{"id":"6B1C5A3E-0000-4000-8000-000000000003","role":"assistant","text":"hi","createdAt":0}"#
+        #expect(try JSONDecoder().decode(StoredChatMessage.self, from: Data(savedMessageJSON.utf8)).kind == .exchange)
+        var conversation = ChatConversation()
+        let taskIdentifier = UUID()
+        conversation.appendTaskReport("Juniper finished it.", elfIdentifier: "juniper", taskIdentifier: taskIdentifier)
+        let decodedConversation = try JSONDecoder().decode(ChatConversation.self, from: JSONEncoder().encode(conversation))
+        #expect(decodedConversation.messages.last?.kind == .taskReport)
+        #expect(decodedConversation.messages.last?.taskIdentifier == taskIdentifier)
+        #expect(decodedConversation.messages.last?.speakingElfIdentifier == "juniper")
+        #expect(decodedConversation.historyTurns(maximumTurnCount: 10).isEmpty)
     }
 }

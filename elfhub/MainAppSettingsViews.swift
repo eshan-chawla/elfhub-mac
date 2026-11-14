@@ -185,6 +185,17 @@ private struct ModesSettingsContent: View {
         }
         .mainAppCard()
 
+        SettingsToggleRow(
+            iconName: "checklist",
+            title: "Say when background work is done",
+            detail: "When an elf finishes a task (or has a question) and you're not busy, your main elf says so. Off: a sound and a note in the chat, and it's mentioned in the next reply.",
+            isOn: Binding(
+                get: { companionManager.speaksTaskReports },
+                set: { companionManager.speaksTaskReports = $0 }
+            )
+        )
+        .mainAppCard()
+
         VStack(alignment: .leading, spacing: 8) {
             Text("SCREEN ACTIONS")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))

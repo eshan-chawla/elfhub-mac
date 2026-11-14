@@ -145,6 +145,57 @@ final class CompanionManager: ObservableObject {
         }
     )
 
+    /// Whether finished background work is spoken when the user is idle
+    /// (Settings › Modes); on by default.
+    static let speaksTaskReportsDefaultsKey = "speaksFinishedTaskReports"
+    var speaksTaskReports: Bool {
+        get { UserDefaults.standard.object(forKey: Self.speaksTaskReportsDefaultsKey) as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.speaksTaskReportsDefaultsKey)
+            objectWillChange.send()
+        }
+    }
+
+    /// Tells the user about a background task that finished or asks
+    /// something: a soft sound and a pill line always, a bubble in the chat
+    /// it came from, and — when the user is idle and spoken reports are on —
+    /// the main elf says it. Otherwise the main elf mentions it at the start
+    /// of its next reply (its status block).
+    private func reportBackgroundTask(_ reportedTask: ElfTask) {
+        guard reportedTask.status != .cancelled else { return }
+        let elfName = reportedTask.elfIdentifier == ElfManager.mainElfIdentifier
+            ? elfManager.mainElf.configuration.identity.name
+            : ElfTaskTools.elfName(forIdentifier: reportedTask.elfIdentifier, in: elfManager)
+        let reportText = ElfTaskReportText.report(for: reportedTask, elfName: elfName)
+        switch reportedTask.status {
+        case .done: CompanionEarcon.requestAccepted.play()
+        case .failed: CompanionEarcon.failed.play()
+        default: CompanionEarcon.needsConfirmation.play()
+        }
+        companionEventBus.emit(.hintRequested(reportText))
+        textChatViewModel.appendTaskReport(
+            reportText,
+            elfIdentifier: reportedTask.elfIdentifier,
+            taskIdentifier: reportedTask.id,
+            conversationIdentifier: reportedTask.originConversationIdentifier
+        )
+        let reportDelivery = ElfTaskReportPlanner.plan(
+            isVoiceIdle: voiceState == .idle,
+            isRecording: buddyDictationManager.isDictationInProgress,
+            isReplyStreaming: textChatViewModel.isResponding,
+            areActionsRunning: screenActionCoordinator.isRunningActions,
+            speaksReports: speaksTaskReports
+        )
+        guard reportDelivery == .speakNow else { return }
+        if let mainElfSpeechProvider = speechProviderForCurrentSettings() {
+            companionEventBus.emit(.responseCaptionAvailable(reportText))
+            streamingSpeechPlayer.speakCompleteText(reportText, using: mainElfSpeechProvider)
+        }
+        if reportedTask.status == .done || reportedTask.status == .failed {
+            elfTaskScheduler.markReported(taskIdentifiers: [reportedTask.id])
+        }
+    }
+
     /// When the user calls a side elf by name with something long ("Juniper,
     /// research flights to Lisbon"), the elf takes it on as a background
     /// task and says so; returns that short reply, or nil to answer the turn
@@ -635,6 +686,8 @@ final class CompanionManager: ObservableObject {
         // Unit tests run inside the app: never pick up (and run, or fail)
         // the user's real background tasks there.
         if !Self.isRunningUnitTests {
+            elfTaskScheduler.onTaskFinished = { [weak self] finishedTask in self?.reportBackgroundTask(finishedTask) }
+            elfTaskScheduler.onTaskNeedsInput = { [weak self] askingTask in self?.reportBackgroundTask(askingTask) }
             elfTaskScheduler.loadTasksAndResumeInterruptedOnes()
         }
         notepadPanelManager.startListening(to: companionEventBus)

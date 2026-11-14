@@ -351,6 +351,20 @@ final class TextChatViewModel: ObservableObject {
         }
     }
 
+    /// A background task's report, in the chat it came from (or the open
+    /// one when that chat is gone or wasn't saved).
+    func appendTaskReport(_ reportText: String, elfIdentifier: String, taskIdentifier: UUID, conversationIdentifier: UUID?) {
+        let reportConversationIdentifier = conversationIdentifier.flatMap { originConversationIdentifier in
+            originConversationIdentifier == activeConversation.id
+                || chatConversationStore.conversation(withIdentifier: originConversationIdentifier) != nil
+                ? originConversationIdentifier
+                : nil
+        } ?? activeConversation.id
+        updateConversation(withIdentifier: reportConversationIdentifier, savingToDisk: true) { conversation in
+            conversation.appendTaskReport(reportText, elfIdentifier: elfIdentifier, taskIdentifier: taskIdentifier)
+        }
+    }
+
     /// Applies a change to the conversation on screen, or — if the user has
     /// since opened another chat — to its saved copy.
     private func updateConversation(
@@ -520,10 +534,19 @@ struct TextChatView: View {
             if isFromUser { Spacer(minLength: 40) }
 
             VStack(alignment: isFromUser ? .trailing : .leading, spacing: 6) {
-                if !isFromUser, let speakerLabel = viewModel.speakerLabel(for: message) {
-                    Text(speakerLabel)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(DS.Colors.textTertiary)
+                if !isFromUser, message.kind == .taskReport || viewModel.speakerLabel(for: message) != nil {
+                    HStack(spacing: 4) {
+                        if message.kind == .taskReport {
+                            // A background task's report, not a reply.
+                            Image(systemName: "checklist")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        Text([viewModel.speakerLabel(for: message), message.kind == .taskReport ? "Task" : nil]
+                            .compactMap { $0 }
+                            .joined(separator: " · "))
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(DS.Colors.textTertiary)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     // Push-to-talk questions are marked so a mixed conversation

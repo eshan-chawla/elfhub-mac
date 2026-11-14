@@ -50,6 +50,17 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
     /// On a reply: the elf that answered, when it wasn't the main elf.
     var speakingElfIdentifier: String?
 
+    enum Kind: String, Codable {
+        /// A question or its reply.
+        case exchange
+        /// An elf's background task finished, or asks something.
+        case taskReport
+    }
+
+    var kind: Kind
+    /// For a task report: the task.
+    var taskIdentifier: UUID?
+
     init(
         id: UUID = UUID(),
         role: Role,
@@ -62,7 +73,9 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         userInk: SavedUserInk? = nil,
         notepad: SavedNotepad? = nil,
         fileChanges: [SavedElfFileChange] = [],
-        speakingElfIdentifier: String? = nil
+        speakingElfIdentifier: String? = nil,
+        kind: Kind = .exchange,
+        taskIdentifier: UUID? = nil
     ) {
         self.id = id
         self.role = role
@@ -76,10 +89,12 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         self.notepad = notepad
         self.fileChanges = fileChanges
         self.speakingElfIdentifier = speakingElfIdentifier
+        self.kind = kind
+        self.taskIdentifier = taskIdentifier
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, role, text, createdAt, isError, inputSource, screenshotFileName, screenGuidance, userInk, notepad, fileChanges, speakingElfIdentifier
+        case id, role, text, createdAt, isError, inputSource, screenshotFileName, screenGuidance, userInk, notepad, fileChanges, speakingElfIdentifier, kind, taskIdentifier
     }
 
     init(from decoder: Decoder) throws {
@@ -98,6 +113,8 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         fileChanges = try container.decodeIfPresent([SavedElfFileChange].self, forKey: .fileChanges) ?? []
         // Replies saved before side elves were all the main elf's.
         speakingElfIdentifier = try container.decodeIfPresent(String.self, forKey: .speakingElfIdentifier)
+        kind = (try? container.decodeIfPresent(Kind.self, forKey: .kind)) ?? .exchange
+        taskIdentifier = try container.decodeIfPresent(UUID.self, forKey: .taskIdentifier)
     }
 }
 
@@ -189,6 +206,20 @@ struct ChatConversation: Codable, Identifiable, Equatable {
               let assistantMessageIndex = messages.firstIndex(where: { $0.id == assistantMessageIdentifier }) else { return }
         let alreadyShownChangeIdentifiers = Set(messages[assistantMessageIndex].fileChanges.map(\.changeEntryIdentifier))
         messages[assistantMessageIndex].fileChanges += fileChanges.filter { !alreadyShownChangeIdentifiers.contains($0.changeEntryIdentifier) }
+    }
+
+    /// A background task's report (finished, or a question), shown as its
+    /// own bubble. It has no question before it, so the model's history
+    /// leaves it out — the main elf hears about tasks in its status block.
+    mutating func appendTaskReport(_ reportText: String, elfIdentifier: String, taskIdentifier: UUID) {
+        messages.append(StoredChatMessage(
+            role: .assistant,
+            text: reportText,
+            speakingElfIdentifier: elfIdentifier == ElfManager.mainElfIdentifier ? nil : elfIdentifier,
+            kind: .taskReport,
+            taskIdentifier: taskIdentifier
+        ))
+        updatedAt = Date()
     }
 
     /// Marks a reply as answered by a side elf (nil or main: the main elf).

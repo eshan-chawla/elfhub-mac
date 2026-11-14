@@ -23,7 +23,7 @@ nonisolated enum ElfTaskKind: String, Equatable, Sendable {
 }
 
 enum ElfTaskClassifier {
-    static let modelAnswerTimeoutInSeconds: Double = 1.2
+    nonisolated static let modelAnswerTimeoutInSeconds: Double = 1.2
 
     private static let longWorkPhrases = [
         "research", "look into", "write up", "draft", "find out", "in the background", "dig into", "put together", "compile",
@@ -64,6 +64,13 @@ enum ElfTaskClassifier {
     you sort requests for an assistant. reply with only json: {"kind": "quick"} if it can be answered right away in a sentence or two (a question, an explanation, pointing at something), {"kind": "long"} if it needs research, writing or several steps that take a while, or {"kind": "screen"} if the user wants something done on their screen (clicking, typing, filling in).
     """
 
+    /// Finishes (with no answer) when the classifier's time is up.
+    @concurrent
+    nonisolated private static func classifierTimeLimitPassed() async -> ElfTaskKind? {
+        try? await Task.sleep(nanoseconds: UInt64(modelAnswerTimeoutInSeconds * 1_000_000_000))
+        return nil
+    }
+
     /// Shortcuts first, else one small model call with a short time limit.
     static func classify(requestText: String, languageModelProvider: LanguageModelProvider) async -> ElfTaskKind {
         if let shortcutKind = shortcutKind(for: requestText) { return shortcutKind }
@@ -80,10 +87,9 @@ enum ElfTaskClassifier {
                 }
                 return kind(fromModelAnswer: classificationResponse.text)
             }
-            taskGroup.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(modelAnswerTimeoutInSeconds * 1_000_000_000))
-                return nil
-            }
+            // The time limit runs off the main thread, so a busy main thread
+            // can't let a slow answer win the race.
+            taskGroup.addTask(operation: classifierTimeLimitPassed)
             let firstResult = await taskGroup.next() ?? nil
             taskGroup.cancelAll()
             return firstResult ?? .quick
