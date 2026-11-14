@@ -73,31 +73,51 @@ nonisolated enum ElfAddressRouter {
                 nameStartIndex += 1
             }
             if let nameMatch = matchName(at: nameStartIndex, in: transcriptWords, candidateNames: candidateNames), !nameMatch.isPossessive {
-                var textForElf = textAfter(wordIndex: nameMatch.lastWordIndex, in: transcriptWords, transcript: transcript)
-                if requestWords.contains(firstWord), textForElf.lowercased().hasPrefix("to ") {
-                    textForElf = String(textForElf.dropFirst(3))
+                let isFollowedByAPause = isPause(afterWordIndex: nameMatch.lastWordIndex, in: transcriptWords)
+                let wordAfterName = word(after: nameMatch.lastWordIndex, in: transcriptWords)
+                var isAddressed = isFollowedByAPause || !isTalkingAboutTheName(wordAfterName: wordAfterName)
+                if greetingWords.contains(firstWord), nameMatch.candidateName.isEverydayWord, !isFollowedByAPause {
+                    // "Hey, will you…": after "hey," a sentence starts; an
+                    // everyday word there is part of it, unless "hey" runs
+                    // straight into it and it isn't followed by "you", "I"…
+                    let greetingEndsWithAComma = transcriptWords[startIndex].punctuationAfter.contains(",")
+                    isAddressed = !greetingEndsWithAComma && !sentenceContinuationWords.contains(wordAfterName ?? "")
                 }
-                return route(to: nameMatch.candidateName, textForElf: textForElf)
+                if requestWords.contains(firstWord), !isFollowedByAPause {
+                    // "ask Juniper to …", "tell Will about …" — not "tell
+                    // Will I said hi", which is a message for the user's
+                    // friend Will.
+                    isAddressed = askOrTellLinkingWords.contains(wordAfterName ?? "")
+                }
+                if isAddressed {
+                    var textForElf = textAfter(wordIndex: nameMatch.lastWordIndex, in: transcriptWords, transcript: transcript)
+                    if requestWords.contains(firstWord), textForElf.lowercased().hasPrefix("to ") {
+                        textForElf = String(textForElf.dropFirst(3))
+                    }
+                    return route(to: nameMatch.candidateName, textForElf: textForElf)
+                }
+                return nil
             }
         }
 
         // "Juniper, …" / "Juniper …" / "Juniper".
         if let nameMatch = matchName(at: startIndex, in: transcriptWords, candidateNames: candidateNames), !nameMatch.isPossessive {
-            let isLastWord = nameMatch.lastWordIndex == transcriptWords.count - 1
-            let separatorAfterName = transcriptWords[nameMatch.lastWordIndex].punctuationAfter
-            let isFollowedByAPause = isLastWord || separatorAfterName.contains(",") || separatorAfterName.contains(":")
-                || separatorAfterName.contains("!") || separatorAfterName.contains("?") || separatorAfterName.contains("—")
-            if isFollowedByAPause || !nameMatch.candidateName.isEverydayWord {
+            let isFollowedByAPause = isPause(afterWordIndex: nameMatch.lastWordIndex, in: transcriptWords)
+            // Without a pause, the name must not be an everyday word and the
+            // sentence must not be about the elf ("Juniper got it wrong").
+            let isAddressedWithoutAPause = !nameMatch.candidateName.isEverydayWord
+                && !isTalkingAboutTheName(wordAfterName: word(after: nameMatch.lastWordIndex, in: transcriptWords))
+            if isFollowedByAPause || isAddressedWithoutAPause {
                 return route(
                     to: nameMatch.candidateName,
                     textForElf: textAfter(wordIndex: nameMatch.lastWordIndex, in: transcriptWords, transcript: transcript)
                 )
             }
-            if nameMatch.candidateName.elfIdentifier == ElfManager.mainElfIdentifier { return nil }
+            return nil
         }
 
-        // "…, Juniper?"
-        for candidateName in candidateNames {
+        // "…, Juniper?" — not for everyday words ("…in May, June?").
+        for candidateName in candidateNames where !candidateName.isEverydayWord {
             let nameWordCount = candidateName.foldedWords.count
             let nameStartIndex = transcriptWords.count - nameWordCount
             guard nameStartIndex > startIndex,
@@ -110,6 +130,43 @@ nonisolated enum ElfAddressRouter {
             return route(to: candidateName, textForElf: textBeforeName + closingPunctuation)
         }
         return nil
+    }
+
+    /// Words that, right after a name, show the sentence is about the elf,
+    /// not to it ("Juniper is slow", "Juniper got it wrong").
+    static let talkingAboutWords: Set<String> = [
+        "is", "was", "has", "had", "does", "did", "got", "gets", "said", "says", "thinks", "thought", "should",
+        "isn't", "wasn't", "didn't", "doesn't", "hasn't", "keeps", "kept", "made", "makes", "wrote", "writes",
+        "told", "tells", "seems", "seemed", "knows", "knew", "will", "would", "could", "can't", "won't", "and", "or",
+    ]
+
+    /// Words that, after "hey, <everyday word>", continue a sentence.
+    static let sentenceContinuationWords: Set<String> = [
+        "you", "i", "we", "they", "he", "she", "it", "me", "us", "out", "up", "be", "have", "not", "there", "this", "that",
+    ]
+
+    /// What follows "ask <name>" / "tell <name>" when it's a request to it.
+    static let askOrTellLinkingWords: Set<String> = [
+        "to", "about", "if", "whether", "what", "how", "when", "where", "why", "who", "for",
+    ]
+
+    private static func isTalkingAboutTheName(wordAfterName: String?) -> Bool {
+        guard let wordAfterName else { return false }
+        if talkingAboutWords.contains(wordAfterName) { return true }
+        // "Atlas shrugged", "Juniper finds…": a past-tense or third-person verb.
+        guard wordAfterName.count > 3, wordAfterName.allSatisfy(\.isLetter) else { return false }
+        if wordAfterName.hasSuffix("ed") { return true }
+        return wordAfterName.hasSuffix("s") && !wordAfterName.hasSuffix("ss") && !wordAfterName.hasSuffix("us")
+    }
+
+    private static func isPause(afterWordIndex wordIndex: Int, in transcriptWords: [TranscriptWord]) -> Bool {
+        guard wordIndex < transcriptWords.count - 1 else { return true }
+        let separatorAfterWord = transcriptWords[wordIndex].punctuationAfter
+        return [",", ":", "!", "?", "—", ".", ";"].contains { separatorAfterWord.contains($0) }
+    }
+
+    private static func word(after wordIndex: Int, in transcriptWords: [TranscriptWord]) -> String? {
+        wordIndex + 1 < transcriptWords.count ? transcriptWords[wordIndex + 1].foldedText : nil
     }
 
     // MARK: Matching
@@ -138,9 +195,11 @@ nonisolated enum ElfAddressRouter {
     private static func candidateNames(for elves: [Elf]) -> [CandidateName] {
         elves.flatMap { elf -> [CandidateName] in
             ([elf.configuration.identity.name] + elf.configuration.identity.aliases).compactMap { name in
-                let foldedName = ElfNameRules.foldedForComparison(name)
-                let foldedWords = foldedName.split(separator: " ").map(String.init)
+                // Split like the transcript is, so "R2-D2", "Dr. Who" and
+                // "D’Arcy" match what speech-to-text writes.
+                let foldedWords = words(in: name).map(\.foldedText)
                 guard !foldedWords.isEmpty else { return nil }
+                let foldedName = foldedWords.joined(separator: " ")
                 return CandidateName(
                     elfIdentifier: elf.id,
                     foldedName: foldedName,

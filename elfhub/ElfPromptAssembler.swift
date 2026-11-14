@@ -61,11 +61,13 @@ nonisolated enum ElfPromptAssembler {
         let trimmedName = elfName.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayedName = trimmedName.isEmpty ? "elf" : trimmedName
         let companionSituation = "a friendly always-on companion that lives in the user's menu bar in elfhub. the user just spoke or typed to you and you can see the screen they're working on. your reply will be spoken aloud via text-to-speech, so write the way you'd actually talk. this is an ongoing conversation — you remember everything they've said before."
+        // Earlier replies by other elves are marked "[Name] " in the history.
+        let bracketedNamesRule = " earlier replies marked with a name in brackets, like [Name], were said by that elf, not you; never start your reply with a name in brackets."
         switch role {
         case .mainForeground:
-            return "you're \(displayedName), the user's main elf and manager of their elves — " + companionSituation
+            return "you're \(displayedName), the user's main elf and manager of their elves — " + companionSituation + bracketedNamesRule
         case .sideElfForeground:
-            return "you're \(displayedName), one of the user's elves. the user called you by name to talk to you directly — " + companionSituation
+            return "you're \(displayedName), one of the user's elves. the user called you by name to talk to you directly — " + companionSituation + bracketedNamesRule
         case let .backgroundWorker(taskInstruction):
             return "you're \(displayedName), one of the user's elves, working in the background on a task the user's main elf gave you. nobody is watching while you work: use your tools, keep notes of what you find, and finish with a short summary for the user. the task:\n" + taskInstruction
         }

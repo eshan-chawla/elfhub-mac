@@ -99,9 +99,14 @@ final class TextChatViewModel: ObservableObject {
         guard !trimmed.isEmpty, !isResponding else { return }
         draft = ""
 
-        var recordedExchange = beginExchange(userText: trimmed, inputSource: .typed)
+        // Who answers is decided now, so the reply is theirs from the start.
+        let speakingElf = companionManager.addressedElf(
+            for: trimmed,
+            chosenElfIdentifier: composerElfSelection.takeElfIdentifierForSending()
+        )
+        let chosenElfIdentifier = speakingElf?.id ?? ElfManager.mainElfIdentifier
+        var recordedExchange = beginExchange(userText: trimmed, inputSource: .typed, speakingElfIdentifier: speakingElf?.id)
         isResponding = true
-        let chosenElfIdentifier = composerElfSelection.takeElfIdentifierForSending()
 
         currentTask = Task { [weak self] in
             guard let self else { return }
@@ -157,22 +162,33 @@ final class TextChatViewModel: ObservableObject {
         let conversationIdentifier: UUID
         let userMessageIdentifier: UUID
         let assistantMessageIdentifier: UUID
+        /// The side elf answering (nil: the main elf).
+        var speakingElfIdentifier: String? = nil
     }
 
     /// Adds the question and an empty reply bubble to the open conversation
     /// and saves it. A spoken question after a long quiet spell starts a new
     /// conversation instead (see `shouldStartNewConversation(forVoiceTurnAt:)`).
-    func beginExchange(userText: String, inputSource: StoredChatMessage.InputSource) -> RecordedExchange {
+    func beginExchange(
+        userText: String,
+        inputSource: StoredChatMessage.InputSource,
+        speakingElfIdentifier: String? = nil
+    ) -> RecordedExchange {
         if inputSource == .spoken, !isResponding,
            activeConversation.shouldStartNewConversation(forVoiceTurnAt: Date()) {
             startNewConversation()
         }
-        let exchangeIdentifiers = activeConversation.appendExchange(userText: userText, inputSource: inputSource)
+        let exchangeIdentifiers = activeConversation.appendExchange(
+            userText: userText,
+            inputSource: inputSource,
+            speakingElfIdentifier: speakingElfIdentifier
+        )
         chatConversationStore.save(activeConversation)
         return RecordedExchange(
             conversationIdentifier: activeConversation.id,
             userMessageIdentifier: exchangeIdentifiers.userMessageIdentifier,
-            assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier
+            assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier,
+            speakingElfIdentifier: speakingElfIdentifier
         )
     }
 
@@ -297,11 +313,16 @@ final class TextChatViewModel: ObservableObject {
         saveInterruptedExchange(recordedExchange, rawReplyTextSoFar: rawReplyTextSoFar)
         var restartedExchange = recordedExchange
         updateConversation(withIdentifier: recordedExchange.conversationIdentifier, savingToDisk: true) { conversation in
-            let exchangeIdentifiers = conversation.appendExchange(userText: userText, inputSource: inputSource)
+            let exchangeIdentifiers = conversation.appendExchange(
+                userText: userText,
+                inputSource: inputSource,
+                speakingElfIdentifier: recordedExchange.speakingElfIdentifier
+            )
             restartedExchange = RecordedExchange(
                 conversationIdentifier: recordedExchange.conversationIdentifier,
                 userMessageIdentifier: exchangeIdentifiers.userMessageIdentifier,
-                assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier
+                assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier,
+                speakingElfIdentifier: recordedExchange.speakingElfIdentifier
             )
         }
         return restartedExchange

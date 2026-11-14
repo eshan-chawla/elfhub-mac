@@ -29,6 +29,11 @@ struct ElfAddressRouterTests {
             elf("will-smith", "Will Smith"),
             elf("jose", "José"),
             elf("writer", "Writer"),
+            elf("atlas", "Atlas"),
+            elf("r2-d2", "R2-D2"),
+            elf("doctor", "Dr. Who"),
+            elf("darcy", "D’Arcy"),
+            elf("computer", "Hal", aliases: ["Computer"]),
         ]
     }()
 
@@ -110,6 +115,40 @@ struct ElfAddressRouterTests {
     }
 
     @Test func dictationHearsEveryElfsNamesAndAliases() {
-        #expect(ElfAddressRouter.dictationKeyterms(for: elves) == ["Pip", "Juniper", "June", "Will", "Will Smith", "José", "Writer"])
+        #expect(ElfAddressRouter.dictationKeyterms(for: elves).prefix(7) == ["Pip", "Juniper", "June", "Will", "Will Smith", "José", "Writer"])
+    }
+
+    @Test func ordinarySentencesThatStartWithAGreetingStayWithMain() {
+        #expect(routedElfIdentifier("Hey, will you open Safari?") == nil)
+        #expect(routedElfIdentifier("Hi, may I ask something?") == nil)
+        #expect(routedElfIdentifier("Hey, will, open Safari") == "will")
+    }
+
+    @Test func talkingAboutAnElfStaysWithMain() {
+        #expect(routedElfIdentifier("Juniper is slow today, can you fix her notes?") == nil)
+        #expect(routedElfIdentifier("Juniper got it wrong") == nil)
+        #expect(routedElfIdentifier("Computer is slow today") == nil)
+        #expect(routedElfIdentifier("Atlas Shrugged is a book I like") == nil)
+        #expect(routedElfIdentifier("Juniper tells me it's done") == nil)
+        #expect(routedElfIdentifier("hey, Juniper got it wrong") == nil)
+        #expect(routedElfIdentifier("Juniper open my notes") == "juniper")
+    }
+
+    @Test func askOrTellNeedsWhatToAskAbout() {
+        #expect(routedElfIdentifier("tell Will I said hi") == nil)
+        #expect(routedElfIdentifier("ask Will to check the build") == "will")
+        #expect(routedElfIdentifier("ask Juniper whether it's done") == "juniper")
+    }
+
+    @Test func aTrailingEverydayWordIsNotAName() {
+        #expect(routedElfIdentifier("Is the meeting in May, June?") == nil)
+        #expect(routedElfIdentifier("what's this, Juniper?") == "juniper")
+    }
+
+    @Test func namesWithPunctuationCanBeCalled() {
+        #expect(routedElfIdentifier("R2-D2, open mail") == "r2-d2")
+        #expect(routedElfIdentifier("Dr. Who, open mail") == "doctor")
+        #expect(routedElfIdentifier("D'Arcy, what's this?") == "darcy")
+        #expect(routedElfIdentifier("D’Arcy, what's this?") == "darcy")
     }
 }

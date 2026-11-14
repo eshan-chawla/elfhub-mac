@@ -107,6 +107,14 @@ struct ChatHistoryTests {
         #expect(chatComposerElfSelection.chosenElfIdentifier == nil)
     }
 
+    @Test func aSideElfsReplyIsMarkedFromTheStart() {
+        var conversation = ChatConversation()
+        let exchangeIdentifiers = conversation.appendExchange(userText: "Juniper, what's this?", inputSource: .typed, speakingElfIdentifier: "juniper")
+        #expect(conversation.messages.first { $0.id == exchangeIdentifiers.assistantMessageIdentifier }?.speakingElfIdentifier == "juniper")
+        let mainExchangeIdentifiers = conversation.appendExchange(userText: "thanks", inputSource: .typed, speakingElfIdentifier: ElfManager.mainElfIdentifier)
+        #expect(conversation.messages.first { $0.id == mainExchangeIdentifiers.assistantMessageIdentifier }?.speakingElfIdentifier == nil)
+    }
+
     @Test func appendingAnExchangeAddsTheQuestionAndAnEmptyReply() {
         var conversation = ChatConversation()
         let exchangeIdentifiers = conversation.appendExchange(userText: "open my downloads", inputSource: .spoken)

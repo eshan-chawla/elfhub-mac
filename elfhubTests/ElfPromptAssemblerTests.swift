@@ -94,4 +94,9 @@ struct ElfPromptAssemblerTests {
         #expect(home.ownNotePaths() == ["files/trips/newer.md", "files/older.md"])
         #expect(ElfPromptContext.reading(home: home).ownNotePaths == ["files/trips/newer.md", "files/older.md"])
     }
+
+    @Test func elvesAreToldWhatBracketedNamesInTheHistoryMean() {
+        #expect(promptText(role: .mainForeground).contains("never start your reply with a name in brackets"))
+        #expect(promptText(role: .sideElfForeground).contains("never start your reply with a name in brackets"))
+    }
 }

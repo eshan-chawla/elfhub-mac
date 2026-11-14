@@ -104,13 +104,13 @@ final class ScreenGuidanceOverlayModel: ObservableObject {
     private static let minimumPointerDisplaySeconds: TimeInterval = 3
     /// After speech ends, the pointer lingers this long.
     private static let pointerLingerAfterSpeechSeconds: TimeInterval = 1
-    /// Annotations stay longer than the pointer — they're meant to be read.
     /// "Juniper is acting: clicking Save" when a side elf holds the screen.
     static func actingSummary(_ summary: String, screenHolderElfName: String?) -> String {
         guard let screenHolderElfName else { return summary }
         return "\(screenHolderElfName) is acting: \(summary)"
     }
 
+    /// Annotations stay longer than the pointer — they're meant to be read.
     private static let annotationLingerAfterSpeechSeconds: TimeInterval = 8
     private static let pillLingerAfterTurnSeconds: TimeInterval = 2.5
     private static let hintDisplaySeconds: TimeInterval = 8

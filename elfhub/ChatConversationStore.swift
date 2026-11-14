@@ -140,13 +140,20 @@ struct ChatConversation: Codable, Identifiable, Equatable {
     @discardableResult
     mutating func appendExchange(
         userText: String,
-        inputSource: StoredChatMessage.InputSource
+        inputSource: StoredChatMessage.InputSource,
+        speakingElfIdentifier: String? = nil
     ) -> (userMessageIdentifier: UUID, assistantMessageIdentifier: UUID) {
         if messages.isEmpty {
             title = ChatConversation.title(forFirstUserMessage: userText)
         }
         let userMessage = StoredChatMessage(role: .user, text: userText, inputSource: inputSource)
-        let assistantMessage = StoredChatMessage(role: .assistant, text: "")
+        // A side elf's reply is marked from the start, so a reply stopped
+        // with Esc or restarted on the fallback model stays its.
+        let assistantMessage = StoredChatMessage(
+            role: .assistant,
+            text: "",
+            speakingElfIdentifier: speakingElfIdentifier == ElfManager.mainElfIdentifier ? nil : speakingElfIdentifier
+        )
         messages.append(userMessage)
         messages.append(assistantMessage)
         return (userMessage.id, assistantMessage.id)

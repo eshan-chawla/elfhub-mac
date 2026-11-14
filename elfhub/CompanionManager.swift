@@ -388,7 +388,10 @@ final class CompanionManager: ObservableObject {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
         companionEventBus.emit(.responseCaptionAvailable(trimmedText))
-        guard let speechProvider = speechProviderForCurrentSettings() else { return }
+        // Said in the voice of the elf holding the screen (its consent
+        // prompts and action lines), which is main's unless a side elf acts.
+        let screenHoldingElf = elfManager.elf(withIdentifier: elfScreenHolder.elfIdentifier)
+        guard let speechProvider = speechProviderForTurn(answeredBy: screenHoldingElf) else { return }
         streamingSpeechPlayer.speakAfterCurrentUtterance(trimmedText, using: speechProvider)
     }
 
@@ -995,11 +998,15 @@ final class CompanionManager: ObservableObject {
         // Voice turns are part of the conversation history, next to typed
         // ones. Recorded before the turn runs: after a quiet spell this starts
         // a new conversation, which also clears what the model remembers.
-        var recordedVoiceExchange = textChatViewModel.beginExchange(userText: transcript, inputSource: .spoken)
         // "Juniper, …" goes to Juniper: its model, voice, folder and history,
         // and it holds the screen for this turn.
         let speakingElf = addressedElf(for: transcript)
         handOverScreen(to: speakingElf)
+        var recordedVoiceExchange = textChatViewModel.beginExchange(
+            userText: transcript,
+            inputSource: .spoken,
+            speakingElfIdentifier: speakingElf?.id
+        )
         let userInkStrokes = pendingUserInkStrokes
         pendingUserInkStrokes = []
 
