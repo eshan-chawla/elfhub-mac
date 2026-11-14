@@ -298,7 +298,7 @@ struct ElfHubPage: View {
     var body: some View {
         MainAppPage(title: pageTitle, subtitle: pageSubtitle) {
             if !elfEditor.isMainElf {
-                Text("You'll be able to talk to \(elfEditor.elf.configuration.identity.name) by name soon. For now you can shape its soul, notes and skills.")
+                Text("Talk to \(elfEditor.elf.configuration.identity.name) by starting with its name — “\(elfEditor.elf.configuration.identity.name), what's this?” — or pick it in the chat.")
                     .font(.system(size: 12))
                     .foregroundColor(DS.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -320,7 +320,7 @@ struct ElfSettingsContent: View {
     let onElfDeleted: () -> Void
 
     var body: some View {
-        Text("An elf's soul, its notes about you and its skills go to your language model with every question, like the rest of the conversation. They're plain files in its home folder — edit them here or in any text editor.")
+        Text("An elf's soul, its notes about you and its skills go to your language model with every question it answers, like the rest of the conversation. They're plain files in its home folder — edit them here or in any text editor.")
             .font(.system(size: 11))
             .foregroundColor(DS.Colors.textTertiary)
             .fixedSize(horizontal: false, vertical: true)

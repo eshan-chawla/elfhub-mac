@@ -42,6 +42,8 @@ struct LanguageModelImage {
 struct LanguageModelHistoryTurn {
     let userText: String
     let assistantText: String
+    /// The elf that answered, when it wasn't the main elf.
+    var speakingElfName: String? = nil
 }
 
 /// A tool the model may call. `inputSchema` is a JSON Schema object.

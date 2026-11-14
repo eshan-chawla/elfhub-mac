@@ -57,6 +57,47 @@ final class CompanionTurnPipeline {
     /// How many model rounds the main elf gets per turn to use its tools
     /// (usually one is enough).
     static let mainElfMaximumModelRounds = 3
+    /// A side elf called by name gets one more round.
+    static let sideElfMaximumModelRounds = 4
+    /// A side elf called by name sees fewer past exchanges than main.
+    static let sideElfMaximumHistoryTurns = 6
+
+    /// Which elf answers a turn, in which role, with how many model rounds.
+    struct ElfTurnSetup {
+        let elf: Elf?
+        let role: ElfPromptRole
+        let maximumModelRounds: Int
+    }
+
+    /// A side elf called by name answers with its own folder, role and
+    /// round cap; otherwise the main elf does.
+    static func elfTurnSetup(speakingElf: Elf?, mainElf: Elf?) -> ElfTurnSetup {
+        if let speakingElf, speakingElf.id != ElfManager.mainElfIdentifier {
+            return ElfTurnSetup(elf: speakingElf, role: .sideElfForeground, maximumModelRounds: sideElfMaximumModelRounds)
+        }
+        return ElfTurnSetup(elf: mainElf, role: .mainForeground, maximumModelRounds: mainElfMaximumModelRounds)
+    }
+
+    /// The past exchanges an elf sees: the last ten for main, the last six
+    /// for a side elf, with replies from other elves marked "[Name] " so
+    /// each elf knows what it said itself.
+    static func historyTurns(
+        forSpeakingElfName speakingElfName: String?,
+        mainElfName: String,
+        from storedHistoryTurns: [LanguageModelHistoryTurn]
+    ) -> [LanguageModelHistoryTurn] {
+        let maximumTurnCount = speakingElfName == nil ? maximumHistoryTurns : sideElfMaximumHistoryTurns
+        let listenerName = speakingElfName ?? mainElfName
+        return storedHistoryTurns.suffix(maximumTurnCount).map { storedHistoryTurn in
+            let answeringElfName = storedHistoryTurn.speakingElfName ?? mainElfName
+            guard answeringElfName != listenerName else { return storedHistoryTurn }
+            return LanguageModelHistoryTurn(
+                userText: storedHistoryTurn.userText,
+                assistantText: "[\(answeringElfName)] " + storedHistoryTurn.assistantText,
+                speakingElfName: storedHistoryTurn.speakingElfName
+            )
+        }
+    }
 
     /// The active elf's part of each prompt (soul, profile, skills…), read
     /// at the start of every turn.
@@ -112,12 +153,15 @@ final class CompanionTurnPipeline {
         prefetchedScreenCaptures: [CompanionScreenCapture]?,
         userInkStrokes: [UserInkStroke] = [],
         isSpokenTurn: Bool = false,
+        speakingElf: Elf? = nil,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
         onModelRoundEnded: @escaping @MainActor () -> Void = {},
         onElfFileChanged: @escaping @MainActor (_ fileChange: ElfChangeLogEntry, _ elfIdentifier: String) -> Void = { _, _ in },
         onLanguageModelSwitched: @escaping @MainActor (LanguageModelSwitchNotice) -> Void = { _ in }
     ) async throws -> TurnResult {
-        let elfForTools = elfForToolsProvider()
+        let mainElf = elfForToolsProvider()
+        let elfTurnSetup = Self.elfTurnSetup(speakingElf: speakingElf, mainElf: mainElf)
+        let elfForTools = elfTurnSetup.elf
         // Kept across the fallback restart below, so a file the first try
         // already saved isn't saved twice and still shows under the reply.
         // Each change is reported as it's made, so a reply stopped with Esc
@@ -129,12 +173,27 @@ final class CompanionTurnPipeline {
         // and only this turn's actions may run from now on.
         let screenActionTurnToken = screenActionCoordinator.beginTurn()
 
-        guard let turnConfiguration = providerConfigurationStore.configurationForNextTurn() else {
+        // A side elf answers with its own model when it has a ready one.
+        let sideElfPreferredConfigurationIdentifier = elfTurnSetup.role == .sideElfForeground
+            ? elfForTools?.home.readLocalSettings().languageModelConfigurationIdentifier
+            : nil
+        guard let turnConfiguration = providerConfigurationStore.configurationForNextTurn(
+            preferredConfigurationIdentifier: sideElfPreferredConfigurationIdentifier
+        ) else {
             throw LanguageModelProviderError.missingConfiguration("add a model in Settings, under Models")
         }
 
         var screenCaptures: [CompanionScreenCapture]
-        if let prefetchedScreenCaptures, !prefetchedScreenCaptures.isEmpty {
+        // The screenshot taken at key-down was sized for the main model; a
+        // side elf's model with smaller image limits gets a new one.
+        let prefetchedScreenCapturesFitTheModel = (prefetchedScreenCaptures ?? []).allSatisfy { prefetchedScreenCapture in
+            ScreenshotGeometry.imageFits(
+                widthInPixels: prefetchedScreenCapture.screenshotWidthInPixels,
+                heightInPixels: prefetchedScreenCapture.screenshotHeightInPixels,
+                profile: turnConfiguration.visionProfile
+            )
+        }
+        if let prefetchedScreenCaptures, !prefetchedScreenCaptures.isEmpty, prefetchedScreenCapturesFitTheModel {
             screenCaptures = prefetchedScreenCaptures
         } else {
             screenCaptures = try await CompanionScreenCaptureUtility.captureCursorScreenAsJPEG(
@@ -152,6 +211,8 @@ final class CompanionTurnPipeline {
                 isSpokenTurn: isSpokenTurn,
                 screenActionTurnToken: screenActionTurnToken,
                 elfToolContextForTurn: elfForTools,
+                elfTurnSetup: elfTurnSetup,
+                mainElfName: mainElf?.configuration.identity.name ?? ElfConfiguration.Identity().name,
                 turnEffectLedger: turnEffectLedger,
                 onReplyTextDelta: onReplyTextDelta,
                 onModelRoundEnded: onModelRoundEnded
@@ -205,6 +266,8 @@ final class CompanionTurnPipeline {
                 isSpokenTurn: isSpokenTurn,
                 screenActionTurnToken: screenActionTurnToken,
                 elfToolContextForTurn: elfForTools,
+                elfTurnSetup: elfTurnSetup,
+                mainElfName: mainElf?.configuration.identity.name ?? ElfConfiguration.Identity().name,
                 turnEffectLedger: turnEffectLedger,
                 onReplyTextDelta: onReplyTextDelta,
                 onModelRoundEnded: onModelRoundEnded
@@ -255,6 +318,8 @@ final class CompanionTurnPipeline {
         isSpokenTurn: Bool,
         screenActionTurnToken: ScreenActionTurnToken,
         elfToolContextForTurn: Elf?,
+        elfTurnSetup: ElfTurnSetup,
+        mainElfName: String,
         turnEffectLedger: ElfTurnEffectLedger,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
         onModelRoundEnded: @escaping @MainActor () -> Void
@@ -312,13 +377,23 @@ final class CompanionTurnPipeline {
             : []
         let elfToolDefinitions = usesNativeGuidanceTools
             ? elfToolContextForTurn.map { elfRegistryElf in
-                elfToolRegistry.toolDefinitions(for: .mainForeground, configuration: elfRegistryElf.configuration)
+                elfToolRegistry.toolDefinitions(for: elfTurnSetup.role, configuration: elfRegistryElf.configuration)
             } ?? []
             : []
         // Models without tool calling change their files with silent tags,
         // and see their newest notes in the prompt since they can't open them.
         let usesElfFileTags = !usesNativeGuidanceTools && elfToolContextForTurn != nil
-        var elfPromptContext = await elfPromptContextProvider()
+        // A side elf's own name, soul, notes and skills; main's come from
+        // the provider. Read off the main actor.
+        var elfPromptContext: ElfPromptContext
+        if elfTurnSetup.role == .sideElfForeground, let sideElfHome = elfToolContextForTurn?.home {
+            elfPromptContext = await Task.detached(priority: .userInitiated) {
+                ElfPromptContext.reading(home: sideElfHome, role: .sideElfForeground)
+            }.value
+        } else {
+            elfPromptContext = await elfPromptContextProvider()
+        }
+        let speakingElfName = elfTurnSetup.role == .sideElfForeground ? elfToolContextForTurn?.configuration.identity.name : nil
         if usesElfFileTags, let elfToolContextForTurn {
             elfPromptContext.preloadedNotes = ElfPromptBudget.preloadedNotes(home: elfToolContextForTurn.home)
         }
@@ -332,7 +407,7 @@ final class CompanionTurnPipeline {
 
         let initialRequest = LanguageModelRequest(
             systemPrompt: systemPrompt,
-            history: conversationHistory,
+            history: Self.historyTurns(forSpeakingElfName: speakingElfName, mainElfName: mainElfName, from: conversationHistory),
             userText: userTextForModel,
             images: imagesForModel,
             tools: guidanceTools + elfToolDefinitions,
@@ -360,7 +435,7 @@ final class CompanionTurnPipeline {
             toolRegistry: elfToolRegistry,
             toolContext: elfToolContext,
             guidanceToolNames: GuidanceToolDefinitions.toolNames,
-            maximumRounds: usesNativeGuidanceTools ? Self.mainElfMaximumModelRounds : 1,
+            maximumRounds: usesNativeGuidanceTools ? elfTurnSetup.maximumModelRounds : 1,
             onReplyTextDelta: onReplyTextDelta,
             onModelRoundEnded: onModelRoundEnded
         )
@@ -441,7 +516,11 @@ final class CompanionTurnPipeline {
             // 20 MB of backups).
             try? ElfChangeLog(home: elfToolContextForTurn.home).prune(now: Date())
         }
-        conversationHistory.append(LanguageModelHistoryTurn(userText: userText, assistantText: assistantTextForHistory))
+        conversationHistory.append(LanguageModelHistoryTurn(
+            userText: userText,
+            assistantText: assistantTextForHistory,
+            speakingElfName: speakingElfName
+        ))
         if conversationHistory.count > Self.maximumHistoryTurns {
             conversationHistory.removeFirst(conversationHistory.count - Self.maximumHistoryTurns)
         }

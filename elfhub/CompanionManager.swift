@@ -358,6 +358,22 @@ final class CompanionManager: ObservableObject {
         }
     }
 
+    /// The elf the user called by name ("Juniper, …"), or nil for the main
+    /// elf. `chosenElfIdentifier` (the chat's elf picker) wins over the words.
+    func addressedElf(for userText: String, chosenElfIdentifier: String? = nil) -> Elf? {
+        if let chosenElfIdentifier {
+            return chosenElfIdentifier == ElfManager.mainElfIdentifier ? nil : elfManager.elf(withIdentifier: chosenElfIdentifier)
+        }
+        guard let elfAddressRoute = ElfAddressRouter.route(transcript: userText, elves: elfManager.elves) else { return nil }
+        return elfManager.elf(withIdentifier: elfAddressRoute.elfIdentifier)
+    }
+
+    /// The voice for a turn answered by `speakingElf` (nil: the main elf).
+    private func speechProviderForTurn(answeredBy speakingElf: Elf?) -> SpeechSynthesisProvider? {
+        guard let speakingElf else { return speechProviderForCurrentSettings() }
+        return speechProvider(for: speakingElf)
+    }
+
     /// Speaks a short sample with the current voice settings ("Preview").
     func previewCurrentVoice() {
         stopSpeech()
@@ -955,6 +971,8 @@ final class CompanionManager: ObservableObject {
         // ones. Recorded before the turn runs: after a quiet spell this starts
         // a new conversation, which also clears what the model remembers.
         var recordedVoiceExchange = textChatViewModel.beginExchange(userText: transcript, inputSource: .spoken)
+        // "Juniper, …" goes to Juniper: its model, voice, folder and history.
+        let speakingElf = addressedElf(for: transcript)
         let userInkStrokes = pendingUserInkStrokes
         pendingUserInkStrokes = []
 
@@ -963,7 +981,7 @@ final class CompanionManager: ObservableObject {
             var streamingReplyPresenter = StreamingReplyPresenter(
                 companionEventBus: companionEventBus,
                 streamingSpeechPlayer: streamingSpeechPlayer,
-                speechProvider: speechProviderForCurrentSettings()
+                speechProvider: speechProviderForTurn(answeredBy: speakingElf)
             )
             var rawReplyText = ""
             var languageModelSwitchNotice: LanguageModelSwitchNotice?
@@ -978,6 +996,7 @@ final class CompanionManager: ObservableObject {
                     prefetchedScreenCaptures: reusablePrefetchedScreenCaptures,
                     userInkStrokes: userInkStrokes,
                     isSpokenTurn: true,
+                    speakingElf: speakingElf,
                     onReplyTextDelta: { [textChatViewModel, turnLatencyTimeline] replyTextDelta in
                         turnLatencyTimeline.mark(.firstReplyText)
                         streamingReplyPresenter.receive(replyTextDelta: replyTextDelta)
@@ -1016,7 +1035,7 @@ final class CompanionManager: ObservableObject {
                         streamingReplyPresenter = StreamingReplyPresenter(
                             companionEventBus: self.companionEventBus,
                             streamingSpeechPlayer: self.streamingSpeechPlayer,
-                            speechProvider: self.speechProviderForCurrentSettings()
+                            speechProvider: self.speechProviderForTurn(answeredBy: speakingElf)
                         )
                     }
                 )
@@ -1067,6 +1086,7 @@ final class CompanionManager: ObservableObject {
     ///   interrupted reply.
     func respondToChatMessage(
         _ userText: String,
+        chosenElfIdentifier: String? = nil,
         onTextChunk: @escaping @MainActor @Sendable (String) -> Void,
         onElfFileChanged: @escaping @MainActor (_ fileChange: ElfChangeLogEntry, _ elfIdentifier: String) -> Void = { _, _ in },
         onLanguageModelSwitched: @escaping @MainActor (LanguageModelSwitchNotice) -> Void = { _ in }
@@ -1084,15 +1104,17 @@ final class CompanionManager: ObservableObject {
             companionEventBus.emit(.turnFinished)
         }
 
+        let speakingElf = addressedElf(for: userText, chosenElfIdentifier: chosenElfIdentifier)
         var streamingReplyPresenter = StreamingReplyPresenter(
             companionEventBus: companionEventBus,
             streamingSpeechPlayer: streamingSpeechPlayer,
-            speechProvider: speechProviderForCurrentSettings()
+            speechProvider: speechProviderForTurn(answeredBy: speakingElf)
         )
         do {
             let turnResult = try await companionTurnPipeline.runTurn(
                 userText: userText,
                 prefetchedScreenCaptures: nil,
+                speakingElf: speakingElf,
                 onReplyTextDelta: { [turnLatencyTimeline] replyTextDelta in
                     turnLatencyTimeline.mark(.firstReplyText)
                     streamingReplyPresenter.receive(replyTextDelta: replyTextDelta)
@@ -1111,7 +1133,7 @@ final class CompanionManager: ObservableObject {
                         streamingReplyPresenter = StreamingReplyPresenter(
                             companionEventBus: self.companionEventBus,
                             streamingSpeechPlayer: self.streamingSpeechPlayer,
-                            speechProvider: self.speechProviderForCurrentSettings()
+                            speechProvider: self.speechProviderForTurn(answeredBy: speakingElf)
                         )
                     }
                     onLanguageModelSwitched(switchNotice)
