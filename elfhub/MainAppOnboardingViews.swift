@@ -21,8 +21,9 @@ import SwiftUI
 // MARK: - Onboarding Pane
 
 /// Pre-ready detail pane.
-/// - Fresh install: step 1 (models) → step 2 (shortcuts, permissions, your
-///   data on this Mac, tutorial checkbox) → Finish.
+/// - Fresh install: step 1 (your elf) → step 2 (models) → step 3
+///   (shortcuts, permissions, your data on this Mac, tutorial checkbox) →
+///   Finish.
 /// - Permissions revoked after onboarding: the permission checklist only.
 struct OnboardingPane: View {
     @ObservedObject var companionManager: CompanionManager
@@ -464,7 +465,7 @@ struct NameYourElfCard: View {
 }
 
 /// Big accent button used by onboarding steps.
-/// Onboarding step 2: what elfhub keeps on this Mac, shown before setup ends
+/// Onboarding step 3: what elfhub keeps on this Mac, shown before setup ends
 /// so nobody is saving chats without having seen the choice. The toggles show
 /// the stores' own defaults (chats on, screenshots off, action log on) and
 /// change the same settings as Settings › Privacy.

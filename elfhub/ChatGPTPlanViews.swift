@@ -3,7 +3,7 @@
 //  elfhub
 //
 //  "Use your ChatGPT plan": the card at the top of the language-model layer
-//  (onboarding step 1 and Settings › Models) that signs in with ChatGPT,
+//  (onboarding's Models step and Settings › Models) that signs in with ChatGPT,
 //  picks the model, shows that requests use the plan with a Manage usage
 //  link, and sets the fallback model for when the plan can't answer. Also
 //  the one-time "You're using your ChatGPT plan" confirmation.

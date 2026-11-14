@@ -45,7 +45,7 @@ enum MainAppSection: Hashable {
 /// Which page is showing, and where "Back" from Settings returns to.
 struct MainAppNavigation: Equatable {
     private(set) var selectedSection: MainAppSection
-    /// The last chat/tutorial page, so leaving Settings goes back to it.
+    /// The last chat, tutorial or elf page, so leaving Settings goes back to it.
     private(set) var lastMainSection: MainAppSection
 
     init(selectedSection: MainAppSection = .chat) {

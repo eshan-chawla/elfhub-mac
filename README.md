@@ -22,7 +22,7 @@ elfhub is **desktop-first and bring-your-own-key**: there is no elfhub server, a
 
 ## Your elf
 
-The assistant is your **elf**, and it lives in a folder on your Mac (Settings › Elf, or `~/Library/Application Support/elfhub/Elves/main`):
+The assistant is your **elf**. You name it when you set elfhub up, and it lives in a folder on your Mac (its page under Elves in the sidebar, or `~/Library/Application Support/elfhub/Elves/main`):
 
 - **`soul.md`** — instructions it follows in every reply. You write it; the elf can only suggest changes.
 - **`profile.md`** — your personal preferences, as the elf noted them. Edit or clear it anytime.
@@ -30,7 +30,7 @@ The assistant is your **elf**, and it lives in a folder on your Mac (Settings �
 - **`elf.json`** — its name, how it answers (reply length, tone, language) and the setup it was used with (never your keys).
 - **`files/`** — its own working files.
 
-The soul, profile and skills go to your language model with each question, like the rest of the conversation. **Export elf…** saves a `.elf` file with its config, soul and skills; your profile and its files are only included if you switch them on.
+The soul, profile and skills go to your language model with each question, like the rest of the conversation. You can add more elves from the **+** next to Elves in the sidebar (or the Researcher and Writer starters); each has its own page, folder, soul and skills. **Export elf…** saves a `.elf` file with its config, soul and skills; your profile and its files are only included if you switch them on.
 
 ## The three model layers
 

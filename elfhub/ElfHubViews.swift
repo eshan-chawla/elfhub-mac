@@ -450,12 +450,6 @@ private struct ElfDeleteSection: View {
 private struct ElfIdentitySection: View {
     @ObservedObject var elfEditor: ElfEditor
 
-    /// The name as typed; saved through the name rules when the user
-    /// presses Return or leaves the field, so a half-typed or clashing name
-    /// never reaches elf.json.
-    @State private var nameDraft = ""
-    @State private var nameProblemMessage: String?
-    @FocusState private var isNameFieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -470,16 +464,22 @@ private struct ElfIdentitySection: View {
                     }
                 )
                 .frame(width: 56)
-                TextField("Name", text: $nameDraft)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isNameFieldFocused)
-                    .onSubmit { saveNameDraft() }
-                    .onChange(of: isNameFieldFocused) { _, isFocused in
-                        if !isFocused { saveNameDraft() }
+                // Saved through the name rules on Return or blur, and it
+                // follows a rename made elsewhere (elf.json edited in another
+                // app), so leaving the field never undoes that rename.
+                ElfCommittingTextField(
+                    placeholder: "Name",
+                    savedText: elfEditor.elf.configuration.identity.name,
+                    onCommit: { newName in
+                        try elfEditor.rename(to: newName)
+                        return elfEditor.elf.configuration.identity.name
                     }
+                )
             }
-            if let nameProblemMessage {
-                Text(nameProblemMessage)
+            // A name that's the start of another elf's is allowed, with a
+            // warning that saying it may reach either elf.
+            if let nameWarningMessage = elfEditor.nameWarningMessage {
+                Text(nameWarningMessage)
                     .font(.system(size: 11))
                     .foregroundColor(DS.Colors.warning)
             }
@@ -504,26 +504,6 @@ private struct ElfIdentitySection: View {
                     }
                 )
             }
-        }
-        .onAppear {
-            nameDraft = elfEditor.elf.configuration.identity.name
-            nameProblemMessage = elfEditor.nameWarningMessage
-        }
-    }
-
-    private func saveNameDraft() {
-        guard nameDraft != elfEditor.elf.configuration.identity.name else {
-            nameProblemMessage = nil
-            return
-        }
-        do {
-            try elfEditor.rename(to: nameDraft)
-            nameDraft = elfEditor.elf.configuration.identity.name
-            // A name that's the start of another elf's is allowed, with a
-            // warning that saying it may reach either elf.
-            nameProblemMessage = elfEditor.nameWarningMessage
-        } catch {
-            nameProblemMessage = error.localizedDescription
         }
     }
 }
