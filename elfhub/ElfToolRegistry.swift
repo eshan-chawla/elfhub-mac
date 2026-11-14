@@ -93,6 +93,20 @@ struct ElfToolOutcome {
 final class ElfTurnEffectLedger {
     private var writtenContentSHA256ByPath: [String: String] = [:]
     private var assignedTaskIdentifierByKey: [String: UUID] = [:]
+    /// Every file change this turn made, across a fallback restart, in order.
+    private(set) var recordedFileChanges: [ElfChangeLogEntry] = []
+    private let onFileChanged: (ElfChangeLogEntry) -> Void
+
+    /// `onFileChanged` hears each change as it's made, so a reply stopped
+    /// with Esc still shows (and can undo) what it already saved.
+    init(onFileChanged: @escaping (ElfChangeLogEntry) -> Void = { _ in }) {
+        self.onFileChanged = onFileChanged
+    }
+
+    func recordFileChange(_ fileChange: ElfChangeLogEntry) {
+        recordedFileChanges.append(fileChange)
+        onFileChanged(fileChange)
+    }
 
     func hasWritten(path: String, contentSHA256: String) -> Bool {
         writtenContentSHA256ByPath[path] == contentSHA256

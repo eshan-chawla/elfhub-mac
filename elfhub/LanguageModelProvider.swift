@@ -57,6 +57,9 @@ struct LanguageModelToolCall: Equatable {
     let toolCallIdentifier: String
     let toolName: String
     let argumentsJSON: String
+    /// A provider's signature for the call that must be sent back with it
+    /// (Gemini's `thoughtSignature`); nil for providers without one.
+    var providerSignature: String? = nil
 
     /// The arguments as a dictionary, or empty when they aren't valid JSON.
     var argumentsDictionary: [String: Any] {

@@ -76,7 +76,8 @@ final class GeminiLanguageModelProvider: LanguageModelProvider {
                 toolCalls.append(LanguageModelToolCall(
                     toolCallIdentifier: "gemini_call_\(toolCalls.count)",
                     toolName: functionCall.name,
-                    argumentsJSON: functionCall.argumentsJSON
+                    argumentsJSON: functionCall.argumentsJSON,
+                    providerSignature: functionCall.thoughtSignature
                 ))
             }
         }
@@ -166,7 +167,13 @@ final class GeminiLanguageModelProvider: LanguageModelProvider {
                 guard !image.label.isEmpty else { return [imagePart] }
                 return [imagePart, ["text": image.label]]
             case let .toolCall(toolCall):
-                return [["functionCall": ["name": toolCall.toolName, "args": toolCall.argumentsDictionary]]]
+                var functionCallPart: [String: Any] = ["functionCall": ["name": toolCall.toolName, "args": toolCall.argumentsDictionary]]
+                // Gemini 3 refuses a function call sent back without the
+                // signature it came with.
+                if let thoughtSignature = toolCall.providerSignature {
+                    functionCallPart["thoughtSignature"] = thoughtSignature
+                }
+                return [functionCallPart]
             case let .toolResult(_, toolName, resultText):
                 return [["functionResponse": ["name": toolName, "response": ["result": resultText]]]]
             case .anthropicRawBlock, .openAIResponsesRawItem:
@@ -179,6 +186,9 @@ final class GeminiLanguageModelProvider: LanguageModelProvider {
         struct FunctionCall: Equatable {
             let name: String
             let argumentsJSON: String
+            /// The part's `thoughtSignature`, which Gemini 3 needs back with
+            /// the call in the next request.
+            var thoughtSignature: String? = nil
         }
 
         let textDelta: String?
@@ -205,7 +215,11 @@ final class GeminiLanguageModelProvider: LanguageModelProvider {
                   let functionName = functionCall["name"] as? String else { return nil }
             let functionArguments = functionCall["args"] as? [String: Any] ?? [:]
             let argumentsData = (try? JSONSerialization.data(withJSONObject: functionArguments)) ?? Data("{}".utf8)
-            return ParsedStreamChunk.FunctionCall(name: functionName, argumentsJSON: String(decoding: argumentsData, as: UTF8.self))
+            return ParsedStreamChunk.FunctionCall(
+                name: functionName,
+                argumentsJSON: String(decoding: argumentsData, as: UTF8.self),
+                thoughtSignature: part["thoughtSignature"] as? String
+            )
         }
         return ParsedStreamChunk(textDelta: text.isEmpty ? nil : text, functionCalls: functionCalls)
     }

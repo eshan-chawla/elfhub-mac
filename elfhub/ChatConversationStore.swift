@@ -174,7 +174,8 @@ struct ChatConversation: Codable, Identifiable, Equatable {
     mutating func recordFileChanges(_ fileChanges: [SavedElfFileChange], assistantMessageIdentifier: UUID) {
         guard !fileChanges.isEmpty,
               let assistantMessageIndex = messages.firstIndex(where: { $0.id == assistantMessageIdentifier }) else { return }
-        messages[assistantMessageIndex].fileChanges += fileChanges
+        let alreadyShownChangeIdentifiers = Set(messages[assistantMessageIndex].fileChanges.map(\.changeEntryIdentifier))
+        messages[assistantMessageIndex].fileChanges += fileChanges.filter { !alreadyShownChangeIdentifiers.contains($0.changeEntryIdentifier) }
     }
 
     mutating func markFileChangeUndone(changeEntryIdentifier: UUID) {

@@ -114,12 +114,17 @@ final class CompanionTurnPipeline {
         isSpokenTurn: Bool = false,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
         onModelRoundEnded: @escaping @MainActor () -> Void = {},
+        onElfFileChanged: @escaping @MainActor (_ fileChange: ElfChangeLogEntry, _ elfIdentifier: String) -> Void = { _, _ in },
         onLanguageModelSwitched: @escaping @MainActor (LanguageModelSwitchNotice) -> Void = { _ in }
     ) async throws -> TurnResult {
-        // Kept across the fallback restart below, so a file the first try
-        // already saved isn't saved twice.
-        let turnEffectLedger = ElfTurnEffectLedger()
         let elfForTools = elfForToolsProvider()
+        // Kept across the fallback restart below, so a file the first try
+        // already saved isn't saved twice and still shows under the reply.
+        // Each change is reported as it's made, so a reply stopped with Esc
+        // still shows what it saved.
+        let turnEffectLedger = ElfTurnEffectLedger(onFileChanged: { fileChange in
+            if let elfForTools { onElfFileChanged(fileChange, elfForTools.id) }
+        })
         // This turn replaces whatever the previous one was doing on screen,
         // and only this turn's actions may run from now on.
         let screenActionTurnToken = screenActionCoordinator.beginTurn()
@@ -343,8 +348,9 @@ final class CompanionTurnPipeline {
                 userUtterance: userText,
                 // The screenshot is the user's own view, sent every turn with
                 // them watching, so it isn't counted; files and web pages the
-                // elf reads are (see the tools).
-                influencedBy: [],
+                // elf reads are (see the tools) — and so are the notes a
+                // model without tools is shown in its prompt.
+                influencedBy: elfPromptContext.preloadedNotes.isEmpty ? [] : [.file],
                 turnEffectLedger: turnEffectLedger
             )
         }
@@ -361,7 +367,6 @@ final class CompanionTurnPipeline {
         try Task.checkCancellation()
 
         let toolCalls = agentLoopResult.guidanceToolCalls
-        var elfToolOutcomes = agentLoopResult.toolOutcomes
         // Tag-using models: their file tags run through the same tools, and
         // never reach guidance decoding or speech.
         if usesElfFileTags, let elfToolContext {
@@ -374,10 +379,11 @@ final class CompanionTurnPipeline {
                 let (toolName, toolArguments) = tagInvocation.toolNameAndArguments
                 guard let elfTool = elfToolRegistry.tool(named: toolName),
                       let argumentsData = try? JSONSerialization.data(withJSONObject: toolArguments) else { continue }
-                elfToolOutcomes.append(try await elfTool.run(
+                // The change itself is recorded in the turn's ledger.
+                _ = try await elfTool.run(
                     argumentsJSON: String(decoding: argumentsData, as: UTF8.self),
                     context: elfToolContext
-                ))
+                )
             }
         }
         let replyText = usesElfFileTags ? ElfToolTags.textWithoutElfTags(agentLoopResult.replyText) : agentLoopResult.replyText
@@ -422,11 +428,19 @@ final class CompanionTurnPipeline {
 
         // The notepad window isn't in screenshots, so the model remembers
         // what it wrote there through its history.
+        // Every change this turn made, including any the try before a
+        // fallback restart made.
+        let turnFileChanges = turnEffectLedger.recordedFileChanges
         let assistantTextForHistory = Self.assistantTextForHistory(
             spokenText: spokenText,
             notepad: shownNotepad,
-            toolOutcomes: elfToolOutcomes
+            fileChanges: turnFileChanges
         )
+        if let elfToolContextForTurn, !turnFileChanges.isEmpty {
+            // Keeps the change list within its limits (500 changes, 30 days,
+            // 20 MB of backups).
+            try? ElfChangeLog(home: elfToolContextForTurn.home).prune(now: Date())
+        }
         conversationHistory.append(LanguageModelHistoryTurn(userText: userText, assistantText: assistantTextForHistory))
         if conversationHistory.count > Self.maximumHistoryTurns {
             conversationHistory.removeFirst(conversationHistory.count - Self.maximumHistoryTurns)
@@ -447,7 +461,7 @@ final class CompanionTurnPipeline {
                 }
                 : nil,
             shownNotepad: shownNotepad,
-            elfFileChanges: elfToolOutcomes.flatMap(\.fileChanges),
+            elfFileChanges: turnFileChanges,
             elfIdentifier: elfToolContextForTurn?.id
         )
     }
@@ -459,10 +473,10 @@ final class CompanionTurnPipeline {
     static func assistantTextForHistory(
         spokenText: String,
         notepad: SavedNotepad?,
-        toolOutcomes: [ElfToolOutcome]
+        fileChanges: [ElfChangeLogEntry]
     ) -> String {
         var assistantTextForHistory = notepad.map { spokenText + "\n\n" + $0.textForConversationHistory } ?? spokenText
-        let chatNotes = toolOutcomes.flatMap(\.chatNotes)
+        let chatNotes = fileChanges.map(ElfFileTools.chatNote)
         if !chatNotes.isEmpty {
             assistantTextForHistory += "\n\n(you " + chatNotes.joined(separator: "; ") + ")"
         }

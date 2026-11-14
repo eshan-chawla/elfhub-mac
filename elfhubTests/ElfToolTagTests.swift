@@ -24,6 +24,13 @@ struct ElfToolTagTests {
         #expect(ElfToolTags.textWithoutElfTags(responseText) == "noted.  anything else? ")
     }
 
+    @Test func aDeleteTagInsideASavedFileIsTextNotAnAction() {
+        let responseText = "saved the how-to. [FILE:files/howto.md]write [DELETE_FILE:files/x.md] to delete x[/FILE]"
+        #expect(ElfToolTags.invocations(fromResponseText: responseText, userAskedToSaveSkill: false) == [
+            .writeFile(path: "files/howto.md", content: "write [DELETE_FILE:files/x.md] to delete x"),
+        ])
+    }
+
     @Test func skillTagsAreIgnoredUnlessAsked() {
         let responseText = "here's the skill. [SKILL:Deploying]run make deploy[/SKILL]"
         #expect(ElfToolTags.invocations(fromResponseText: responseText, userAskedToSaveSkill: false).isEmpty)

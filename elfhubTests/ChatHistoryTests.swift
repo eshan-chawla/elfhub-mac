@@ -73,6 +73,15 @@ struct ChatHistoryTests {
         #expect(replyFileChanges?.first?.isUndone == true)
     }
 
+    @Test func aFileChangeRecordedTwiceShowsOnce() {
+        var conversation = ChatConversation()
+        let exchangeIdentifiers = conversation.appendExchange(userText: "note it", inputSource: .typed)
+        let savedFileChange = SavedElfFileChange(changeEntryIdentifier: UUID(), elfIdentifier: "main", note: "saved files/a.md")
+        conversation.recordFileChanges([savedFileChange], assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier)
+        conversation.recordFileChanges([savedFileChange], assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier)
+        #expect(conversation.messages.last?.fileChanges.count == 1)
+    }
+
     @Test func appendingAnExchangeAddsTheQuestionAndAnEmptyReply() {
         var conversation = ChatConversation()
         let exchangeIdentifiers = conversation.appendExchange(userText: "open my downloads", inputSource: .spoken)

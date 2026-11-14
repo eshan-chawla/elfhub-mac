@@ -953,6 +953,9 @@ final class CompanionManager: ObservableObject {
                         streamingReplyPresenter.markEndOfModelRound()
                         rawReplyText += "\n"
                     },
+                    onElfFileChanged: { [textChatViewModel] fileChange, elfIdentifier in
+                        textChatViewModel.recordFileChange(fileChange, elfIdentifier: elfIdentifier, for: recordedVoiceExchange)
+                    },
                     onLanguageModelSwitched: { [weak self] switchNotice in
                         guard let self else { return }
                         languageModelSwitchNotice = switchNotice
@@ -1028,6 +1031,7 @@ final class CompanionManager: ObservableObject {
     func respondToChatMessage(
         _ userText: String,
         onTextChunk: @escaping @MainActor @Sendable (String) -> Void,
+        onElfFileChanged: @escaping @MainActor (_ fileChange: ElfChangeLogEntry, _ elfIdentifier: String) -> Void = { _, _ in },
         onLanguageModelSwitched: @escaping @MainActor (LanguageModelSwitchNotice) -> Void = { _ in }
     ) async throws -> CompanionTurnPipeline.TurnResult {
         stopSpeech()
@@ -1061,6 +1065,7 @@ final class CompanionManager: ObservableObject {
                     streamingReplyPresenter.markEndOfModelRound()
                     onTextChunk("\n")
                 },
+                onElfFileChanged: onElfFileChanged,
                 onLanguageModelSwitched: { [weak self] switchNotice in
                     guard let self else { return }
                     self.companionEventBus.emit(.hintRequested(switchNotice.message))

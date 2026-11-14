@@ -66,8 +66,12 @@ nonisolated enum ElfToolTags {
                 break
             }
         }
+        // A delete tag written inside a saved file's text is text, not an
+        // action.
+        let completeBlockRanges = completeBlockPattern?.matches(in: textWithoutNotepad, range: fullRange).map(\.range) ?? []
         deleteFileTagPattern?.enumerateMatches(in: textWithoutNotepad, range: fullRange) { match, _, _ in
             guard let match, let pathRange = Range(match.range(at: 1), in: textWithoutNotepad) else { return }
+            guard !completeBlockRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) else { return }
             let deletedPath = textWithoutNotepad[pathRange].trimmingCharacters(in: .whitespaces)
             positionedInvocations.append((match.range.location, .deleteFile(path: deletedPath)))
         }

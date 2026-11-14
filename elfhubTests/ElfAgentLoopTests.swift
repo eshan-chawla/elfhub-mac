@@ -164,6 +164,41 @@ struct ElfAgentLoopTests {
         let restartedResult = try await runLoop(provider: ScriptedLanguageModelProvider(scriptedResponses: [writeResponse()]), toolContext: restartedToolContext)
         #expect(ElfChangeLog(home: home).entries().count == 1)
         #expect(restartedResult.toolOutcomes.flatMap(\.fileChanges).isEmpty)
+        // The change the first try made is still the turn's, for chat's Undo.
+        #expect(turnEffectLedger.recordedFileChanges.map(\.path) == ["files/trip.md"])
+    }
+
+    @Test func eachFileChangeIsReportedAsItHappens() async throws {
+        var reportedPaths: [String] = []
+        let turnEffectLedger = ElfTurnEffectLedger(onFileChanged: { fileChange in reportedPaths.append(fileChange.path) })
+        let (toolContext, home) = try makeToolContext(turnEffectLedger: turnEffectLedger)
+        defer { try? FileManager.default.removeItem(at: home.directory) }
+        let provider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([
+                ScriptedLanguageModelProvider.toolCall("write_file", ["path": "files/a.md", "content": "a"]),
+                ScriptedLanguageModelProvider.toolCall("list_files", [:]),
+            ], text: "saved."),
+        ])
+        let loopTask = Task { @MainActor in try await runLoop(provider: provider, toolContext: toolContext) }
+        // Esc while the second round is streaming: the first round's file
+        // change was reported already.
+        provider.beforeEachResponse = { if provider.receivedRequests.count == 2 { loopTask.cancel() } }
+        await #expect(throws: CancellationError.self) { try await loopTask.value }
+        #expect(reportedPaths == ["files/a.md"])
+    }
+
+    @Test func aWriteRepeatedAfterADeleteInTheSameTurnIsWrittenAgain() async throws {
+        let (toolContext, home) = try makeToolContext()
+        defer { try? FileManager.default.removeItem(at: home.directory) }
+        let provider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([
+                ScriptedLanguageModelProvider.toolCall("write_file", ["path": "files/a.md", "content": "a"]),
+                ScriptedLanguageModelProvider.toolCall("delete_file", ["path": "files/a.md"]),
+                ScriptedLanguageModelProvider.toolCall("write_file", ["path": "files/a.md", "content": "a"]),
+            ], text: "done."),
+        ])
+        _ = try await runLoop(provider: provider, toolContext: toolContext)
+        #expect(FileManager.default.fileExists(atPath: home.filesDirectory.appendingPathComponent("a.md").path))
     }
 
     @Test func eachModelRoundIsMarkedSoHeldBackSpeechIsFlushed() async throws {
@@ -191,9 +226,9 @@ struct ElfAgentLoopTests {
         let historyText = CompanionTurnPipeline.assistantTextForHistory(
             spokenText: "saved it.",
             notepad: nil,
-            toolOutcomes: [ElfToolOutcome(resultText: "saved", fileChanges: [fileChange], chatNotes: ["saved files/trip.md"])]
+            fileChanges: [fileChange]
         )
         #expect(historyText == "saved it.\n\n(you saved files/trip.md)")
-        #expect(CompanionTurnPipeline.assistantTextForHistory(spokenText: "hi.", notepad: nil, toolOutcomes: []) == "hi.")
+        #expect(CompanionTurnPipeline.assistantTextForHistory(spokenText: "hi.", notepad: nil, fileChanges: []) == "hi.")
     }
 }

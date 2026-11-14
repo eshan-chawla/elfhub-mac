@@ -251,6 +251,31 @@ struct LanguageModelProviderTests {
         #expect(parsedChunk.functionCalls.first?.name == "point_at")
     }
 
+    @Test func geminiKeepsEachFunctionCallsThoughtSignatureAndSendsItBack() {
+        let line = #"data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"read_file","args":{"path":"profile.md"}},"thoughtSignature":"c2lnbmF0dXJl"}]}}]}"#
+        let parsedChunk = GeminiLanguageModelProvider.parseStreamedChunk(fromSSELine: line)
+        #expect(parsedChunk.functionCalls.first?.thoughtSignature == "c2lnbmF0dXJl")
+
+        let toolCall = LanguageModelToolCall(
+            toolCallIdentifier: "gemini_call_0",
+            toolName: "read_file",
+            argumentsJSON: #"{"path":"profile.md"}"#,
+            providerSignature: "c2lnbmF0dXJl"
+        )
+        let body = GeminiLanguageModelProvider.buildRequestBody(
+            request: LanguageModelRequest(systemPrompt: "s", messages: [
+                LanguageModelMessage(role: .user, content: [.text("hi")]),
+                LanguageModelMessage(role: .assistant, content: [.toolCall(toolCall)]),
+                LanguageModelMessage(role: .user, content: [.toolResult(toolCallIdentifier: "gemini_call_0", toolName: "read_file", resultText: "x")]),
+            ]),
+            includeImages: false
+        )
+        let contents = body["contents"] as! [[String: Any]]
+        let modelParts = contents[1]["parts"] as! [[String: Any]]
+        #expect(modelParts.first?["thoughtSignature"] as? String == "c2lnbmF0dXJl")
+        #expect(modelParts.first?["functionCall"] != nil)
+    }
+
     @Test func geminiIgnoresEmptyOrNonData() {
         #expect(GeminiLanguageModelProvider.parseStreamedChunk(fromSSELine: "data: {}").textDelta == nil)
         #expect(GeminiLanguageModelProvider.parseStreamedChunk(fromSSELine: "event: ping").functionCalls.isEmpty)

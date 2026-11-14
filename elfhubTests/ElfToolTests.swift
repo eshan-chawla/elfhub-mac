@@ -184,6 +184,29 @@ struct ElfToolTests {
         #expect(toolContext.changeLog.entries().count == 1)
     }
 
+    @Test func loadingASkillMarksTheTurnAsFileInfluenced() async throws {
+        let (toolContext, home, cleanUp) = try makeToolContext()
+        defer { cleanUp() }
+        try home.writeSkill(ElfSkill(name: "Deploying", description: "", body: "steps"))
+        _ = try await runTool("load_skill", ["name": "Deploying"], in: toolContext)
+        #expect(toolContext.influencedBy.contains(.file))
+    }
+
+    @Test func saveSkillCannotFollowASkillFolderLinkIntoTheAppsFolder() async throws {
+        let (toolContext, home, cleanUp) = try makeToolContext(userUtterance: "save that as a skill")
+        defer { cleanUp() }
+        // A dropped-in "skill" folder that's really a link to the app's folder.
+        let linkedSkillFileURL = home.appDataDirectory.appendingPathComponent("SKILL.md")
+        try Data("---\nname: Deploying\n---\nold".utf8).write(to: linkedSkillFileURL)
+        try FileManager.default.createSymbolicLink(
+            at: home.skillsDirectory.appendingPathComponent("deploying"),
+            withDestinationURL: home.appDataDirectory
+        )
+        let saveOutcome = try await runTool("save_skill", ["name": "Deploying", "body": "new"], in: toolContext)
+        #expect(saveOutcome.isFailure)
+        #expect(try String(contentsOf: linkedSkillFileURL, encoding: .utf8).hasSuffix("old"))
+    }
+
     @Test func listFilesShowsTheElfsFiles() async throws {
         let (toolContext, _, cleanUp) = try makeToolContext()
         defer { cleanUp() }

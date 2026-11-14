@@ -45,6 +45,16 @@ enum ElfFileTools {
         return .success(homeRelativePath)
     }
 
+    /// True when this turn (or the try before a fallback restart) already
+    /// wrote exactly this text there and it's still there — so writing it
+    /// again would only repeat the change.
+    static func alreadyWroteThisTurn(path homeRelativePath: String, contentSHA256: String, context: ElfToolContext) -> Bool {
+        guard context.turnEffectLedger.hasWritten(path: homeRelativePath, contentSHA256: contentSHA256),
+              let fileURL = try? context.elf.home.resolvedURLInsideHome(homeRelativePath),
+              let currentContent = try? Data(contentsOf: fileURL) else { return false }
+        return ElfChangeLog.sha256(of: currentContent) == contentSHA256
+    }
+
     /// One line per changed file, for the chat.
     static func chatNote(for fileChange: ElfChangeLogEntry) -> String {
         switch fileChange.operation {
@@ -204,7 +214,7 @@ private struct WriteFileTool: OwnFolderTool {
             return .failure("that's too long for \(homeRelativePath) (the limit is \(characterLimit) characters). shorten it or split it into several files.")
         }
         let newContentSHA256 = ElfChangeLog.sha256(of: Data(newText.utf8))
-        if context.turnEffectLedger.hasWritten(path: homeRelativePath, contentSHA256: newContentSHA256) {
+        if ElfFileTools.alreadyWroteThisTurn(path: homeRelativePath, contentSHA256: newContentSHA256, context: context) {
             return ElfToolOutcome(resultText: "saved \(homeRelativePath).")
         }
         try Task.checkCancellation()
@@ -216,6 +226,7 @@ private struct WriteFileTool: OwnFolderTool {
                 influencedBy: context.influencedBy
             )
             context.turnEffectLedger.recordWrite(path: homeRelativePath, contentSHA256: newContentSHA256)
+            context.turnEffectLedger.recordFileChange(fileChange)
             return ElfToolOutcome(
                 resultText: "saved \(homeRelativePath).",
                 fileChanges: [fileChange],
@@ -254,6 +265,7 @@ private struct DeleteFileTool: OwnFolderTool {
         try Task.checkCancellation()
         do {
             let fileChange = try context.changeLog.recordDelete(path: homeRelativePath, origin: context.origin, influencedBy: context.influencedBy)
+            context.turnEffectLedger.recordFileChange(fileChange)
             return ElfToolOutcome(resultText: "deleted \(homeRelativePath).", fileChanges: [fileChange], chatNotes: [ElfFileTools.chatNote(for: fileChange)])
         } catch {
             return .failure("there's no file at \(homeRelativePath) to delete.")
@@ -305,6 +317,7 @@ private struct RenameFileTool: OwnFolderTool {
                 origin: context.origin,
                 influencedBy: context.influencedBy
             )
+            context.turnEffectLedger.recordFileChange(fileChange)
             return ElfToolOutcome(resultText: "moved \(writableOriginalPath) to \(writableNewPath).", fileChanges: [fileChange], chatNotes: [ElfFileTools.chatNote(for: fileChange)])
         } catch {
             return .failure("there's no file at \(writableOriginalPath) to move.")
@@ -336,6 +349,9 @@ private struct LoadSkillTool: OwnFolderTool {
         }) else {
             return .failure("there's no skill called \(requestedName).")
         }
+        // A skill may be a dropped-in third-party file; what it says may
+        // steer what the elf writes next.
+        context.influencedBy.insert(.file)
         let descriptionLine = skill.description.isEmpty ? "" : "\n" + skill.description
         return ElfToolOutcome(resultText: "# \(skill.name)" + descriptionLine + "\n\n" + skill.body)
     }
@@ -384,18 +400,26 @@ private struct SaveSkillTool: OwnFolderTool {
         guard skillMarkdown.count <= ElfHome.skillCharacterLimit else {
             return .failure("that skill is too long (the limit is \(ElfHome.skillCharacterLimit) characters).")
         }
-        let skillPath = "skills/\(savedSkill.slug)/\(ElfHome.skillFileName)"
+        // Judged by where the path really lands: a skill folder that's a
+        // link elsewhere (into the app's own folder, say) is refused.
+        guard let skillPath = try? home.homeRelativePathForElfTool(
+            "skills/\(savedSkill.slug)/\(ElfHome.skillFileName)",
+            access: .write
+        ), skillPath.hasPrefix("skills/") else {
+            return .failure("the skill folder for \(skillName) isn't a plain folder in your skills, so it can't be saved there.")
+        }
         if existingSkill == nil, FileManager.default.fileExists(atPath: home.skillsDirectory.appendingPathComponent(savedSkill.slug).path) {
             return .failure("a skill folder called \(savedSkill.slug) already exists. pick another name.")
         }
         let newContentSHA256 = ElfChangeLog.sha256(of: Data(skillMarkdown.utf8))
-        if context.turnEffectLedger.hasWritten(path: skillPath, contentSHA256: newContentSHA256) {
+        if ElfFileTools.alreadyWroteThisTurn(path: skillPath, contentSHA256: newContentSHA256, context: context) {
             return ElfToolOutcome(resultText: "saved the skill \(skillName).")
         }
         try Task.checkCancellation()
         do {
             let fileChange = try context.changeLog.recordWrite(path: skillPath, newText: skillMarkdown, origin: context.origin, influencedBy: context.influencedBy)
             context.turnEffectLedger.recordWrite(path: skillPath, contentSHA256: newContentSHA256)
+            context.turnEffectLedger.recordFileChange(fileChange)
             return ElfToolOutcome(resultText: "saved the skill \(skillName).", fileChanges: [fileChange], chatNotes: ["saved the skill \(skillName)"])
         } catch {
             return .failure("couldn't save the skill: \(error.localizedDescription)")

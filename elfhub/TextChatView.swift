@@ -105,6 +105,9 @@ final class TextChatViewModel: ObservableObject {
                         rawReplyText += chunk
                         self.showStreamingReply(rawReplyText: rawReplyText, for: recordedExchange)
                     },
+                    onElfFileChanged: { fileChange, elfIdentifier in
+                        self.recordFileChange(fileChange, elfIdentifier: elfIdentifier, for: recordedExchange)
+                    },
                     onLanguageModelSwitched: { switchNotice in
                         self.showLanguageModelSwitchNotice(
                             switchNotice,
@@ -207,6 +210,17 @@ final class TextChatViewModel: ObservableObject {
                         note: ElfFileTools.chatNote(for: fileChange)
                     )
                 },
+                assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier
+            )
+        }
+    }
+
+    /// Shows a file change under the reply as soon as the elf makes it, so
+    /// a reply stopped with Esc still lists (and can undo) what it saved.
+    func recordFileChange(_ fileChange: ElfChangeLogEntry, elfIdentifier: String, for recordedExchange: RecordedExchange) {
+        updateConversation(withIdentifier: recordedExchange.conversationIdentifier, savingToDisk: true) { conversation in
+            conversation.recordFileChanges(
+                [SavedElfFileChange(changeEntryIdentifier: fileChange.id, elfIdentifier: elfIdentifier, note: ElfFileTools.chatNote(for: fileChange))],
                 assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier
             )
         }

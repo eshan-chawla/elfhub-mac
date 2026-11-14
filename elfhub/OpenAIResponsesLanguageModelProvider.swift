@@ -254,7 +254,7 @@ final class OpenAIResponsesLanguageModelProvider: LanguageModelProvider {
             body["tools"] = [[
                 "type": "namespace",
                 "name": guidanceToolNamespace,
-                "description": "Show things on the user's screen: point, annotate and, when allowed, act.",
+                "description": "Show things on the user's screen (point, annotate and, when allowed, act) and work with your own notes, files and skills.",
                 "tools": request.tools.map { toolDefinition in
                     [
                         "type": "function",
