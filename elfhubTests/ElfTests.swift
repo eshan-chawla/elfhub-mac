@@ -160,37 +160,40 @@ struct ElfTests {
         #expect(try elfManager.createElf(identity: .init(name: "Pip")).id == "pip-2")
     }
 
-    @Test func settingsEditsCantChangeANameWithoutTheNameRules() throws {
+    @Test func identityEditsLeaveTheNameToTheNameRules() throws {
         let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
         defer { cleanUp() }
         let elfManager = ElfManager(elvesDirectory: elvesDirectory)
-        elfManager.updateConfiguration { configuration in
-            configuration.identity.name = ""
-            configuration.identity.emoji = "🧝"
-        }
-        #expect(elfManager.configuration.identity.name == "elf")
+        let mainElfEditor = try ElfEditor(elfIdentifier: "main", elfManager: elfManager)
+        try mainElfEditor.updateEmoji("🧝")
+        try mainElfEditor.updateDescription("helps with everything")
+        try mainElfEditor.updateBehaviour { behaviour in behaviour.tone = "calm" }
+        #expect(mainElfEditor.elf.configuration.identity.name == "elf")
         #expect(elfManager.mainElf.home.readConfiguration().identity.name == "elf")
-        #expect(elfManager.configuration.identity.emoji == "🧝")
+        #expect(elfManager.mainElf.configuration.identity.emoji == "🧝")
+        #expect(elfManager.mainElf.configuration.behaviour.tone == "calm")
+        #expect(mainElfEditor.isMainElf)
     }
 
     @Test func editingADroppedInSkillKeepsItsFolderAndExtraFiles() throws {
         let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
         defer { cleanUp() }
         let elfManager = ElfManager(elvesDirectory: elvesDirectory)
-        let skillFolderURL = elfManager.home.skillsDirectory.appendingPathComponent("Deploy", isDirectory: true)
+        let mainElfEditor = try ElfEditor(elfIdentifier: "main", elfManager: elfManager)
+        let skillFolderURL = mainElfEditor.home.skillsDirectory.appendingPathComponent("Deploy", isDirectory: true)
         try FileManager.default.createDirectory(at: skillFolderURL.appendingPathComponent("references"), withIntermediateDirectories: true)
         try Data("---\nname: Deploy\ndescription: old\n---\n\nsteps".utf8).write(to: skillFolderURL.appendingPathComponent("SKILL.md"))
         try Data("notes".utf8).write(to: skillFolderURL.appendingPathComponent("references/notes.md"))
-        elfManager.reload()
+        mainElfEditor.reload()
 
-        var editedSkill = try #require(elfManager.skills.first)
+        var editedSkill = try #require(mainElfEditor.skills.first)
         editedSkill.description = "fixed typo"
         editedSkill.name = "Deploying"
-        try elfManager.saveSkill(editedSkill, isNewSkill: false)
+        try mainElfEditor.saveSkill(editedSkill, isNewSkill: false)
 
-        #expect(elfManager.skills.map(\.slug) == ["Deploy"])
-        #expect(elfManager.skills.first?.name == "Deploying")
-        #expect(elfManager.skills.first?.description == "fixed typo")
+        #expect(mainElfEditor.skills.map(\.slug) == ["Deploy"])
+        #expect(mainElfEditor.skills.first?.name == "Deploying")
+        #expect(mainElfEditor.skills.first?.description == "fixed typo")
         #expect(FileManager.default.fileExists(atPath: skillFolderURL.appendingPathComponent("references/notes.md").path))
     }
 
@@ -198,11 +201,71 @@ struct ElfTests {
         let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
         defer { cleanUp() }
         let elfManager = ElfManager(elvesDirectory: elvesDirectory)
-        try elfManager.saveSkill(ElfSkill(name: "Deploy", description: "", body: "first"), isNewSkill: true)
+        let mainElfEditor = try ElfEditor(elfIdentifier: "main", elfManager: elfManager)
+        try mainElfEditor.saveSkill(ElfSkill(name: "Deploy", description: "", body: "first"), isNewSkill: true)
         #expect(throws: ElfManagerError.skillAlreadyExists(name: "DEPLOY")) {
-            try elfManager.saveSkill(ElfSkill(name: "DEPLOY", description: "", body: "second"), isNewSkill: true)
+            try mainElfEditor.saveSkill(ElfSkill(name: "DEPLOY", description: "", body: "second"), isNewSkill: true)
         }
-        #expect(elfManager.skills.map(\.body) == ["first"])
+        #expect(mainElfEditor.skills.map(\.body) == ["first"])
+    }
+
+    // MARK: - Editing any elf
+
+    @Test func anEditorEditsOnlyTheElfItWasOpenedFor() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory, deletedFolderDisposal: .removePermanently)
+        try elfManager.createElf(identity: .init(name: "Ada"))
+        let adaEditor = try ElfEditor(elfIdentifier: "ada", elfManager: elfManager)
+        try adaEditor.saveSoul("# soul\n\nbe brief")
+        try adaEditor.updateDescription("keeps the books")
+        #expect(elfManager.elf(withIdentifier: "ada")?.home.readSoul() == "# soul\n\nbe brief")
+        #expect(elfManager.elf(withIdentifier: "ada")?.configuration.identity.description == "keeps the books")
+        #expect(elfManager.mainElf.home.readSoul() == ElfHome.starterSoul)
+        #expect(!adaEditor.isMainElf)
+    }
+
+    @Test func editingAnElfWhoseFolderWasRemovedFailsWithoutRecreatingIt() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory, deletedFolderDisposal: .removePermanently)
+        try elfManager.createElf(identity: .init(name: "Ada"))
+        let adaEditor = try ElfEditor(elfIdentifier: "ada", elfManager: elfManager)
+        let adaFolderURL = elvesDirectory.appendingPathComponent("ada", isDirectory: true)
+        try FileManager.default.removeItem(at: adaFolderURL)
+        #expect(throws: ElfManagerError.unknownElf("ada")) { try adaEditor.saveSoul("x") }
+        #expect(throws: ElfManagerError.unknownElf("ada")) { try adaEditor.updateEmoji("🧝") }
+        #expect(!FileManager.default.fileExists(atPath: adaFolderURL.path))
+        #expect(elfManager.elf(withIdentifier: "ada") == nil)
+    }
+
+    @Test func anEditorForAnUnknownElfCannotBeOpened() {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        #expect(throws: ElfManagerError.unknownElf("nobody")) {
+            _ = try ElfEditor(elfIdentifier: "nobody", elfManager: elfManager)
+        }
+    }
+
+    @Test func theMainElfsPromptStillComesFromMainAfterOtherElvesAreEdited() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        try elfManager.createElf(identity: .init(name: "Ada"))
+        try ElfEditor(elfIdentifier: "ada", elfManager: elfManager).saveSoul("# soul\n\nada only")
+        #expect(elfManager.promptContext().soulText == ElfHome.starterSoul)
+        #expect(elfManager.promptContext().elfName == "elf")
+    }
+
+    @Test func emojiFieldKeepsOnlyTheFirstEmoji() {
+        #expect(ElfNameRules.normalizedEmoji("🧝‍♀️ Juniper") == "🧝‍♀️")
+        #expect(ElfNameRules.normalizedEmoji("👍🏽👍") == "👍🏽")
+        #expect(ElfNameRules.normalizedEmoji("ab") == "")
+        #expect(ElfNameRules.normalizedEmoji("  ") == "")
+        #expect(ElfNameRules.normalizedEmoji("1") == "")
+        #expect(ElfNameRules.normalizedEmoji("✍️") == "✍️")
+        #expect(ElfNameRules.normalizedEmoji("🔎") == "🔎")
     }
 
     // MARK: - Skills

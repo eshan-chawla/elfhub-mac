@@ -79,7 +79,7 @@ struct SettingsCategoryPage: View {
         MainAppPage(title: settingsCategory.displayTitle, subtitle: settingsCategory.subtitle) {
             switch settingsCategory {
             case .elf:
-                ElfSettingsContent(companionManager: companionManager, elfManager: companionManager.elfManager)
+                MainElfSettingsContent(companionManager: companionManager)
             case .models:
                 ModelsSettingsContent(companionManager: companionManager)
             case .modes:

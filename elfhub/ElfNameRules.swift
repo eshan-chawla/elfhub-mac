@@ -109,6 +109,21 @@ nonisolated enum ElfNameRules {
         return "\(baseIdentifier)-\(suffixNumber)"
     }
 
+    /// The one emoji an elf goes by: the first emoji of whatever was typed
+    /// or pasted ("🧝‍♀️ Juniper" → "🧝‍♀️"), kept whole with its skin tone or
+    /// joined parts, or nothing when the text doesn't start with one.
+    /// Digits and "#" can be drawn as emoji but aren't on their own.
+    static func normalizedEmoji(_ proposedEmoji: String) -> String {
+        let trimmedText = proposedEmoji.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let firstCharacter = trimmedText.first else { return "" }
+        let unicodeScalars = firstCharacter.unicodeScalars
+        let variationSelectorForEmoji: Unicode.Scalar = "\u{FE0F}"
+        let zeroWidthJoiner: Unicode.Scalar = "\u{200D}"
+        let startsWithEmojiPresentation = unicodeScalars.first?.properties.isEmojiPresentation ?? false
+        let asksForEmojiPresentation = unicodeScalars.contains(variationSelectorForEmoji) || unicodeScalars.contains(zeroWidthJoiner)
+        return startsWithEmojiPresentation || asksForEmojiPresentation ? String(firstCharacter) : ""
+    }
+
     /// "will" is a whole-word prefix of "will smith"; "jun" isn't one of
     /// "juniper", and a name isn't a prefix of itself.
     private static func isWholeWordPrefix(_ shorterFoldedName: String, of longerFoldedName: String) -> Bool {

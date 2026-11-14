@@ -4,11 +4,9 @@
 //
 //  Owns the roster of elves: every folder in Elves/ is an elf, and the
 //  main elf ("main") always exists and comes first. Creates, renames and
-//  deletes elves (names checked with ElfNameRules). Until the Elves hub
-//  exists, its single-elf API (soul, profile, skills, config, export) edits
-//  the main elf, keeping it in step with the files (which the user may also
-//  edit in any text editor), and builds the part of every prompt that makes
-//  the model that elf.
+//  deletes elves (names checked with ElfNameRules), and builds the part of
+//  every prompt that makes the model the main elf. Editing one elf's soul,
+//  notes, skills and settings is ElfEditor's job.
 //
 
 import AppKit
@@ -49,13 +47,6 @@ final class ElfManager: ObservableObject {
     /// Every elf on this Mac: main first, then the rest by name.
     @Published private(set) var elves: [Elf] = []
 
-    /// The main elf; the single-elf members below act on it.
-    @Published private(set) var activeElf: Elf
-    @Published private(set) var soulText: String
-    @Published private(set) var profileText: String
-    @Published private(set) var skills: [ElfSkill]
-    @Published private(set) var elfFileCount: Int
-
     nonisolated static let mainElfIdentifier = "main"
 
     private let elvesDirectory: URL
@@ -64,40 +55,23 @@ final class ElfManager: ObservableObject {
     init(elvesDirectory: URL = ElfHome.defaultElvesDirectory, deletedFolderDisposal: ElfDeletedFolderDisposal = .moveToTrash) {
         self.elvesDirectory = elvesDirectory
         self.deletedFolderDisposal = deletedFolderDisposal
-        // The main elf is "main" — a fixed id, so every build of the app
-        // (release, Xcode, tests) finds the same elf, like it finds the same
-        // chats. Elves added later get ids from their names.
-        let mainElfHome = ElfHome(directory: elvesDirectory.appendingPathComponent(Self.mainElfIdentifier, isDirectory: true))
-        try? mainElfHome.createIfNeeded()
-        activeElf = Elf(id: Self.mainElfIdentifier, home: mainElfHome, configuration: mainElfHome.readConfiguration())
-        soulText = mainElfHome.readSoul()
-        profileText = mainElfHome.readProfile()
-        skills = mainElfHome.readSkills()
-        elfFileCount = mainElfHome.fileCount()
         reloadRoster()
     }
 
-    var home: ElfHome { activeElf.home }
-    var configuration: ElfConfiguration { activeElf.configuration }
-
+    /// The main elf. It's "main" — a fixed id, so every build of the app
+    /// (release, Xcode, tests) finds the same elf, like it finds the same
+    /// chats. `reloadRoster` recreates its folder if needed, so it's always
+    /// in the roster.
     var mainElf: Elf {
-        elves.first { $0.id == Self.mainElfIdentifier } ?? activeElf
+        if let rosterMainElf = elves.first(where: { $0.id == Self.mainElfIdentifier }) {
+            return rosterMainElf
+        }
+        let mainElfHome = ElfHome(directory: elvesDirectory.appendingPathComponent(Self.mainElfIdentifier, isDirectory: true))
+        return Elf(id: Self.mainElfIdentifier, home: mainElfHome, configuration: mainElfHome.readConfiguration())
     }
 
     func elf(withIdentifier elfIdentifier: String) -> Elf? {
         elves.first { $0.id == elfIdentifier }
-    }
-
-    /// Re-reads everything from disk, e.g. after the user edited soul.md in
-    /// another app.
-    func reload() {
-        try? home.createIfNeeded()
-        activeElf.configuration = home.readConfiguration()
-        soulText = home.readSoul()
-        profileText = home.readProfile()
-        skills = home.readSkills()
-        elfFileCount = home.fileCount()
-        reloadRoster()
     }
 
     // MARK: Roster
@@ -151,9 +125,6 @@ final class ElfManager: ObservableObject {
         var renamedConfiguration = renamedElf.home.readConfiguration()
         renamedConfiguration.identity.name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         try renamedElf.home.writeConfiguration(renamedConfiguration)
-        if elfIdentifier == activeElf.id {
-            activeElf.configuration = renamedConfiguration
-        }
         reloadRoster()
     }
 
@@ -182,97 +153,14 @@ final class ElfManager: ObservableObject {
     /// The elf's part of the next prompt, read fresh from disk so edits made
     /// outside the app count straight away.
     func promptContext() -> ElfPromptContext {
-        ElfPromptContext(
+        let home = mainElf.home
+        return ElfPromptContext(
             elfName: home.readConfiguration().identity.name,
             soulText: home.readSoul(),
             profileText: home.readProfile(),
             behaviour: home.readConfiguration().behaviour,
             skills: home.readSkills()
         )
-    }
-
-    // MARK: Edits from Settings
-
-    /// Changes the main elf's settings. Its name is left as it was: names
-    /// change only through `renameElf`, which checks the name rules.
-    func updateConfiguration(_ updateConfiguration: (inout ElfConfiguration) -> Void) {
-        var updatedConfiguration = activeElf.configuration
-        updateConfiguration(&updatedConfiguration)
-        updatedConfiguration.identity.name = activeElf.configuration.identity.name
-        guard updatedConfiguration != activeElf.configuration else { return }
-        try? home.writeConfiguration(updatedConfiguration)
-        activeElf.configuration = updatedConfiguration
-        reloadRoster()
-    }
-
-    func saveSoul(_ newSoulText: String) throws {
-        try home.writeSoul(newSoulText)
-        soulText = newSoulText
-    }
-
-    func resetSoulToStarter() throws {
-        try saveSoul(ElfHome.starterSoul)
-    }
-
-    func saveProfile(_ newProfileText: String) throws {
-        try home.writeProfile(newProfileText)
-        profileText = newProfileText
-    }
-
-    func clearProfile() throws {
-        try saveProfile(ElfHome.starterProfile)
-    }
-
-    /// Saves a skill. An edited skill stays in its own folder whatever its
-    /// name becomes — the folder is the skill's identity (as agentskills.io
-    /// treats it) and may hold references/, scripts/ or assets/ too. A new
-    /// skill gets a folder named after it, and never takes over a folder
-    /// another skill uses (compared ignoring case, as the Mac's disk does).
-    func saveSkill(_ skill: ElfSkill, isNewSkill: Bool) throws {
-        if isNewSkill {
-            let newSkillSlug = ElfSkill.slug(forName: skill.name)
-            let skillFolderNamesInUse = (try? FileManager.default.contentsOfDirectory(atPath: home.skillsDirectory.path)) ?? []
-            if skillFolderNamesInUse.contains(where: { $0.lowercased() == newSkillSlug.lowercased() }) {
-                throw ElfManagerError.skillAlreadyExists(name: skill.name.trimmingCharacters(in: .whitespacesAndNewlines))
-            }
-            try home.writeSkill(ElfSkill(
-                slug: newSkillSlug,
-                name: skill.name,
-                description: skill.description,
-                body: skill.body,
-                unrecognizedFrontmatterLines: skill.unrecognizedFrontmatterLines
-            ))
-        } else {
-            try home.writeSkill(skill)
-        }
-        skills = home.readSkills()
-    }
-
-    func deleteSkill(_ skill: ElfSkill) throws {
-        try home.deleteSkill(slug: skill.slug)
-        skills = home.readSkills()
-    }
-
-    /// Writes a `.elf` file. `preferredModels` is the current setup (no
-    /// keys), stored in the export's elf.json so an imported elf can
-    /// suggest it.
-    func export(
-        to destinationURL: URL,
-        options: ElfExporter.Options,
-        preferredModels: ElfConfiguration.PreferredModels
-    ) throws {
-        var exportedConfiguration = home.readConfiguration()
-        exportedConfiguration.preferredModels = preferredModels
-        try ElfExporter.export(home: home, configuration: exportedConfiguration, options: options, to: destinationURL)
-    }
-
-    func revealHomeInFinder() {
-        NSWorkspace.shared.activateFileViewerSelecting([home.directory])
-    }
-
-    func revealFilesInFinder() {
-        try? FileManager.default.createDirectory(at: home.filesDirectory, withIntermediateDirectories: true)
-        NSWorkspace.shared.open(home.filesDirectory)
     }
 }
 

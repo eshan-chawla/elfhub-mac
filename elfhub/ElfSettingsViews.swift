@@ -12,9 +12,25 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Settings › Elf for the main elf, until the Elves hub gives every elf a
+/// page. Owns the editor so it lives as long as the page.
+struct MainElfSettingsContent: View {
+    @ObservedObject var companionManager: CompanionManager
+    @StateObject private var mainElfEditor: ElfEditor
+
+    init(companionManager: CompanionManager) {
+        self.companionManager = companionManager
+        _mainElfEditor = StateObject(wrappedValue: ElfEditor(editingMainElfOf: companionManager.elfManager))
+    }
+
+    var body: some View {
+        ElfSettingsContent(companionManager: companionManager, elfEditor: mainElfEditor)
+    }
+}
+
 struct ElfSettingsContent: View {
     @ObservedObject var companionManager: CompanionManager
-    @ObservedObject var elfManager: ElfManager
+    @ObservedObject var elfEditor: ElfEditor
 
     var body: some View {
         Text("Your elf's soul, its notes about you and its skills go to your language model with every question, like the rest of the conversation. They're plain files in its home folder — edit them here or in any text editor.")
@@ -22,43 +38,43 @@ struct ElfSettingsContent: View {
             .foregroundColor(DS.Colors.textTertiary)
             .fixedSize(horizontal: false, vertical: true)
 
-        ElfIdentitySection(elfManager: elfManager)
+        ElfIdentitySection(elfEditor: elfEditor)
             .mainAppCard()
-        ElfBehaviourSection(elfManager: elfManager)
+        ElfBehaviourSection(elfEditor: elfEditor)
             .mainAppCard()
         ElfMarkdownFileSection(
             title: "Soul",
             fileName: "soul.md",
             explanation: "Instructions your elf follows in every reply. Only you change this file — the elf can suggest changes for you to approve.",
-            savedText: elfManager.soulText,
+            savedText: elfEditor.soulText,
             characterLimit: ElfHome.soulCharacterLimit,
             editorHeight: 240,
-            onSave: { try elfManager.saveSoul($0) },
+            onSave: { try elfEditor.saveSoul($0) },
             resetButtonTitle: "Reset to the starter soul…",
             resetConfirmationMessage: "This replaces soul.md with the soul a new elf starts with.",
-            onReset: { try elfManager.resetSoulToStarter() }
+            onReset: { try elfEditor.resetSoulToStarter() }
         )
         .mainAppCard()
         ElfMarkdownFileSection(
             title: "What it knows about you",
             fileName: "profile.md",
             explanation: "Your personal preferences, as your elf noted them. Edit or clear anything. Never shared in an export unless you include it.",
-            savedText: elfManager.profileText,
+            savedText: elfEditor.profileText,
             characterLimit: ElfHome.profileCharacterLimit,
             editorHeight: 140,
-            onSave: { try elfManager.saveProfile($0) },
+            onSave: { try elfEditor.saveProfile($0) },
             resetButtonTitle: "Clear…",
             resetConfirmationMessage: "This deletes every note in profile.md.",
-            onReset: { try elfManager.clearProfile() }
+            onReset: { try elfEditor.clearProfile() }
         )
         .mainAppCard()
-        ElfSkillsSection(elfManager: elfManager)
+        ElfSkillsSection(elfEditor: elfEditor)
             .mainAppCard()
-        ElfHomeAndExportSection(companionManager: companionManager, elfManager: elfManager)
+        ElfHomeAndExportSection(companionManager: companionManager, elfEditor: elfEditor)
             .mainAppCard()
-            .onAppear { elfManager.reload() }
+            .onAppear { elfEditor.reload() }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                elfManager.reload()
+                elfEditor.reload()
             }
     }
 }
@@ -66,7 +82,7 @@ struct ElfSettingsContent: View {
 // MARK: - Identity
 
 private struct ElfIdentitySection: View {
-    @ObservedObject var elfManager: ElfManager
+    @ObservedObject var elfEditor: ElfEditor
 
     /// The name as typed; saved through the name rules when the user
     /// presses Return or leaves the field, so a half-typed or clashing name
@@ -78,10 +94,13 @@ private struct ElfIdentitySection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             LayerFieldLabel(text: "Identity")
-            HStack(spacing: 8) {
-                TextField("Emoji", text: identityBinding(\.emoji))
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 56)
+            HStack(alignment: .top, spacing: 8) {
+                ElfCommittingTextField(
+                    placeholder: "Emoji",
+                    savedText: elfEditor.elf.configuration.identity.emoji,
+                    onCommit: { proposedEmoji in try elfEditor.updateEmoji(proposedEmoji) }
+                )
+                .frame(width: 56)
                 TextField("Name", text: $nameDraft)
                     .textFieldStyle(.roundedBorder)
                     .focused($isNameFieldFocused)
@@ -95,38 +114,85 @@ private struct ElfIdentitySection: View {
                     .font(.system(size: 11))
                     .foregroundColor(DS.Colors.warning)
             }
-            TextField("What this elf is for (optional)", text: identityBinding(\.description))
-                .textFieldStyle(.roundedBorder)
+            ElfCommittingTextField(
+                placeholder: "What this elf is for (optional)",
+                savedText: elfEditor.elf.configuration.identity.description,
+                onCommit: { newDescription in try elfEditor.updateDescription(newDescription) }
+            )
         }
-        .onAppear { nameDraft = elfManager.configuration.identity.name }
+        .onAppear { nameDraft = elfEditor.elf.configuration.identity.name }
     }
 
     private func saveNameDraft() {
-        guard nameDraft != elfManager.configuration.identity.name else {
+        guard nameDraft != elfEditor.elf.configuration.identity.name else {
             nameProblemMessage = nil
             return
         }
         do {
-            try elfManager.renameElf(withIdentifier: elfManager.activeElf.id, to: nameDraft)
-            nameDraft = elfManager.configuration.identity.name
+            try elfEditor.rename(to: nameDraft)
+            nameDraft = elfEditor.elf.configuration.identity.name
             nameProblemMessage = nil
         } catch {
             nameProblemMessage = error.localizedDescription
         }
     }
+}
 
-    private func identityBinding(_ identityKeyPath: WritableKeyPath<ElfConfiguration.Identity, String>) -> Binding<String> {
-        Binding(
-            get: { elfManager.configuration.identity[keyPath: identityKeyPath] },
-            set: { newValue in elfManager.updateConfiguration { $0.identity[keyPath: identityKeyPath] = newValue } }
-        )
+/// A text field that saves when the user presses Return or leaves it — not
+/// on every keystroke, so a half-typed value never reaches elf.json — and
+/// shows why a save failed underneath. It follows the saved value when
+/// that changes elsewhere (say, a reload) while the user isn't typing.
+struct ElfCommittingTextField: View {
+    let placeholder: String
+    let savedText: String
+    let onCommit: (String) throws -> Void
+
+    @State private var draftText = ""
+    @State private var errorMessage: String?
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField(placeholder, text: $draftText)
+                .textFieldStyle(.roundedBorder)
+                .focused($isFocused)
+                .onSubmit { commitDraft() }
+                .onChange(of: isFocused) { _, isNowFocused in
+                    if !isNowFocused { commitDraft() }
+                }
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+        }
+        .onAppear { draftText = savedText }
+        .onChange(of: savedText) { _, newSavedText in
+            if !isFocused { draftText = newSavedText }
+        }
+    }
+
+    private func commitDraft() {
+        guard draftText != savedText else {
+            errorMessage = nil
+            return
+        }
+        do {
+            try onCommit(draftText)
+            errorMessage = nil
+            // The saved value may differ from what was typed (trimmed, or
+            // only the first emoji kept).
+            draftText = savedText
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
 // MARK: - Behaviour
 
 private struct ElfBehaviourSection: View {
-    @ObservedObject var elfManager: ElfManager
+    @ObservedObject var elfEditor: ElfEditor
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -137,8 +203,8 @@ private struct ElfBehaviourSection: View {
                     .foregroundColor(DS.Colors.textSecondary)
                 Spacer()
                 Picker("", selection: Binding(
-                    get: { elfManager.configuration.behaviour.replyLength },
-                    set: { newReplyLength in elfManager.updateConfiguration { $0.behaviour.replyLength = newReplyLength } }
+                    get: { elfEditor.elf.configuration.behaviour.replyLength },
+                    set: { newReplyLength in try? elfEditor.updateBehaviour { $0.replyLength = newReplyLength } }
                 )) {
                     ForEach(ElfConfiguration.Behaviour.ReplyLength.allCases, id: \.self) { replyLength in
                         Text(replyLength.displayName).tag(replyLength)
@@ -149,10 +215,16 @@ private struct ElfBehaviourSection: View {
                 .fixedSize()
                 .pointerCursor()
             }
-            TextField("Tone, for example \"calm and encouraging\" (optional)", text: behaviourBinding(\.tone))
-                .textFieldStyle(.roundedBorder)
-            TextField("Always reply in… (optional, for example \"British English\")", text: behaviourBinding(\.language))
-                .textFieldStyle(.roundedBorder)
+            ElfCommittingTextField(
+                placeholder: "Tone, for example \"calm and encouraging\" (optional)",
+                savedText: elfEditor.elf.configuration.behaviour.tone,
+                onCommit: { newTone in try elfEditor.updateBehaviour { $0.tone = newTone } }
+            )
+            ElfCommittingTextField(
+                placeholder: "Always reply in… (optional, for example \"British English\")",
+                savedText: elfEditor.elf.configuration.behaviour.language,
+                onCommit: { newLanguage in try elfEditor.updateBehaviour { $0.language = newLanguage } }
+            )
 
             SettingsToggleRow(
                 iconName: "person.text.rectangle",
@@ -169,17 +241,10 @@ private struct ElfBehaviourSection: View {
         }
     }
 
-    private func behaviourBinding(_ behaviourKeyPath: WritableKeyPath<ElfConfiguration.Behaviour, String>) -> Binding<String> {
-        Binding(
-            get: { elfManager.configuration.behaviour[keyPath: behaviourKeyPath] },
-            set: { newValue in elfManager.updateConfiguration { $0.behaviour[keyPath: behaviourKeyPath] = newValue } }
-        )
-    }
-
     private func behaviourToggleBinding(_ behaviourKeyPath: WritableKeyPath<ElfConfiguration.Behaviour, Bool>) -> Binding<Bool> {
         Binding(
-            get: { elfManager.configuration.behaviour[keyPath: behaviourKeyPath] },
-            set: { newValue in elfManager.updateConfiguration { $0.behaviour[keyPath: behaviourKeyPath] = newValue } }
+            get: { elfEditor.elf.configuration.behaviour[keyPath: behaviourKeyPath] },
+            set: { newValue in try? elfEditor.updateBehaviour { $0[keyPath: behaviourKeyPath] = newValue } }
         )
     }
 }
@@ -284,7 +349,7 @@ private struct ElfMarkdownFileSection: View {
 // MARK: - Skills
 
 private struct ElfSkillsSection: View {
-    @ObservedObject var elfManager: ElfManager
+    @ObservedObject var elfEditor: ElfEditor
     @State private var skillBeingEdited: ElfSkillEditorRequest?
 
     var body: some View {
@@ -305,13 +370,13 @@ private struct ElfSkillsSection: View {
                 .foregroundColor(DS.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if elfManager.skills.isEmpty {
+            if elfEditor.skills.isEmpty {
                 Text("No skills yet.")
                     .font(.system(size: 12))
                     .foregroundColor(DS.Colors.textTertiary)
                     .padding(.vertical, 4)
             }
-            ForEach(elfManager.skills) { skill in
+            ForEach(elfEditor.skills) { skill in
                 HStack(alignment: .top, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(skill.name)
@@ -332,7 +397,7 @@ private struct ElfSkillsSection: View {
             }
         }
         .sheet(item: $skillBeingEdited) { skillEditorRequest in
-            ElfSkillEditorSheet(elfManager: elfManager, skillEditorRequest: skillEditorRequest)
+            ElfSkillEditorSheet(elfEditor: elfEditor, skillEditorRequest: skillEditorRequest)
         }
     }
 }
@@ -344,7 +409,7 @@ private struct ElfSkillEditorRequest: Identifiable {
 }
 
 private struct ElfSkillEditorSheet: View {
-    @ObservedObject var elfManager: ElfManager
+    @ObservedObject var elfEditor: ElfEditor
     let skillEditorRequest: ElfSkillEditorRequest
 
     @Environment(\.dismiss) private var dismiss
@@ -354,8 +419,8 @@ private struct ElfSkillEditorSheet: View {
     @State private var errorMessage: String?
     @State private var isConfirmingDelete = false
 
-    init(elfManager: ElfManager, skillEditorRequest: ElfSkillEditorRequest) {
-        self.elfManager = elfManager
+    init(elfEditor: ElfEditor, skillEditorRequest: ElfSkillEditorRequest) {
+        self.elfEditor = elfEditor
         self.skillEditorRequest = skillEditorRequest
         _name = State(initialValue: skillEditorRequest.skill.name)
         _description = State(initialValue: skillEditorRequest.skill.description)
@@ -408,7 +473,7 @@ private struct ElfSkillEditorSheet: View {
         .background(DS.Colors.background)
         .confirmationDialog("Delete this skill?", isPresented: $isConfirmingDelete) {
             Button("Delete", role: .destructive) {
-                try? elfManager.deleteSkill(skillEditorRequest.skill)
+                try? elfEditor.deleteSkill(skillEditorRequest.skill)
                 dismiss()
             }
         }
@@ -416,7 +481,7 @@ private struct ElfSkillEditorSheet: View {
 
     private func save() {
         do {
-            try elfManager.saveSkill(
+            try elfEditor.saveSkill(
                 ElfSkill(
                     slug: skillEditorRequest.skill.slug,
                     name: name,
@@ -437,28 +502,28 @@ private struct ElfSkillEditorSheet: View {
 
 private struct ElfHomeAndExportSection: View {
     @ObservedObject var companionManager: CompanionManager
-    @ObservedObject var elfManager: ElfManager
+    @ObservedObject var elfEditor: ElfEditor
     @State private var exportMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             LayerFieldLabel(text: "Home folder")
             HStack(spacing: 8) {
-                Text(elfManager.home.directory.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                Text(elfEditor.home.directory.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(DS.Colors.textTertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Button("Show in Finder") { elfManager.revealHomeInFinder() }
+                Button("Show in Finder") { elfEditor.revealHomeInFinder() }
                     .pointerCursor()
             }
             HStack(spacing: 8) {
-                Text("Its own files (files/): \(elfManager.elfFileCount) \(elfManager.elfFileCount == 1 ? "file" : "files")")
+                Text("Its own files (files/): \(elfEditor.elfFileCount) \(elfEditor.elfFileCount == 1 ? "file" : "files")")
                     .font(.system(size: 12))
                     .foregroundColor(DS.Colors.textSecondary)
                 Spacer()
-                Button("Open") { elfManager.revealFilesInFinder() }
+                Button("Open") { elfEditor.revealFilesInFinder() }
                     .pointerCursor()
             }
 
@@ -485,7 +550,7 @@ private struct ElfHomeAndExportSection: View {
         let exportOptionsModel = ElfExportOptionsModel()
         let savePanel = NSSavePanel()
         savePanel.title = "Export elf"
-        savePanel.nameFieldStringValue = ElfExporter.packageBaseName(forElfName: elfManager.configuration.identity.name) + ".elf"
+        savePanel.nameFieldStringValue = ElfExporter.packageBaseName(forElfName: elfEditor.elf.configuration.identity.name) + ".elf"
         savePanel.allowedContentTypes = [UTType(filenameExtension: "elf") ?? .zip]
         savePanel.canCreateDirectories = true
         let accessoryHostingView = NSHostingView(rootView: ElfExportOptionsView(exportOptionsModel: exportOptionsModel))
@@ -494,7 +559,7 @@ private struct ElfHomeAndExportSection: View {
 
         guard savePanel.runModal() == .OK, let destinationURL = savePanel.url else { return }
         do {
-            try elfManager.export(
+            try elfEditor.export(
                 to: destinationURL,
                 options: exportOptionsModel.options,
                 preferredModels: companionManager.preferredModelsForElfExport()
