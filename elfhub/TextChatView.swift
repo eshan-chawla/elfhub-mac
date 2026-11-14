@@ -25,6 +25,8 @@ final class TextChatViewModel: ObservableObject {
     @Published private(set) var activeConversation = ChatConversation()
     @Published private(set) var isResponding = false
     @Published var draft: String = ""
+    /// The elf picked for the next message, if any (else: by name, or main).
+    @Published var composerElfSelection = ChatComposerElfSelection()
     /// Shown above the chat whose turn the ChatGPT plan handed to the
     /// fallback model (or took over again), until the user dismisses it.
     @Published private(set) var languageModelSwitchChatNotice: LanguageModelSwitchChatNotice?
@@ -73,7 +75,12 @@ final class TextChatViewModel: ObservableObject {
               let savedConversation = chatConversationStore.conversation(withIdentifier: conversationIdentifier) else { return }
         activeConversation = savedConversation
         companionManager.companionTurnPipeline.replaceConversationHistory(
-            with: savedConversation.historyTurns(maximumTurnCount: CompanionTurnPipeline.maximumHistoryTurns)
+            with: savedConversation.historyTurns(
+                maximumTurnCount: CompanionTurnPipeline.maximumHistoryTurns,
+                elfNameForIdentifier: { [companionManager] elfIdentifier in
+                    companionManager.elfManager.elf(withIdentifier: elfIdentifier)?.configuration.identity.name
+                }
+            )
         )
     }
 
@@ -94,6 +101,7 @@ final class TextChatViewModel: ObservableObject {
 
         var recordedExchange = beginExchange(userText: trimmed, inputSource: .typed)
         isResponding = true
+        let chosenElfIdentifier = composerElfSelection.takeElfIdentifierForSending()
 
         currentTask = Task { [weak self] in
             guard let self else { return }
@@ -101,6 +109,7 @@ final class TextChatViewModel: ObservableObject {
             do {
                 let turnResult = try await self.companionManager.respondToChatMessage(
                     trimmed,
+                    chosenElfIdentifier: chosenElfIdentifier,
                     onTextChunk: { chunk in
                         rawReplyText += chunk
                         self.showStreamingReply(rawReplyText: rawReplyText, for: recordedExchange)
@@ -202,6 +211,7 @@ final class TextChatViewModel: ObservableObject {
                 assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier
             )
             conversation.recordNotepad(turnResult.shownNotepad, assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier)
+            conversation.recordSpeakingElf(turnResult.elfIdentifier, assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier)
             conversation.recordFileChanges(
                 turnResult.elfFileChanges.map { fileChange in
                     SavedElfFileChange(
@@ -213,6 +223,21 @@ final class TextChatViewModel: ObservableObject {
                 assistantMessageIdentifier: recordedExchange.assistantMessageIdentifier
             )
         }
+    }
+
+    /// "🧝 Juniper" above a reply a side elf gave; nil for the main elf's.
+    func speakerLabel(for message: StoredChatMessage) -> String? {
+        guard let speakingElfIdentifier = message.speakingElfIdentifier else { return nil }
+        guard let speakingElf = companionManager.elfManager.elf(withIdentifier: speakingElfIdentifier) else {
+            return speakingElfIdentifier
+        }
+        let identity = speakingElf.configuration.identity
+        return identity.emoji.isEmpty ? identity.name : "\(identity.emoji) \(identity.name)"
+    }
+
+    /// Every elf, main first, for the composer's picker.
+    var elvesForComposer: [Elf] {
+        companionManager.elfManager.elves
     }
 
     /// Shows a file change under the reply as soon as the elf makes it, so
@@ -474,6 +499,11 @@ struct TextChatView: View {
             if isFromUser { Spacer(minLength: 40) }
 
             VStack(alignment: isFromUser ? .trailing : .leading, spacing: 6) {
+                if !isFromUser, let speakerLabel = viewModel.speakerLabel(for: message) {
+                    Text(speakerLabel)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(DS.Colors.textTertiary)
+                }
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     // Push-to-talk questions are marked so a mixed conversation
                     // reads clearly.
@@ -529,6 +559,8 @@ struct TextChatView: View {
 
     private var composer: some View {
         HStack(spacing: 8) {
+            ChatComposerElfPicker(viewModel: viewModel)
+
             TextField("Message elfhub…", text: $viewModel.draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
@@ -849,5 +881,56 @@ private struct ChatFileChangeRow: View {
         } catch {
             undoErrorMessage = error.localizedDescription
         }
+    }
+}
+
+// MARK: - Choosing the elf in chat
+
+/// The elf picked in the chat's composer for the next message. It wins
+/// over a name in the message, and goes back to "by name" after sending.
+struct ChatComposerElfSelection: Equatable {
+    var chosenElfIdentifier: String?
+
+    mutating func takeElfIdentifierForSending() -> String? {
+        defer { chosenElfIdentifier = nil }
+        return chosenElfIdentifier
+    }
+}
+
+/// The composer's elf picker: who the next message goes to. "By name" lets
+/// a name in the message decide ("Juniper, …"), otherwise the main elf.
+private struct ChatComposerElfPicker: View {
+    @ObservedObject var viewModel: TextChatViewModel
+
+    private var chosenElf: Elf? {
+        viewModel.composerElfSelection.chosenElfIdentifier.flatMap { chosenElfIdentifier in
+            viewModel.elvesForComposer.first { $0.id == chosenElfIdentifier }
+        }
+    }
+
+    var body: some View {
+        Menu {
+            Button("By name (or the main elf)") { viewModel.composerElfSelection.chosenElfIdentifier = nil }
+            Divider()
+            ForEach(viewModel.elvesForComposer) { elf in
+                let identity = elf.configuration.identity
+                Button(identity.emoji.isEmpty ? identity.name : "\(identity.emoji) \(identity.name)") {
+                    viewModel.composerElfSelection.chosenElfIdentifier = elf.id
+                }
+            }
+        } label: {
+            if let chosenElf {
+                Text(chosenElf.configuration.identity.emoji.isEmpty ? chosenElf.configuration.identity.name : chosenElf.configuration.identity.emoji)
+                    .font(.system(size: 12, weight: .medium))
+            } else {
+                Image(systemName: "person.2")
+                    .font(.system(size: 12))
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .pointerCursor()
+        .help(chosenElf.map { "Sending to \($0.configuration.identity.name)" } ?? "Who answers: by name, or the main elf")
     }
 }

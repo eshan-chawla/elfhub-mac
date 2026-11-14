@@ -495,6 +495,16 @@ final class CompanionManager: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "hasCompletedOnboarding") }
     }
 
+    private var elfNamesForDictationCancellable: AnyCancellable?
+
+    /// The speech recognizer listens for every elf's names, so "Juniper, …"
+    /// is heard as Juniper.
+    private func bindElfNamesForDictation() {
+        elfNamesForDictationCancellable = elfManager.$elves.sink { [weak self] rosterElves in
+            self?.buddyDictationManager.updateContextualKeyterms(ElfAddressRouter.dictationKeyterms(for: rosterElves))
+        }
+    }
+
     func start() {
         refreshAllPermissions()
         print("🔑 elfhub start — accessibility: \(hasAccessibilityPermission), screen: \(hasScreenRecordingPermission), mic: \(hasMicrophonePermission), screenContent: \(hasScreenContentPermission), onboarded: \(hasCompletedOnboarding)")
@@ -504,6 +514,7 @@ final class CompanionManager: ObservableObject {
         bindShortcutTransitions()
         wireScreenActionCoordinator()
         bindEscapeStop()
+        bindElfNamesForDictation()
         notepadPanelManager.startListening(to: companionEventBus)
         bindProviderConfigurationStore()
         applyTranscriptionProviderChoice()

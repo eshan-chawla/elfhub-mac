@@ -44,6 +44,14 @@ nonisolated enum ElfAddressRouter {
         "writer", "researcher", "helper", "assistant", "coach", "tutor", "editor", "scribe",
     ]
 
+    /// Every elf's names and aliases, for the speech recognizer to listen
+    /// for, main first.
+    static func dictationKeyterms(for elves: [Elf]) -> [String] {
+        elves.flatMap { [$0.configuration.identity.name] + $0.configuration.identity.aliases }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     /// The elf `transcript` is addressed to, or nil for the main elf.
     static func route(transcript: String, elves: [Elf]) -> ElfAddressRoute? {
         let transcriptWords = words(in: transcript)

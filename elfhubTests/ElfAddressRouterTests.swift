@@ -108,4 +108,8 @@ struct ElfAddressRouterTests {
         #expect(routedElfIdentifier("what's this button?") == nil)
         #expect(routedElfIdentifier("") == nil)
     }
+
+    @Test func dictationHearsEveryElfsNamesAndAliases() {
+        #expect(ElfAddressRouter.dictationKeyterms(for: elves) == ["Pip", "Juniper", "June", "Will", "Will Smith", "José", "Writer"])
+    }
 }

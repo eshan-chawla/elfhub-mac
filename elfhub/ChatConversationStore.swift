@@ -47,6 +47,8 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
     var notepad: SavedNotepad?
     /// On a reply: files the elf changed in its folder, each with Undo.
     var fileChanges: [SavedElfFileChange]
+    /// On a reply: the elf that answered, when it wasn't the main elf.
+    var speakingElfIdentifier: String?
 
     init(
         id: UUID = UUID(),
@@ -59,7 +61,8 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         screenGuidance: SavedScreenGuidance? = nil,
         userInk: SavedUserInk? = nil,
         notepad: SavedNotepad? = nil,
-        fileChanges: [SavedElfFileChange] = []
+        fileChanges: [SavedElfFileChange] = [],
+        speakingElfIdentifier: String? = nil
     ) {
         self.id = id
         self.role = role
@@ -72,10 +75,11 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         self.userInk = userInk
         self.notepad = notepad
         self.fileChanges = fileChanges
+        self.speakingElfIdentifier = speakingElfIdentifier
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, role, text, createdAt, isError, inputSource, screenshotFileName, screenGuidance, userInk, notepad, fileChanges
+        case id, role, text, createdAt, isError, inputSource, screenshotFileName, screenGuidance, userInk, notepad, fileChanges, speakingElfIdentifier
     }
 
     init(from decoder: Decoder) throws {
@@ -92,6 +96,8 @@ struct StoredChatMessage: Codable, Identifiable, Equatable {
         userInk = try container.decodeIfPresent(SavedUserInk.self, forKey: .userInk)
         notepad = try container.decodeIfPresent(SavedNotepad.self, forKey: .notepad)
         fileChanges = try container.decodeIfPresent([SavedElfFileChange].self, forKey: .fileChanges) ?? []
+        // Replies saved before side elves were all the main elf's.
+        speakingElfIdentifier = try container.decodeIfPresent(String.self, forKey: .speakingElfIdentifier)
     }
 }
 
@@ -178,6 +184,13 @@ struct ChatConversation: Codable, Identifiable, Equatable {
         messages[assistantMessageIndex].fileChanges += fileChanges.filter { !alreadyShownChangeIdentifiers.contains($0.changeEntryIdentifier) }
     }
 
+    /// Marks a reply as answered by a side elf (nil or main: the main elf).
+    mutating func recordSpeakingElf(_ speakingElfIdentifier: String?, assistantMessageIdentifier: UUID) {
+        guard let assistantMessageIndex = messages.firstIndex(where: { $0.id == assistantMessageIdentifier }) else { return }
+        messages[assistantMessageIndex].speakingElfIdentifier =
+            speakingElfIdentifier == ElfManager.mainElfIdentifier ? nil : speakingElfIdentifier
+    }
+
     mutating func markFileChangeUndone(changeEntryIdentifier: UUID) {
         for messageIndex in messages.indices {
             for fileChangeIndex in messages[messageIndex].fileChanges.indices
@@ -232,7 +245,12 @@ struct ChatConversation: Codable, Identifiable, Equatable {
     /// Completed user → assistant exchanges, oldest first, for giving the
     /// model the conversation so far when the user reopens a chat. Error
     /// bubbles and unanswered messages are left out.
-    func historyTurns(maximumTurnCount: Int) -> [LanguageModelHistoryTurn] {
+    /// `elfNameForIdentifier` names the side elves that answered, so each
+    /// elf can tell its own replies from the others'.
+    func historyTurns(
+        maximumTurnCount: Int,
+        elfNameForIdentifier: (String) -> String? = { _ in nil }
+    ) -> [LanguageModelHistoryTurn] {
         var historyTurns: [LanguageModelHistoryTurn] = []
         var pendingUserText: String?
         for message in messages {
@@ -243,7 +261,11 @@ struct ChatConversation: Codable, Identifiable, Equatable {
                 if let userText = pendingUserText, !message.isError, !message.text.isEmpty {
                     // Same as a live turn: the model remembers its notepad.
                     let assistantText = message.notepad.map { message.text + "\n\n" + $0.textForConversationHistory } ?? message.text
-                    historyTurns.append(LanguageModelHistoryTurn(userText: userText, assistantText: assistantText))
+                    historyTurns.append(LanguageModelHistoryTurn(
+                        userText: userText,
+                        assistantText: assistantText,
+                        speakingElfName: message.speakingElfIdentifier.flatMap(elfNameForIdentifier)
+                    ))
                 }
                 pendingUserText = nil
             }

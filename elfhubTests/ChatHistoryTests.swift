@@ -82,6 +82,31 @@ struct ChatHistoryTests {
         #expect(conversation.messages.last?.fileChanges.count == 1)
     }
 
+    @Test func oldChatsDecodeAsMain() throws {
+        let savedMessageJSON = #"{"id":"6B1C5A3E-0000-4000-8000-000000000002","role":"assistant","text":"hi","createdAt":0}"#
+        let decodedMessage = try JSONDecoder().decode(StoredChatMessage.self, from: Data(savedMessageJSON.utf8))
+        #expect(decodedMessage.speakingElfIdentifier == nil)
+    }
+
+    @Test func aRepliesSpeakerRoundTripsAndReachesTheModelsHistory() throws {
+        var conversation = ChatConversation()
+        let exchangeIdentifiers = conversation.appendExchange(userText: "Juniper, what's this?", inputSource: .typed)
+        conversation.setText("a button.", ofMessageWithIdentifier: exchangeIdentifiers.assistantMessageIdentifier)
+        conversation.recordSpeakingElf("juniper", assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier)
+        let decodedConversation = try JSONDecoder().decode(ChatConversation.self, from: JSONEncoder().encode(conversation))
+        #expect(decodedConversation.messages.last?.speakingElfIdentifier == "juniper")
+        let historyTurns = decodedConversation.historyTurns(maximumTurnCount: 10, elfNameForIdentifier: { $0 == "juniper" ? "Juniper" : nil })
+        #expect(historyTurns.first?.speakingElfName == "Juniper")
+    }
+
+    @Test func thePickerOverridesTheRouterAndResetsAfterSending() {
+        var chatComposerElfSelection = ChatComposerElfSelection()
+        #expect(chatComposerElfSelection.takeElfIdentifierForSending() == nil)
+        chatComposerElfSelection.chosenElfIdentifier = "juniper"
+        #expect(chatComposerElfSelection.takeElfIdentifierForSending() == "juniper")
+        #expect(chatComposerElfSelection.chosenElfIdentifier == nil)
+    }
+
     @Test func appendingAnExchangeAddsTheQuestionAndAnEmptyReply() {
         var conversation = ChatConversation()
         let exchangeIdentifiers = conversation.appendExchange(userText: "open my downloads", inputSource: .spoken)
