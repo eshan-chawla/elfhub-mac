@@ -6,6 +6,9 @@
 //
 //    ~/Library/Application Support/elfhub/Elves/<elf id>/
 //      elf.json  soul.md  profile.md  skills/<slug>/SKILL.md  files/  access.json
+//      .elfhub/      the app's own data about this elf (per-Mac settings,
+//                    and later its change history and tasks) — never the
+//                    elf's to touch and never exported
 //
 //  Every path the elf names is checked with `resolvedURLInsideHome(_:)`, so
 //  nothing it asks for can reach outside its home (no "..", no absolute
@@ -19,6 +22,7 @@ nonisolated enum ElfHomeError: LocalizedError, Equatable {
     case pathOutsideHome(String)
     case textTooLong(fileDescription: String, characterLimit: Int)
     case notTextFile(String)
+    case reservedPath(String)
 
     var errorDescription: String? {
         switch self {
@@ -28,8 +32,16 @@ nonisolated enum ElfHomeError: LocalizedError, Equatable {
             return "\(fileDescription) is longer than \(characterLimit) characters. Shorten it and try again."
         case let .notTextFile(path):
             return "\(path) isn't a text file."
+        case let .reservedPath(path):
+            return "\(path) belongs to elfhub, not the elf."
         }
     }
+}
+
+/// Whether an elf tool wants to read a path or change it.
+nonisolated enum ElfToolPathAccess: Sendable {
+    case read
+    case write
 }
 
 nonisolated struct ElfHome: Equatable, Sendable {
@@ -49,6 +61,19 @@ nonisolated struct ElfHome: Equatable, Sendable {
     var filesDirectory: URL { directory.appendingPathComponent("files", isDirectory: true) }
     /// This Mac's grants to the user's folders. Never exported.
     var accessURL: URL { directory.appendingPathComponent("access.json") }
+    /// The app's own data about this elf. Elf tools can't reach it and
+    /// exports leave it out.
+    var appDataDirectory: URL { directory.appendingPathComponent(Self.appDataFolderName, isDirectory: true) }
+    /// Which of this Mac's models and voices the elf uses.
+    var localSettingsURL: URL { appDataDirectory.appendingPathComponent("local-settings.json") }
+
+    static let appDataFolderName = ".elfhub"
+    /// Top-level items in the home that elf tools may never read or write.
+    static let pathsReservedForTheApp: Set<String> = [appDataFolderName, "elf.json", "access.json"]
+    /// Top-level items elf tools may read but never write: the soul is the
+    /// user's, so text the elf read somewhere can't rewrite its standing
+    /// instructions.
+    static let pathsElfToolsMayOnlyRead: Set<String> = ["soul.md"]
 
     /// ~/Library/Application Support/elfhub/Elves
     static var defaultElvesDirectory: URL {
@@ -65,6 +90,7 @@ nonisolated struct ElfHome: Equatable, Sendable {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: skillsDirectory, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: filesDirectory, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: appDataDirectory, withIntermediateDirectories: true)
         if !fileManager.fileExists(atPath: configurationURL.path) {
             try writeConfiguration(configuration)
         }
@@ -91,6 +117,25 @@ nonisolated struct ElfHome: Equatable, Sendable {
         let jsonEncoder = JSONEncoder()
         jsonEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try jsonEncoder.encode(configuration).write(to: configurationURL, options: .atomic)
+    }
+
+    // MARK: .elfhub/local-settings.json
+
+    /// Empty settings (use the main elf's model and voice) when the file is
+    /// missing or unreadable.
+    func readLocalSettings() -> ElfLocalSettings {
+        guard let localSettingsData = try? Data(contentsOf: localSettingsURL),
+              let localSettings = try? JSONDecoder().decode(ElfLocalSettings.self, from: localSettingsData) else {
+            return ElfLocalSettings()
+        }
+        return localSettings
+    }
+
+    func writeLocalSettings(_ localSettings: ElfLocalSettings) throws {
+        try FileManager.default.createDirectory(at: appDataDirectory, withIntermediateDirectories: true)
+        let jsonEncoder = JSONEncoder()
+        jsonEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try jsonEncoder.encode(localSettings).write(to: localSettingsURL, options: .atomic)
     }
 
     // MARK: soul.md and profile.md
@@ -205,6 +250,26 @@ nonisolated struct ElfHome: Equatable, Sendable {
             throw ElfHomeError.pathOutsideHome(relativePath)
         }
         return candidateURL
+    }
+
+    /// A path an elf's own tools name (reading or writing its notes, for
+    /// example). Same checks as `resolvedURLInsideHome`, and the app's own
+    /// files are off limits: .elfhub/, elf.json and access.json can't be
+    /// read or written, and soul.md can only be read. Compared ignoring
+    /// case, as the Mac's disk does.
+    func resolvedURLForElfTool(_ relativePath: String, access: ElfToolPathAccess) throws -> URL {
+        let resolvedURL = try resolvedURLInsideHome(relativePath)
+        let firstPathComponent = relativePath
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: "/")
+            .first
+            .map { $0.lowercased() } ?? ""
+        let isReservedForTheApp = Self.pathsReservedForTheApp.contains(firstPathComponent)
+        let isReadOnlyForElfTools = access == .write && Self.pathsElfToolsMayOnlyRead.contains(firstPathComponent)
+        guard !isReservedForTheApp, !isReadOnlyForElfTools else {
+            throw ElfHomeError.reservedPath(relativePath)
+        }
+        return resolvedURL
     }
 
     /// The real path, following symlinks in every part that exists — a file

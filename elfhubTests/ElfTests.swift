@@ -156,6 +156,33 @@ struct ElfTests {
         #expect(try home.resolvedURLInsideHome("skills/new-skill.md").lastPathComponent == "new-skill.md")
     }
 
+    @Test func elfToolsCantReachAppOwnedFilesOrWriteTheSoul() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        for reservedPath in [".elfhub/changes.jsonl", ".ELFHUB/tasks/1.json", "elf.json", "access.json"] {
+            #expect(throws: ElfHomeError.reservedPath(reservedPath)) { try home.resolvedURLForElfTool(reservedPath, access: .read) }
+        }
+        #expect(throws: ElfHomeError.reservedPath("soul.md")) { try home.resolvedURLForElfTool("soul.md", access: .write) }
+        #expect(try home.resolvedURLForElfTool("soul.md", access: .read).lastPathComponent == "soul.md")
+        #expect(try home.resolvedURLForElfTool("files/notes/elfhub-ideas.md", access: .write).lastPathComponent == "elfhub-ideas.md")
+        #expect(throws: ElfHomeError.self) { try home.resolvedURLForElfTool("../main/soul.md", access: .read) }
+    }
+
+    @Test func localSettingsRoundTripAndStartEmpty() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        #expect(FileManager.default.fileExists(atPath: home.appDataDirectory.path))
+        #expect(home.readLocalSettings() == ElfLocalSettings())
+        let localSettings = ElfLocalSettings(
+            languageModelConfigurationIdentifier: UUID(),
+            voice: ElfVoiceSelection(speechOutputModeRawValue: "system", voiceIdentifier: "com.apple.voice.premium.en-GB.Malcolm")
+        )
+        try home.writeLocalSettings(localSettings)
+        #expect(home.readLocalSettings() == localSettings)
+        try Data("{not json".utf8).write(to: home.localSettingsURL)
+        #expect(home.readLocalSettings() == ElfLocalSettings())
+    }
+
     @Test func overlongTextIsRefused() throws {
         let (home, cleanUp) = try makeTemporaryHome()
         defer { cleanUp() }

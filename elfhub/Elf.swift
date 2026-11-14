@@ -11,6 +11,8 @@
 //    skills/<slug>/SKILL.md  working knowledge, one folder per skill (ElfSkill)
 //    profile.md    the user's personal preferences, noted by the elf
 //    files/        its own working files
+//    .elfhub/local-settings.json  which of this Mac's models and voices it
+//                  uses (ElfLocalSettings; per Mac, never exported)
 //
 //  elfhub runs one elf for now; homes are laid out per elf so switching the
 //  main elf, and several elves side by side, can come later.
@@ -153,5 +155,38 @@ nonisolated struct ElfConfiguration: Codable, Equatable, Sendable {
         identity = try container.decodeIfPresent(Identity.self, forKey: .identity) ?? Identity()
         behaviour = try container.decodeIfPresent(Behaviour.self, forKey: .behaviour) ?? Behaviour()
         preferredModels = try container.decodeIfPresent(PreferredModels.self, forKey: .preferredModels)
+    }
+}
+
+// MARK: - Per-Mac settings
+
+/// A voice from one of the voice services already set up on this Mac.
+nonisolated struct ElfVoiceSelection: Codable, Equatable, Sendable {
+    /// `SpeechOutputMode` raw value.
+    var speechOutputModeRawValue: String
+    /// The voice within that service, e.g. an Apple voice identifier; nil
+    /// for the service's current voice.
+    var voiceIdentifier: String?
+}
+
+/// Which of this Mac's language models and voices the elf uses, kept in its
+/// home's .elfhub/local-settings.json. These point at things set up on this
+/// Mac (a model configuration's id), so they never travel in an export —
+/// elf.json's `preferredModels` is the portable suggestion. nil means "same
+/// as the main elf".
+nonisolated struct ElfLocalSettings: Codable, Equatable, Sendable {
+    var languageModelConfigurationIdentifier: UUID?
+    var voice: ElfVoiceSelection?
+
+    init(languageModelConfigurationIdentifier: UUID? = nil, voice: ElfVoiceSelection? = nil) {
+        self.languageModelConfigurationIdentifier = languageModelConfigurationIdentifier
+        self.voice = voice
+    }
+
+    /// A field that can't be read becomes nil instead of failing the file.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        languageModelConfigurationIdentifier = try? container.decodeIfPresent(UUID.self, forKey: .languageModelConfigurationIdentifier)
+        voice = try? container.decodeIfPresent(ElfVoiceSelection.self, forKey: .voice)
     }
 }
