@@ -93,10 +93,12 @@ nonisolated enum ElfNameRules {
 
     /// The new elf's folder id: its name as a slug ("Juniper" → "juniper";
     /// "elf" when nothing usable is left), counting up past ids in use
-    /// ("juniper-2"), and never "main", which belongs to the main elf.
+    /// ("juniper-2"), and never "main", which belongs to the main elf. Ids
+    /// in use are compared ignoring case, as the Mac's disk compares folder
+    /// names.
     static func uniqueIdentifier(forName name: String, existingIdentifiers: Set<String>) -> String {
         let baseIdentifier = ElfSkill.slug(forName: name, fallback: "elf")
-        let identifiersInUse = existingIdentifiers.union([ElfManager.mainElfIdentifier])
+        let identifiersInUse = Set(existingIdentifiers.map { $0.lowercased() }).union([ElfManager.mainElfIdentifier])
         if !identifiersInUse.contains(baseIdentifier) {
             return baseIdentifier
         }

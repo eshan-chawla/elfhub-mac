@@ -68,6 +68,13 @@ struct ElfSettingsContent: View {
 private struct ElfIdentitySection: View {
     @ObservedObject var elfManager: ElfManager
 
+    /// The name as typed; saved through the name rules when the user
+    /// presses Return or leaves the field, so a half-typed or clashing name
+    /// never reaches elf.json.
+    @State private var nameDraft = ""
+    @State private var nameProblemMessage: String?
+    @FocusState private var isNameFieldFocused: Bool
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             LayerFieldLabel(text: "Identity")
@@ -75,11 +82,36 @@ private struct ElfIdentitySection: View {
                 TextField("Emoji", text: identityBinding(\.emoji))
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 56)
-                TextField("Name", text: identityBinding(\.name))
+                TextField("Name", text: $nameDraft)
                     .textFieldStyle(.roundedBorder)
+                    .focused($isNameFieldFocused)
+                    .onSubmit { saveNameDraft() }
+                    .onChange(of: isNameFieldFocused) { _, isFocused in
+                        if !isFocused { saveNameDraft() }
+                    }
+            }
+            if let nameProblemMessage {
+                Text(nameProblemMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
             }
             TextField("What this elf is for (optional)", text: identityBinding(\.description))
                 .textFieldStyle(.roundedBorder)
+        }
+        .onAppear { nameDraft = elfManager.configuration.identity.name }
+    }
+
+    private func saveNameDraft() {
+        guard nameDraft != elfManager.configuration.identity.name else {
+            nameProblemMessage = nil
+            return
+        }
+        do {
+            try elfManager.renameElf(withIdentifier: elfManager.activeElf.id, to: nameDraft)
+            nameDraft = elfManager.configuration.identity.name
+            nameProblemMessage = nil
+        } catch {
+            nameProblemMessage = error.localizedDescription
         }
     }
 
@@ -392,7 +424,7 @@ private struct ElfSkillEditorSheet: View {
                     body: bodyText,
                     unrecognizedFrontmatterLines: skillEditorRequest.skill.unrecognizedFrontmatterLines
                 ),
-                replacingSlug: skillEditorRequest.isNew ? nil : skillEditorRequest.skill.slug
+                isNewSkill: skillEditorRequest.isNew
             )
             dismiss()
         } catch {

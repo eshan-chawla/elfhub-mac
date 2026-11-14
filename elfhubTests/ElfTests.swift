@@ -138,6 +138,73 @@ struct ElfTests {
         #expect(elfManager.elves.map(\.id) == ["main"])
     }
 
+    @Test func theMainElfComesBackIfItsFolderIsRemoved() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        try FileManager.default.removeItem(at: elfManager.mainElf.home.directory)
+        elfManager.reloadRoster()
+        #expect(elfManager.elves.map(\.id) == ["main"])
+        #expect(FileManager.default.fileExists(atPath: elfManager.mainElf.home.configurationURL.path))
+    }
+
+    @Test func newElfIdentifiersAvoidEverythingAlreadyOnDiskIgnoringCase() throws {
+        #expect(ElfNameRules.uniqueIdentifier(forName: "Juniper", existingIdentifiers: ["Juniper"]) == "juniper-2")
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        try FileManager.default.createDirectory(at: elvesDirectory.appendingPathComponent("Juniper"), withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: elvesDirectory.appendingPathComponent("pip"))
+        elfManager.reloadRoster()
+        #expect(try elfManager.createElf(identity: .init(name: "Juniper")).id == "juniper-2")
+        #expect(try elfManager.createElf(identity: .init(name: "Pip")).id == "pip-2")
+    }
+
+    @Test func settingsEditsCantChangeANameWithoutTheNameRules() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        elfManager.updateConfiguration { configuration in
+            configuration.identity.name = ""
+            configuration.identity.emoji = "🧝"
+        }
+        #expect(elfManager.configuration.identity.name == "elf")
+        #expect(elfManager.mainElf.home.readConfiguration().identity.name == "elf")
+        #expect(elfManager.configuration.identity.emoji == "🧝")
+    }
+
+    @Test func editingADroppedInSkillKeepsItsFolderAndExtraFiles() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        let skillFolderURL = elfManager.home.skillsDirectory.appendingPathComponent("Deploy", isDirectory: true)
+        try FileManager.default.createDirectory(at: skillFolderURL.appendingPathComponent("references"), withIntermediateDirectories: true)
+        try Data("---\nname: Deploy\ndescription: old\n---\n\nsteps".utf8).write(to: skillFolderURL.appendingPathComponent("SKILL.md"))
+        try Data("notes".utf8).write(to: skillFolderURL.appendingPathComponent("references/notes.md"))
+        elfManager.reload()
+
+        var editedSkill = try #require(elfManager.skills.first)
+        editedSkill.description = "fixed typo"
+        editedSkill.name = "Deploying"
+        try elfManager.saveSkill(editedSkill, isNewSkill: false)
+
+        #expect(elfManager.skills.map(\.slug) == ["Deploy"])
+        #expect(elfManager.skills.first?.name == "Deploying")
+        #expect(elfManager.skills.first?.description == "fixed typo")
+        #expect(FileManager.default.fileExists(atPath: skillFolderURL.appendingPathComponent("references/notes.md").path))
+    }
+
+    @Test func aNewSkillCantReplaceAnExistingOne() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        try elfManager.saveSkill(ElfSkill(name: "Deploy", description: "", body: "first"), isNewSkill: true)
+        #expect(throws: ElfManagerError.skillAlreadyExists(name: "DEPLOY")) {
+            try elfManager.saveSkill(ElfSkill(name: "DEPLOY", description: "", body: "second"), isNewSkill: true)
+        }
+        #expect(elfManager.skills.map(\.body) == ["first"])
+    }
+
     // MARK: - Skills
 
     @Test func skillRoundTripsThroughSkillMarkdownAndKeepsUnknownKeys() {
@@ -261,6 +328,23 @@ struct ElfTests {
         #expect(try home.resolvedURLForElfTool("soul.md", access: .read).lastPathComponent == "soul.md")
         #expect(try home.resolvedURLForElfTool("files/notes/elfhub-ideas.md", access: .write).lastPathComponent == "elfhub-ideas.md")
         #expect(throws: ElfHomeError.self) { try home.resolvedURLForElfTool("../main/soul.md", access: .read) }
+    }
+
+    @Test func dotPrefixedAndSymlinkedPathsCantReachAppOwnedFiles() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        #expect(throws: ElfHomeError.reservedPath("./.elfhub/local-settings.json")) {
+            try home.resolvedURLForElfTool("./.elfhub/local-settings.json", access: .read)
+        }
+        #expect(throws: ElfHomeError.reservedPath("./elf.json")) { try home.resolvedURLForElfTool("./elf.json", access: .read) }
+        #expect(throws: ElfHomeError.reservedPath("./soul.md")) { try home.resolvedURLForElfTool("./soul.md", access: .write) }
+        try FileManager.default.createSymbolicLink(
+            at: home.filesDirectory.appendingPathComponent("app-data"),
+            withDestinationURL: home.appDataDirectory
+        )
+        #expect(throws: ElfHomeError.reservedPath("files/app-data/local-settings.json")) {
+            try home.resolvedURLForElfTool("files/app-data/local-settings.json", access: .read)
+        }
     }
 
     @Test func localSettingsRoundTripAndStartEmpty() throws {

@@ -20,6 +20,8 @@ nonisolated enum ElfManagerError: LocalizedError, Equatable {
     case invalidName([ElfNameProblem])
     case cannotDeleteMainElf
     case unknownElf(String)
+    /// A new skill would land in a folder another skill already uses.
+    case skillAlreadyExists(name: String)
 
     var errorDescription: String? {
         switch self {
@@ -29,6 +31,8 @@ nonisolated enum ElfManagerError: LocalizedError, Equatable {
             return "The main elf can't be deleted. You can rename it instead."
         case let .unknownElf(elfIdentifier):
             return "There's no elf called \(elfIdentifier)."
+        case let .skillAlreadyExists(skillName):
+            return "There's already a skill called \(skillName). Pick another name."
         }
     }
 }
@@ -102,6 +106,9 @@ final class ElfManager: ObservableObject {
     /// so a folder added in Finder shows up and stray files don't.
     func reloadRoster() {
         let fileManager = FileManager.default
+        // The main elf always exists, even if its folder was removed while
+        // the app was running.
+        try? ElfHome(directory: elvesDirectory.appendingPathComponent(Self.mainElfIdentifier, isDirectory: true)).createIfNeeded()
         let elvesFolderItemNames = (try? fileManager.contentsOfDirectory(atPath: elvesDirectory.path)) ?? []
         var rosterElves: [Elf] = []
         for elfIdentifier in elvesFolderItemNames where !elfIdentifier.hasPrefix(".") {
@@ -123,7 +130,11 @@ final class ElfManager: ObservableObject {
     @discardableResult
     func createElf(identity: ElfConfiguration.Identity) throws -> Elf {
         try validateName(identity.name, otherElfNames: elves.map(\.configuration.identity.name))
-        let elfIdentifier = ElfNameRules.uniqueIdentifier(forName: identity.name, existingIdentifiers: Set(elves.map(\.id)))
+        // Every item already in Elves/ counts as taken — folders added in
+        // Finder and stray files too — so a new elf never moves into them.
+        let elvesFolderItemNames = (try? FileManager.default.contentsOfDirectory(atPath: elvesDirectory.path)) ?? []
+        let identifiersInUse = Set(elves.map(\.id)).union(elvesFolderItemNames)
+        let elfIdentifier = ElfNameRules.uniqueIdentifier(forName: identity.name, existingIdentifiers: identifiersInUse)
         let elfHome = ElfHome(directory: elvesDirectory.appendingPathComponent(elfIdentifier, isDirectory: true))
         var trimmedIdentity = identity
         trimmedIdentity.name = identity.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -182,9 +193,12 @@ final class ElfManager: ObservableObject {
 
     // MARK: Edits from Settings
 
+    /// Changes the main elf's settings. Its name is left as it was: names
+    /// change only through `renameElf`, which checks the name rules.
     func updateConfiguration(_ updateConfiguration: (inout ElfConfiguration) -> Void) {
         var updatedConfiguration = activeElf.configuration
         updateConfiguration(&updatedConfiguration)
+        updatedConfiguration.identity.name = activeElf.configuration.identity.name
         guard updatedConfiguration != activeElf.configuration else { return }
         try? home.writeConfiguration(updatedConfiguration)
         activeElf.configuration = updatedConfiguration
@@ -209,19 +223,27 @@ final class ElfManager: ObservableObject {
         try saveProfile(ElfHome.starterProfile)
     }
 
-    /// Saves a skill in a folder named after it; when its name changed, the
-    /// old folder is removed. Frontmatter the skill came with is kept.
-    func saveSkill(_ skill: ElfSkill, replacingSlug previousSlug: String? = nil) throws {
-        let skillInFolderNamedAfterIt = ElfSkill(
-            slug: ElfSkill.slug(forName: skill.name),
-            name: skill.name,
-            description: skill.description,
-            body: skill.body,
-            unrecognizedFrontmatterLines: skill.unrecognizedFrontmatterLines
-        )
-        try home.writeSkill(skillInFolderNamedAfterIt)
-        if let previousSlug, previousSlug != skillInFolderNamedAfterIt.slug {
-            try? home.deleteSkill(slug: previousSlug)
+    /// Saves a skill. An edited skill stays in its own folder whatever its
+    /// name becomes — the folder is the skill's identity (as agentskills.io
+    /// treats it) and may hold references/, scripts/ or assets/ too. A new
+    /// skill gets a folder named after it, and never takes over a folder
+    /// another skill uses (compared ignoring case, as the Mac's disk does).
+    func saveSkill(_ skill: ElfSkill, isNewSkill: Bool) throws {
+        if isNewSkill {
+            let newSkillSlug = ElfSkill.slug(forName: skill.name)
+            let skillFolderNamesInUse = (try? FileManager.default.contentsOfDirectory(atPath: home.skillsDirectory.path)) ?? []
+            if skillFolderNamesInUse.contains(where: { $0.lowercased() == newSkillSlug.lowercased() }) {
+                throw ElfManagerError.skillAlreadyExists(name: skill.name.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+            try home.writeSkill(ElfSkill(
+                slug: newSkillSlug,
+                name: skill.name,
+                description: skill.description,
+                body: skill.body,
+                unrecognizedFrontmatterLines: skill.unrecognizedFrontmatterLines
+            ))
+        } else {
+            try home.writeSkill(skill)
         }
         skills = home.readSkills()
     }

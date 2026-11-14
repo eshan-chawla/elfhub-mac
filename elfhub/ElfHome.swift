@@ -259,8 +259,13 @@ nonisolated struct ElfHome: Equatable, Sendable {
     /// case, as the Mac's disk does.
     func resolvedURLForElfTool(_ relativePath: String, access: ElfToolPathAccess) throws -> URL {
         let resolvedURL = try resolvedURLInsideHome(relativePath)
-        let firstPathComponent = relativePath
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Judged by where the path really lands, not how it's written: "./"
+        // and symlinks inside the home (files/x → ../.elfhub) can't sneak
+        // past the reserved names.
+        let resolvedHomePath = Self.resolvedPath(of: directory)
+        let resolvedTargetPath = Self.resolvedPath(of: resolvedURL)
+        let pathRelativeToHome = String(resolvedTargetPath.dropFirst(resolvedHomePath.count + 1))
+        let firstPathComponent = pathRelativeToHome
             .split(separator: "/")
             .first
             .map { $0.lowercased() } ?? ""
