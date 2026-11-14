@@ -328,6 +328,41 @@ struct ElfTests {
         #expect(adaEditor.elf.configuration.identity.aliases == ["Addy"])
     }
 
+    // MARK: - Starter elves
+
+    @Test func starterElvesComeWithTheirIdentityAndSoul() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        let researcher = try elfManager.createElf(fromStarterTemplate: .researcher)
+        #expect(researcher.id == "researcher")
+        #expect(researcher.configuration.identity.name == "Researcher")
+        #expect(researcher.configuration.identity.emoji == "🔎")
+        #expect(researcher.home.readSoul().contains("## as a researcher"))
+        #expect(researcher.home.readSoul().hasPrefix(ElfHome.starterSoul))
+        let writer = try elfManager.createElf(fromStarterTemplate: .writer)
+        #expect(writer.configuration.identity.emoji == "✍️")
+        #expect(writer.home.readSoul().contains("## as a writer"))
+    }
+
+    @Test func starterElvesThatAreAlreadyThereAreNotOfferedAgain() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        #expect(elfManager.availableStarterTemplates == [.researcher, .writer])
+        try elfManager.renameElf(withIdentifier: "main", to: "Researcher")
+        #expect(elfManager.availableStarterTemplates == [.writer])
+        #expect(throws: ElfManagerError.invalidName([.duplicateOf(elfName: "Researcher")])) {
+            try elfManager.createElf(fromStarterTemplate: .researcher)
+        }
+    }
+
+    @Test func starterNamesPassTheNameRules() {
+        for starterTemplate in ElfStarterTemplate.allCases {
+            #expect(ElfNameRules.problems(forName: starterTemplate.identity.name, otherElfNames: []).isEmpty)
+        }
+    }
+
     @Test func emojiFieldKeepsOnlyTheFirstEmoji() {
         #expect(ElfNameRules.normalizedEmoji("🧝‍♀️ Juniper") == "🧝‍♀️")
         #expect(ElfNameRules.normalizedEmoji("👍🏽👍") == "👍🏽")

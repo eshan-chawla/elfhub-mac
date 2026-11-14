@@ -127,6 +127,25 @@ final class ElfManager: ObservableObject {
         return elf(withIdentifier: elfIdentifier) ?? Elf(id: elfIdentifier, home: elfHome, configuration: elfHome.readConfiguration())
     }
 
+    /// Adds a ready-made elf (Researcher, Writer) with its soul. Fails like
+    /// `createElf` when an elf already goes by that name.
+    @discardableResult
+    func createElf(fromStarterTemplate starterTemplate: ElfStarterTemplate) throws -> Elf {
+        let createdElf = try createElf(identity: starterTemplate.identity)
+        try createdElf.home.writeSoul(starterTemplate.soulText)
+        return createdElf
+    }
+
+    /// The starter elves that can still be added: those whose name no elf
+    /// uses yet (as a name or an alias).
+    var availableStarterTemplates: [ElfStarterTemplate] {
+        let otherElfNames = ElfNameRules.namesInUse(byElves: elves, excludingElfWithIdentifier: nil)
+        return ElfStarterTemplate.allCases.filter { starterTemplate in
+            ElfNameRules.problems(forName: starterTemplate.identity.name, otherElfNames: otherElfNames)
+                .allSatisfy(\.isWarning)
+        }
+    }
+
     /// Renames an elf (the main elf too). Its id and folder stay the same.
     func renameElf(withIdentifier elfIdentifier: String, to newName: String) throws {
         guard let renamedElf = elf(withIdentifier: elfIdentifier) else { throw ElfManagerError.unknownElf(elfIdentifier) }
