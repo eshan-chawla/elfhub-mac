@@ -78,6 +78,66 @@ struct ElfTests {
         #expect(olderIdentity.aliases.isEmpty)
     }
 
+    // MARK: - Roster
+
+    private func makeTemporaryElvesDirectory() -> (elvesDirectory: URL, cleanUp: () -> Void) {
+        let elvesDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("elves-\(UUID().uuidString)", isDirectory: true)
+        return (elvesDirectory, { try? FileManager.default.removeItem(at: elvesDirectory) })
+    }
+
+    @Test func theRosterAlwaysHasMainFirst() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        #expect(elfManager.elves.map(\.id) == ["main"])
+        _ = try elfManager.createElf(identity: .init(name: "Zed"))
+        _ = try elfManager.createElf(identity: .init(name: "Ada"))
+        #expect(elfManager.elves.map(\.id) == ["main", "ada", "zed"])
+        #expect(elfManager.elf(withIdentifier: "ada")?.configuration.identity.name == "Ada")
+    }
+
+    @Test func strayItemsAreNotElvesAndFinderAdditionsAppearOnReload() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        try Data().write(to: elvesDirectory.appendingPathComponent(".DS_Store"))
+        try Data("x".utf8).write(to: elvesDirectory.appendingPathComponent("notes.txt"))
+        try FileManager.default.createDirectory(at: elvesDirectory.appendingPathComponent(".hidden"), withIntermediateDirectories: true)
+        try ElfHome(directory: elvesDirectory.appendingPathComponent("pip")).createIfNeeded(configuration: ElfConfiguration(identity: .init(name: "Pip")))
+        elfManager.reloadRoster()
+        #expect(elfManager.elves.map(\.id) == ["main", "pip"])
+    }
+
+    @Test func creatingAndRenamingCheckTheNameRules() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory)
+        _ = try elfManager.createElf(identity: .init(name: "Juniper"))
+        #expect(throws: ElfManagerError.invalidName([.duplicateOf(elfName: "Juniper")])) {
+            try elfManager.createElf(identity: .init(name: "juniper"))
+        }
+        #expect(throws: ElfManagerError.invalidName([.reservedWord("everyone")])) {
+            try elfManager.renameElf(withIdentifier: "juniper", to: "Everyone")
+        }
+        _ = try elfManager.createElf(identity: .init(name: "Will Smith"))
+        _ = try elfManager.createElf(identity: .init(name: "Will"))   // a prefix is only a warning
+        try elfManager.renameElf(withIdentifier: "main", to: "Pip")
+        #expect(elfManager.mainElf.configuration.identity.name == "Pip")
+        #expect(elfManager.mainElf.id == "main")
+    }
+
+    @Test func mainCannotBeDeletedAndOtherElvesCanBe() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory, deletedFolderDisposal: .removePermanently)
+        #expect(throws: ElfManagerError.cannotDeleteMainElf) { try elfManager.deleteElf(withIdentifier: "main") }
+        #expect(throws: ElfManagerError.unknownElf("nobody")) { try elfManager.deleteElf(withIdentifier: "nobody") }
+        let createdElf = try elfManager.createElf(identity: .init(name: "Ada"))
+        try elfManager.deleteElf(withIdentifier: createdElf.id)
+        #expect(!FileManager.default.fileExists(atPath: createdElf.home.directory.path))
+        #expect(elfManager.elves.map(\.id) == ["main"])
+    }
+
     // MARK: - Skills
 
     @Test func skillRoundTripsThroughSkillMarkdownAndKeepsUnknownKeys() {

@@ -2,47 +2,87 @@
 //  ElfManager.swift
 //  elfhub
 //
-//  Owns the active elf: makes its home on first launch, keeps its soul,
-//  profile, skills and config in step with the files (which the user may
-//  also edit in any text editor), takes edits from Settings › Elf, exports
-//  it, and builds the part of every prompt that makes the model this elf.
+//  Owns the roster of elves: every folder in Elves/ is an elf, and the
+//  main elf ("main") always exists and comes first. Creates, renames and
+//  deletes elves (names checked with ElfNameRules). Until the Elves hub
+//  exists, its single-elf API (soul, profile, skills, config, export) edits
+//  the main elf, keeping it in step with the files (which the user may also
+//  edit in any text editor), and builds the part of every prompt that makes
+//  the model that elf.
 //
 
 import AppKit
 import Combine
 import Foundation
 
+nonisolated enum ElfManagerError: LocalizedError, Equatable {
+    /// Only the problems that block the name; warnings are allowed.
+    case invalidName([ElfNameProblem])
+    case cannotDeleteMainElf
+    case unknownElf(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .invalidName(nameProblems):
+            return nameProblems.first?.message ?? "That name can't be used."
+        case .cannotDeleteMainElf:
+            return "The main elf can't be deleted. You can rename it instead."
+        case let .unknownElf(elfIdentifier):
+            return "There's no elf called \(elfIdentifier)."
+        }
+    }
+}
+
+/// What happens to a deleted elf's folder. The app moves it to the Trash so
+/// it can be recovered; tests remove it so they never fill the user's Trash.
+nonisolated enum ElfDeletedFolderDisposal: Sendable {
+    case moveToTrash
+    case removePermanently
+}
+
 @MainActor
 final class ElfManager: ObservableObject {
+    /// Every elf on this Mac: main first, then the rest by name.
+    @Published private(set) var elves: [Elf] = []
+
+    /// The main elf; the single-elf members below act on it.
     @Published private(set) var activeElf: Elf
     @Published private(set) var soulText: String
     @Published private(set) var profileText: String
     @Published private(set) var skills: [ElfSkill]
     @Published private(set) var elfFileCount: Int
 
-    private let userDefaults: UserDefaults
-    private static let activeElfIdentifierKey = "activeElfIdentifier"
     nonisolated static let mainElfIdentifier = "main"
 
-    init(elvesDirectory: URL = ElfHome.defaultElvesDirectory, userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
-        // The first elf is "main" — a fixed id, so every build of the app
-        // (release, Xcode, tests) finds the same elf, like it finds the same
-        // chats. Elves added later get their own ids.
-        let activeElfIdentifier = userDefaults.string(forKey: Self.activeElfIdentifierKey) ?? Self.mainElfIdentifier
-        userDefaults.set(activeElfIdentifier, forKey: Self.activeElfIdentifierKey)
+    private let elvesDirectory: URL
+    private let deletedFolderDisposal: ElfDeletedFolderDisposal
 
-        let elfHome = ElfHome(directory: elvesDirectory.appendingPathComponent(activeElfIdentifier, isDirectory: true))
-        try? elfHome.createIfNeeded()
-        activeElf = Elf(id: activeElfIdentifier, home: elfHome, configuration: elfHome.readConfiguration())
-        soulText = elfHome.readSoul()
-        profileText = elfHome.readProfile()
-        skills = elfHome.readSkills()
-        elfFileCount = elfHome.fileCount()
+    init(elvesDirectory: URL = ElfHome.defaultElvesDirectory, deletedFolderDisposal: ElfDeletedFolderDisposal = .moveToTrash) {
+        self.elvesDirectory = elvesDirectory
+        self.deletedFolderDisposal = deletedFolderDisposal
+        // The main elf is "main" — a fixed id, so every build of the app
+        // (release, Xcode, tests) finds the same elf, like it finds the same
+        // chats. Elves added later get ids from their names.
+        let mainElfHome = ElfHome(directory: elvesDirectory.appendingPathComponent(Self.mainElfIdentifier, isDirectory: true))
+        try? mainElfHome.createIfNeeded()
+        activeElf = Elf(id: Self.mainElfIdentifier, home: mainElfHome, configuration: mainElfHome.readConfiguration())
+        soulText = mainElfHome.readSoul()
+        profileText = mainElfHome.readProfile()
+        skills = mainElfHome.readSkills()
+        elfFileCount = mainElfHome.fileCount()
+        reloadRoster()
     }
 
     var home: ElfHome { activeElf.home }
     var configuration: ElfConfiguration { activeElf.configuration }
+
+    var mainElf: Elf {
+        elves.first { $0.id == Self.mainElfIdentifier } ?? activeElf
+    }
+
+    func elf(withIdentifier elfIdentifier: String) -> Elf? {
+        elves.first { $0.id == elfIdentifier }
+    }
 
     /// Re-reads everything from disk, e.g. after the user edited soul.md in
     /// another app.
@@ -53,6 +93,77 @@ final class ElfManager: ObservableObject {
         profileText = home.readProfile()
         skills = home.readSkills()
         elfFileCount = home.fileCount()
+        reloadRoster()
+    }
+
+    // MARK: Roster
+
+    /// Re-reads which elves exist. Only visible folders in Elves/ are elves,
+    /// so a folder added in Finder shows up and stray files don't.
+    func reloadRoster() {
+        let fileManager = FileManager.default
+        let elvesFolderItemNames = (try? fileManager.contentsOfDirectory(atPath: elvesDirectory.path)) ?? []
+        var rosterElves: [Elf] = []
+        for elfIdentifier in elvesFolderItemNames where !elfIdentifier.hasPrefix(".") {
+            let elfDirectory = elvesDirectory.appendingPathComponent(elfIdentifier, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: elfDirectory.path, isDirectory: &isDirectory), isDirectory.boolValue else { continue }
+            let elfHome = ElfHome(directory: elfDirectory)
+            rosterElves.append(Elf(id: elfIdentifier, home: elfHome, configuration: elfHome.readConfiguration()))
+        }
+        elves = rosterElves.sorted { firstElf, secondElf in
+            if firstElf.id == Self.mainElfIdentifier { return secondElf.id != Self.mainElfIdentifier }
+            if secondElf.id == Self.mainElfIdentifier { return false }
+            return firstElf.configuration.identity.name.localizedCaseInsensitiveCompare(secondElf.configuration.identity.name) == .orderedAscending
+        }
+    }
+
+    /// Makes a new elf with its own home folder, named and identified from
+    /// `identity`. Name warnings (a prefix of another elf's name) are allowed.
+    @discardableResult
+    func createElf(identity: ElfConfiguration.Identity) throws -> Elf {
+        try validateName(identity.name, otherElfNames: elves.map(\.configuration.identity.name))
+        let elfIdentifier = ElfNameRules.uniqueIdentifier(forName: identity.name, existingIdentifiers: Set(elves.map(\.id)))
+        let elfHome = ElfHome(directory: elvesDirectory.appendingPathComponent(elfIdentifier, isDirectory: true))
+        var trimmedIdentity = identity
+        trimmedIdentity.name = identity.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        try elfHome.createIfNeeded(configuration: ElfConfiguration(identity: trimmedIdentity))
+        reloadRoster()
+        return elf(withIdentifier: elfIdentifier) ?? Elf(id: elfIdentifier, home: elfHome, configuration: elfHome.readConfiguration())
+    }
+
+    /// Renames an elf (the main elf too). Its id and folder stay the same.
+    func renameElf(withIdentifier elfIdentifier: String, to newName: String) throws {
+        guard let renamedElf = elf(withIdentifier: elfIdentifier) else { throw ElfManagerError.unknownElf(elfIdentifier) }
+        let otherElfNames = elves.filter { $0.id != elfIdentifier }.map(\.configuration.identity.name)
+        try validateName(newName, otherElfNames: otherElfNames)
+        var renamedConfiguration = renamedElf.home.readConfiguration()
+        renamedConfiguration.identity.name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        try renamedElf.home.writeConfiguration(renamedConfiguration)
+        if elfIdentifier == activeElf.id {
+            activeElf.configuration = renamedConfiguration
+        }
+        reloadRoster()
+    }
+
+    /// Deletes an elf and its folder (to the Trash in the app). The main elf
+    /// can't be deleted.
+    func deleteElf(withIdentifier elfIdentifier: String) throws {
+        guard elfIdentifier != Self.mainElfIdentifier else { throw ElfManagerError.cannotDeleteMainElf }
+        guard let deletedElf = elf(withIdentifier: elfIdentifier) else { throw ElfManagerError.unknownElf(elfIdentifier) }
+        switch deletedFolderDisposal {
+        case .moveToTrash:
+            try FileManager.default.trashItem(at: deletedElf.home.directory, resultingItemURL: nil)
+        case .removePermanently:
+            try FileManager.default.removeItem(at: deletedElf.home.directory)
+        }
+        reloadRoster()
+    }
+
+    private func validateName(_ proposedName: String, otherElfNames: [String]) throws {
+        let blockingNameProblems = ElfNameRules.problems(forName: proposedName, otherElfNames: otherElfNames)
+            .filter { !$0.isWarning }
+        guard blockingNameProblems.isEmpty else { throw ElfManagerError.invalidName(blockingNameProblems) }
     }
 
     // MARK: Prompt
@@ -77,6 +188,7 @@ final class ElfManager: ObservableObject {
         guard updatedConfiguration != activeElf.configuration else { return }
         try? home.writeConfiguration(updatedConfiguration)
         activeElf.configuration = updatedConfiguration
+        reloadRoster()
     }
 
     func saveSoul(_ newSoulText: String) throws {
