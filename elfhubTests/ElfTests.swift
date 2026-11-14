@@ -45,24 +45,69 @@ struct ElfTests {
 
     // MARK: - Skills
 
-    @Test func skillsRoundTripThroughMarkdown() {
-        let skill = ElfSkill(title: "Deploying the web app", description: "Steps for shipping to production.", body: "1. run the tests\n2. tag a release")
-        #expect(skill.fileName == "deploying-the-web-app")
-        let parsedSkill = ElfSkill.parse(fileName: skill.fileName, markdown: skill.markdown)
-        #expect(parsedSkill == skill)
+    @Test func skillRoundTripsThroughSkillMarkdownAndKeepsUnknownKeys() {
+        let skill = ElfSkill(
+            slug: "deploying-the-web-app",
+            name: "Deploying the web app",
+            description: "Steps: shipping to production",
+            body: "1. run the tests\n2. tag a release",
+            unrecognizedFrontmatterLines: ["license: MIT", "metadata:", "  hermes:", "    tags: [deploy, web]"]
+        )
+        #expect(skill.skillMarkdown.hasPrefix("---\nname: Deploying the web app\ndescription: \"Steps: shipping to production\"\n"))
+        #expect(ElfSkill.parse(slug: skill.slug, skillMarkdown: skill.skillMarkdown) == skill)
     }
 
-    @Test func skillFilesWithoutHeadersStillParse() {
-        let parsedSkill = ElfSkill.parse(fileName: "release-notes", markdown: "just some notes\nmore")
-        #expect(parsedSkill.title == "release notes")
-        #expect(parsedSkill.description == "")
-        #expect(parsedSkill.body == "just some notes\nmore")
+    @Test func hermesSkillWithBlockScalarDescriptionParses() {
+        let hermesSkill = "---\nname: arxiv-search\ndescription: >\n  Search arXiv papers\n  and summarise them.\nversion: 1.2.0\n---\n\n# arXiv\n\nUse the API."
+        let parsedSkill = ElfSkill.parse(slug: "arxiv-search", skillMarkdown: hermesSkill)
+        #expect(parsedSkill.name == "arxiv-search")
+        #expect(parsedSkill.description == "Search arXiv papers and summarise them.")
+        #expect(parsedSkill.body == "# arXiv\n\nUse the API.")
+        #expect(parsedSkill.unrecognizedFrontmatterLines == ["version: 1.2.0"])
     }
 
-    @Test func skillFileNamesAreSafe() {
-        #expect(ElfSkill.fileName(forTitle: "Deploying the Web App!") == "deploying-the-web-app")
-        #expect(ElfSkill.fileName(forTitle: "../../etc/passwd") == "etc-passwd")
-        #expect(ElfSkill.fileName(forTitle: "   ") == "skill")
+    @Test func windowsLineEndingsParseLikeUnixOnes() {
+        let unixSkill = "---\nname: Notes\ndescription: how I take notes\n---\n\nbody line"
+        let windowsSkill = unixSkill.replacingOccurrences(of: "\n", with: "\r\n")
+        #expect(ElfSkill.parse(slug: "notes", skillMarkdown: windowsSkill) == ElfSkill.parse(slug: "notes", skillMarkdown: unixSkill))
+    }
+
+    @Test func skillWithoutFrontmatterOrWithUnclosedFrontmatterIsNamedAfterItsFolder() {
+        let plainSkill = ElfSkill.parse(slug: "release-notes", skillMarkdown: "just some notes\nmore")
+        #expect(plainSkill.name == "release notes")
+        #expect(plainSkill.description == "")
+        #expect(plainSkill.body == "just some notes\nmore")
+        let unclosedSkill = ElfSkill.parse(slug: "half-done", skillMarkdown: "---\nname: Broken\nbody without end")
+        #expect(unclosedSkill.name == "half done")
+        #expect(unclosedSkill.body == "---\nname: Broken\nbody without end")
+    }
+
+    @Test func skillSlugsAreSafe() {
+        #expect(ElfSkill.slug(forName: "Deploying the Web App!") == "deploying-the-web-app")
+        #expect(ElfSkill.slug(forName: "../../etc/passwd") == "etc-passwd")
+        #expect(ElfSkill.slug(forName: "   ") == "skill")
+    }
+
+    @Test func skillFoldersWithoutSkillFilesAreSkipped() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        try FileManager.default.createDirectory(at: home.skillsDirectory.appendingPathComponent("empty-folder"), withIntermediateDirectories: true)
+        try home.writeSkill(ElfSkill(name: "Real skill", description: "", body: "steps"))
+        #expect(home.readSkills().map(\.slug) == ["real-skill"])
+    }
+
+    @Test func legacySingleFileSkillsMoveIntoSkillFolders() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        let legacySkillURL = home.skillsDirectory.appendingPathComponent("deploying.md")
+        try Data("# Deploying\n> how we ship\n\nrun the script".utf8).write(to: legacySkillURL)
+        home.migrateLegacySkillFilesIfNeeded()
+        #expect(!FileManager.default.fileExists(atPath: legacySkillURL.path))
+        let migratedSkill = try #require(home.readSkills().first)
+        #expect(migratedSkill.slug == "deploying")
+        #expect(migratedSkill.name == "Deploying")
+        #expect(migratedSkill.description == "how we ship")
+        #expect(migratedSkill.body == "run the script")
     }
 
     // MARK: - Home
@@ -86,11 +131,11 @@ struct ElfTests {
     @Test func skillsAreSavedListedAndDeleted() throws {
         let (home, cleanUp) = try makeTemporaryHome()
         defer { cleanUp() }
-        try home.writeSkill(ElfSkill(title: "Zed editor", description: "", body: "uses vim mode"))
-        try home.writeSkill(ElfSkill(title: "Alpha tool", description: "the build tool", body: "run alpha build"))
-        #expect(home.readSkills().map(\.title) == ["Alpha tool", "Zed editor"])
-        try home.deleteSkill(fileName: "zed-editor")
-        #expect(home.readSkills().map(\.title) == ["Alpha tool"])
+        try home.writeSkill(ElfSkill(name: "Zed editor", description: "", body: "uses vim mode"))
+        try home.writeSkill(ElfSkill(name: "Alpha tool", description: "the build tool", body: "run alpha build"))
+        #expect(home.readSkills().map(\.name) == ["Alpha tool", "Zed editor"])
+        try home.deleteSkill(slug: "zed-editor")
+        #expect(home.readSkills().map(\.name) == ["Alpha tool"])
     }
 
     @Test func pathsCantLeaveTheHome() throws {
@@ -143,7 +188,7 @@ struct ElfTests {
         elfPromptContext.soulText = "# soul\n\nalways answer like a pirate."
         elfPromptContext.profileText = "# profile\n\n- prefers metric units"
         elfPromptContext.behaviour = .init(replyLength: .short, tone: "calm", language: "French")
-        elfPromptContext.skills = [ElfSkill(title: "Deploying", description: "how we ship", body: "run make deploy")]
+        elfPromptContext.skills = [ElfSkill(name: "Deploying", description: "how we ship", body: "run make deploy")]
         let systemPrompt = CompanionPromptBuilder.systemPrompt(
             coordinateConvention: .imagePixels,
             guidanceEncoding: .textTags,
@@ -168,8 +213,8 @@ struct ElfTests {
         var elfPromptContext = ElfPromptContext.starter
         let longBody = String(repeating: "x", count: ElfPromptContext.inlineSkillsCharacterBudget - 100)
         elfPromptContext.skills = [
-            ElfSkill(title: "Big one", description: "", body: longBody),
-            ElfSkill(title: "Second", description: "another", body: String(repeating: "y", count: 500)),
+            ElfSkill(name: "Big one", description: "", body: longBody),
+            ElfSkill(name: "Second", description: "another", body: String(repeating: "y", count: 500)),
         ]
         let promptText = elfPromptContext.promptSections.joined(separator: "\n\n")
         #expect(promptText.contains("- Second: another"))
@@ -183,7 +228,7 @@ struct ElfTests {
     @Test func exportsCarryOnlyWhatWasChosen() throws {
         let (home, cleanUp) = try makeTemporaryHome()
         defer { cleanUp() }
-        try home.writeSkill(ElfSkill(title: "Deploying", description: "", body: "steps"))
+        try home.writeSkill(ElfSkill(name: "Deploying", description: "", body: "steps"))
         try home.writeProfile("# profile\n\n- likes tea")
         try Data("notes".utf8).write(to: home.filesDirectory.appendingPathComponent("notes.md"))
         try Data(#"{"allowedFolders":["/Users/me/Work"]}"#.utf8).write(to: home.accessURL)

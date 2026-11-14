@@ -8,7 +8,7 @@
 //    elf.json      its configuration — identity, behaviour, preferred models
 //    soul.md       instructions it follows forever (the user writes it; the
 //                  elf can only suggest changes)
-//    skills/*.md   working knowledge it learned, one skill per file
+//    skills/<slug>/SKILL.md  working knowledge, one folder per skill (ElfSkill)
 //    profile.md    the user's personal preferences, noted by the elf
 //    files/        its own working files
 //
@@ -153,90 +153,5 @@ nonisolated struct ElfConfiguration: Codable, Equatable, Sendable {
         identity = try container.decodeIfPresent(Identity.self, forKey: .identity) ?? Identity()
         behaviour = try container.decodeIfPresent(Behaviour.self, forKey: .behaviour) ?? Behaviour()
         preferredModels = try container.decodeIfPresent(PreferredModels.self, forKey: .preferredModels)
-    }
-}
-
-// MARK: - Skills
-
-/// One piece of working knowledge the elf learned ("how the team deploys"),
-/// stored as skills/<file name>.md:
-///
-///     # Deploying the web app
-///     > Steps and gotchas for shipping the web app to production.
-///
-///     the body, in markdown…
-nonisolated struct ElfSkill: Identifiable, Equatable, Sendable {
-    let fileName: String
-    var title: String
-    var description: String
-    var body: String
-
-    var id: String { fileName }
-
-    init(fileName: String, title: String, description: String, body: String) {
-        self.fileName = fileName
-        self.title = title
-        self.description = description
-        self.body = body
-    }
-
-    /// A new skill, filed under a name made from its title.
-    init(title: String, description: String, body: String) {
-        self.init(fileName: Self.fileName(forTitle: title), title: title, description: description, body: body)
-    }
-
-    /// The file's contents.
-    var markdown: String {
-        var markdownLines = ["# \(title.trimmingCharacters(in: .whitespacesAndNewlines))"]
-        let trimmedDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedDescription.isEmpty {
-            markdownLines.append("> \(trimmedDescription.replacingOccurrences(of: "\n", with: " "))")
-        }
-        markdownLines.append("")
-        markdownLines.append(body.trimmingCharacters(in: .whitespacesAndNewlines))
-        return markdownLines.joined(separator: "\n") + "\n"
-    }
-
-    /// Reads a skill file. A file without a "# " title is named after its file.
-    static func parse(fileName: String, markdown: String) -> ElfSkill {
-        var remainingLines = markdown.components(separatedBy: .newlines)[...]
-        func dropBlankLines() {
-            while let firstLine = remainingLines.first, firstLine.trimmingCharacters(in: .whitespaces).isEmpty {
-                remainingLines = remainingLines.dropFirst()
-            }
-        }
-
-        dropBlankLines()
-        var title = fileName.replacingOccurrences(of: "-", with: " ")
-        if let firstLine = remainingLines.first, firstLine.hasPrefix("# ") {
-            title = String(firstLine.dropFirst(2)).trimmingCharacters(in: .whitespaces)
-            remainingLines = remainingLines.dropFirst()
-        }
-        dropBlankLines()
-        var description = ""
-        if let firstLine = remainingLines.first, firstLine.hasPrefix(">") {
-            description = String(firstLine.dropFirst()).trimmingCharacters(in: .whitespaces)
-            remainingLines = remainingLines.dropFirst()
-        }
-        let body = remainingLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        return ElfSkill(fileName: fileName, title: title, description: description, body: body)
-    }
-
-    /// "Deploying the Web App!" → "deploying-the-web-app".
-    static func fileName(forTitle title: String) -> String {
-        let lowercasedTitle = title.lowercased()
-        var fileNameCharacters: [Character] = []
-        var previousCharacterWasSeparator = true
-        for character in lowercasedTitle {
-            if character.isLetter || character.isNumber {
-                fileNameCharacters.append(character)
-                previousCharacterWasSeparator = false
-            } else if !previousCharacterWasSeparator {
-                fileNameCharacters.append("-")
-                previousCharacterWasSeparator = true
-            }
-        }
-        let fileName = String(fileNameCharacters.prefix(64)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-        return fileName.isEmpty ? "skill" : fileName
     }
 }

@@ -264,7 +264,7 @@ private struct ElfSkillsSection: View {
                     .foregroundColor(DS.Colors.textTertiary)
                 Spacer()
                 Button("New skill") {
-                    skillBeingEdited = ElfSkillEditorRequest(skill: ElfSkill(title: "", description: "", body: ""), isNew: true)
+                    skillBeingEdited = ElfSkillEditorRequest(skill: ElfSkill(name: "", description: "", body: ""), isNew: true)
                 }
                 .pointerCursor()
             }
@@ -282,7 +282,7 @@ private struct ElfSkillsSection: View {
             ForEach(elfManager.skills) { skill in
                 HStack(alignment: .top, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(skill.title)
+                        Text(skill.name)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(DS.Colors.textPrimary)
                         if !skill.description.isEmpty {
@@ -316,7 +316,7 @@ private struct ElfSkillEditorSheet: View {
     let skillEditorRequest: ElfSkillEditorRequest
 
     @Environment(\.dismiss) private var dismiss
-    @State private var title: String
+    @State private var name: String
     @State private var description: String
     @State private var bodyText: String
     @State private var errorMessage: String?
@@ -325,13 +325,13 @@ private struct ElfSkillEditorSheet: View {
     init(elfManager: ElfManager, skillEditorRequest: ElfSkillEditorRequest) {
         self.elfManager = elfManager
         self.skillEditorRequest = skillEditorRequest
-        _title = State(initialValue: skillEditorRequest.skill.title)
+        _name = State(initialValue: skillEditorRequest.skill.name)
         _description = State(initialValue: skillEditorRequest.skill.description)
         _bodyText = State(initialValue: skillEditorRequest.skill.body)
     }
 
     private var canSave: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -339,7 +339,7 @@ private struct ElfSkillEditorSheet: View {
             Text(skillEditorRequest.isNew ? "New skill" : "Edit skill")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(DS.Colors.textPrimary)
-            TextField("Title, for example \"Deploying the web app\"", text: $title)
+            TextField("Name, for example \"Deploying the web app\"", text: $name)
                 .textFieldStyle(.roundedBorder)
             TextField("One line on what it covers", text: $description)
                 .textFieldStyle(.roundedBorder)
@@ -385,8 +385,14 @@ private struct ElfSkillEditorSheet: View {
     private func save() {
         do {
             try elfManager.saveSkill(
-                ElfSkill(title: title, description: description, body: bodyText),
-                replacingFileName: skillEditorRequest.isNew ? nil : skillEditorRequest.skill.fileName
+                ElfSkill(
+                    slug: skillEditorRequest.skill.slug,
+                    name: name,
+                    description: description,
+                    body: bodyText,
+                    unrecognizedFrontmatterLines: skillEditorRequest.skill.unrecognizedFrontmatterLines
+                ),
+                replacingSlug: skillEditorRequest.isNew ? nil : skillEditorRequest.skill.slug
             )
             dismiss()
         } catch {

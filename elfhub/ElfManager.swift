@@ -97,18 +97,25 @@ final class ElfManager: ObservableObject {
         try saveProfile(ElfHome.starterProfile)
     }
 
-    /// Saves a skill; when its title changed, the old file is replaced.
-    func saveSkill(_ skill: ElfSkill, replacingFileName previousFileName: String? = nil) throws {
-        let renamedSkill = ElfSkill(title: skill.title, description: skill.description, body: skill.body)
-        try home.writeSkill(renamedSkill)
-        if let previousFileName, previousFileName != renamedSkill.fileName {
-            try? home.deleteSkill(fileName: previousFileName)
+    /// Saves a skill in a folder named after it; when its name changed, the
+    /// old folder is removed. Frontmatter the skill came with is kept.
+    func saveSkill(_ skill: ElfSkill, replacingSlug previousSlug: String? = nil) throws {
+        let skillInFolderNamedAfterIt = ElfSkill(
+            slug: ElfSkill.slug(forName: skill.name),
+            name: skill.name,
+            description: skill.description,
+            body: skill.body,
+            unrecognizedFrontmatterLines: skill.unrecognizedFrontmatterLines
+        )
+        try home.writeSkill(skillInFolderNamedAfterIt)
+        if let previousSlug, previousSlug != skillInFolderNamedAfterIt.slug {
+            try? home.deleteSkill(slug: previousSlug)
         }
         skills = home.readSkills()
     }
 
     func deleteSkill(_ skill: ElfSkill) throws {
-        try home.deleteSkill(fileName: skill.fileName)
+        try home.deleteSkill(slug: skill.slug)
         skills = home.readSkills()
     }
 
@@ -225,14 +232,14 @@ nonisolated struct ElfPromptContext: Equatable, Sendable {
         var sectionLines = ["skills you've learned (your skills folder):"]
         for skill in skills {
             let trimmedDescription = skill.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            sectionLines.append(trimmedDescription.isEmpty ? "- \(skill.title)" : "- \(skill.title): \(trimmedDescription)")
+            sectionLines.append(trimmedDescription.isEmpty ? "- \(skill.name)" : "- \(skill.name): \(trimmedDescription)")
         }
 
         var remainingCharacterBudget = Self.inlineSkillsCharacterBudget
         var inlineSkillTexts: [String] = []
         var skillsLeftOut = false
         for skill in skills where !skill.body.isEmpty {
-            let inlineSkillText = "## \(skill.title)\n\(skill.body)"
+            let inlineSkillText = "## \(skill.name)\n\(skill.body)"
             if inlineSkillText.count <= remainingCharacterBudget {
                 inlineSkillTexts.append(inlineSkillText)
                 remainingCharacterBudget -= inlineSkillText.count

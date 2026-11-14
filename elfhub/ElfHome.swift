@@ -5,7 +5,7 @@
 //  An elf's home folder, and the only code that reads or writes it:
 //
 //    ~/Library/Application Support/elfhub/Elves/<elf id>/
-//      elf.json  soul.md  profile.md  skills/  files/  access.json
+//      elf.json  soul.md  profile.md  skills/<slug>/SKILL.md  files/  access.json
 //
 //  Every path the elf names is checked with `resolvedURLInsideHome(_:)`, so
 //  nothing it asks for can reach outside its home (no "..", no absolute
@@ -39,6 +39,8 @@ nonisolated struct ElfHome: Equatable, Sendable {
     static let profileCharacterLimit = 8_000
     static let skillCharacterLimit = 16_000
     static let fileByteLimit = 256_000
+    /// The file inside each skill folder, as agentskills.io names it.
+    static let skillFileName = "SKILL.md"
 
     var configurationURL: URL { directory.appendingPathComponent("elf.json") }
     var soulURL: URL { directory.appendingPathComponent("soul.md") }
@@ -72,6 +74,7 @@ nonisolated struct ElfHome: Equatable, Sendable {
         if !fileManager.fileExists(atPath: profileURL.path) {
             try writeProfile(Self.starterProfile)
         }
+        migrateLegacySkillFilesIfNeeded()
     }
 
     // MARK: elf.json
@@ -110,28 +113,58 @@ nonisolated struct ElfHome: Equatable, Sendable {
 
     // MARK: Skills
 
-    /// Every skill, sorted by title.
+    /// Every skill, sorted by name. A skill is a folder in skills/ holding a
+    /// SKILL.md; folders without one (or hidden ones) are skipped.
     func readSkills() -> [ElfSkill] {
-        let skillFileNames = (try? FileManager.default.contentsOfDirectory(atPath: skillsDirectory.path)) ?? []
-        return skillFileNames
-            .filter { $0.hasSuffix(".md") }
-            .compactMap { skillFileName -> ElfSkill? in
-                let skillURL = skillsDirectory.appendingPathComponent(skillFileName)
-                guard let skillMarkdown = try? String(contentsOf: skillURL, encoding: .utf8) else { return nil }
-                return ElfSkill.parse(fileName: String(skillFileName.dropLast(".md".count)), markdown: skillMarkdown)
+        let skillFolderNames = (try? FileManager.default.contentsOfDirectory(atPath: skillsDirectory.path)) ?? []
+        return skillFolderNames
+            .filter { !$0.hasPrefix(".") }
+            .compactMap { skillFolderName -> ElfSkill? in
+                let skillFileURL = skillsDirectory
+                    .appendingPathComponent(skillFolderName, isDirectory: true)
+                    .appendingPathComponent(Self.skillFileName)
+                guard let skillMarkdown = try? String(contentsOf: skillFileURL, encoding: .utf8) else { return nil }
+                return ElfSkill.parse(slug: skillFolderName, skillMarkdown: skillMarkdown)
             }
-            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func writeSkill(_ skill: ElfSkill) throws {
-        try FileManager.default.createDirectory(at: skillsDirectory, withIntermediateDirectories: true)
-        let skillURL = try resolvedURLInsideHome("skills/\(skill.fileName).md")
-        try writeText(skill.markdown, to: skillURL, characterLimit: Self.skillCharacterLimit, fileDescription: "The skill \"\(skill.title)\"")
+        let skillFileURL = try resolvedURLInsideHome("skills/\(skill.slug)/\(Self.skillFileName)")
+        try FileManager.default.createDirectory(at: skillFileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try writeText(skill.skillMarkdown, to: skillFileURL, characterLimit: Self.skillCharacterLimit, fileDescription: "The skill \"\(skill.name)\"")
     }
 
-    func deleteSkill(fileName: String) throws {
-        let skillURL = try resolvedURLInsideHome("skills/\(fileName).md")
-        try FileManager.default.removeItem(at: skillURL)
+    /// Removes the skill's whole folder, with anything else it carried.
+    func deleteSkill(slug: String) throws {
+        let skillFolderURL = try resolvedURLInsideHome("skills/\(slug)")
+        try FileManager.default.removeItem(at: skillFolderURL)
+    }
+
+    /// Moves skills saved as single skills/<name>.md files (before skills
+    /// were SKILL.md folders) into skills/<slug>/SKILL.md. A file whose
+    /// folder already exists is left where it is rather than overwrite.
+    func migrateLegacySkillFilesIfNeeded() {
+        let fileManager = FileManager.default
+        let skillsFolderItemNames = (try? fileManager.contentsOfDirectory(atPath: skillsDirectory.path)) ?? []
+        for legacySkillFileName in skillsFolderItemNames where legacySkillFileName.hasSuffix(".md") && !legacySkillFileName.hasPrefix(".") {
+            let legacySkillFileURL = skillsDirectory.appendingPathComponent(legacySkillFileName)
+            var isDirectory: ObjCBool = false
+            guard fileManager.fileExists(atPath: legacySkillFileURL.path, isDirectory: &isDirectory), !isDirectory.boolValue,
+                  let legacyMarkdown = try? String(contentsOf: legacySkillFileURL, encoding: .utf8) else { continue }
+            let migratedSkill = ElfLegacySkillMigration.skill(
+                fromLegacyFileName: String(legacySkillFileName.dropLast(".md".count)),
+                markdown: legacyMarkdown
+            )
+            let migratedSkillFolderURL = skillsDirectory.appendingPathComponent(migratedSkill.slug, isDirectory: true)
+            guard !fileManager.fileExists(atPath: migratedSkillFolderURL.path) else { continue }
+            do {
+                try writeSkill(migratedSkill)
+                try fileManager.removeItem(at: legacySkillFileURL)
+            } catch {
+                print("⚠️ elfhub: Couldn't move the skill \(legacySkillFileName) into a SKILL.md folder: \(error)")
+            }
+        }
     }
 
     // MARK: files/

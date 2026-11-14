@@ -26,7 +26,7 @@ The assistant is your **elf**, and it lives in a folder on your Mac (Settings �
 
 - **`soul.md`** — instructions it follows in every reply. You write it; the elf can only suggest changes.
 - **`profile.md`** — your personal preferences, as the elf noted them. Edit or clear it anytime.
-- **`skills/`** — working knowledge it learned, one markdown file per skill.
+- **`skills/`** — working knowledge, one folder per skill with a `SKILL.md` (the same layout Hermes and other agentskills.io agents use, so their skills can be dropped in).
 - **`elf.json`** — its name, how it answers (reply length, tone, language) and the setup it was used with (never your keys).
 - **`files/`** — its own working files.
 
