@@ -231,4 +231,80 @@ struct ElfAgentLoopTests {
         #expect(historyText == "saved it.\n\n(you saved files/trip.md)")
         #expect(CompanionTurnPipeline.assistantTextForHistory(spokenText: "hi.", notepad: nil, fileChanges: []) == "hi.")
     }
+
+    @Test func anOutputTokenBudgetStopsTheRun() async throws {
+        let (toolContext, home) = try makeToolContext()
+        defer { try? FileManager.default.removeItem(at: home.directory) }
+        var expensiveResponse = ScriptedLanguageModelProvider.toolCalls([ScriptedLanguageModelProvider.toolCall("list_files", [:])])
+        expensiveResponse.usage = LanguageModelUsage(outputTokens: 900)
+        let provider = ScriptedLanguageModelProvider(scriptedResponses: [expensiveResponse, expensiveResponse, expensiveResponse])
+        await #expect(throws: ElfAgentLoopError.budgetExceeded) {
+            _ = try await ElfAgentLoop.run(
+                initialRequest: LanguageModelRequest(systemPrompt: "s", userText: "work"),
+                languageModelProvider: provider,
+                toolRegistry: ElfToolRegistry.standard(),
+                toolContext: toolContext,
+                guidanceToolNames: [],
+                maximumRounds: 25,
+                budget: ElfAgentLoopBudget(maximumOutputTokens: 1_500, deadline: Date(timeIntervalSinceNow: 60)),
+                onReplyTextDelta: { _ in },
+                onModelRoundEnded: {}
+            )
+        }
+        #expect(provider.receivedRequests.count == 2)
+    }
+
+    @Test func aTimeBudgetStopsTheRunBeforeTheNextRound() async throws {
+        let (toolContext, home) = try makeToolContext()
+        defer { try? FileManager.default.removeItem(at: home.directory) }
+        let provider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply("x")])
+        await #expect(throws: ElfAgentLoopError.budgetExceeded) {
+            _ = try await ElfAgentLoop.run(
+                initialRequest: LanguageModelRequest(systemPrompt: "s", userText: "work"),
+                languageModelProvider: provider,
+                toolRegistry: ElfToolRegistry.standard(),
+                toolContext: toolContext,
+                guidanceToolNames: [],
+                maximumRounds: 25,
+                budget: ElfAgentLoopBudget(maximumOutputTokens: 1_000, deadline: Date(timeIntervalSinceNow: -1)),
+                onReplyTextDelta: { _ in },
+                onModelRoundEnded: {}
+            )
+        }
+        #expect(provider.receivedRequests.isEmpty)
+    }
+
+    @Test func aToolThatEndsTheRunStopsTheLoop() async throws {
+        let (toolContext, home) = try makeToolContext()
+        defer { try? FileManager.default.removeItem(at: home.directory) }
+        let endingTool = RunEndingTestTool()
+        let provider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([ScriptedLanguageModelProvider.toolCall("end_run", [:])]),
+            ScriptedLanguageModelProvider.reply("never asked"),
+        ])
+        let loopResult = try await ElfAgentLoop.run(
+            initialRequest: LanguageModelRequest(systemPrompt: "s", userText: "work"),
+            languageModelProvider: provider,
+            toolRegistry: ElfToolRegistry(tools: [endingTool]),
+            toolContext: toolContext,
+            guidanceToolNames: [],
+            maximumRounds: 25,
+            onReplyTextDelta: { _ in },
+            onModelRoundEnded: {}
+        )
+        #expect(loopResult.roundsUsed == 1)
+        #expect(provider.receivedRequests.count == 1)
+    }
+}
+
+/// A tool whose outcome ends the run (like finish_task or ask_user).
+@MainActor
+private struct RunEndingTestTool: ElfTool {
+    let definition = LanguageModelToolDefinition(name: "end_run", description: "ends the run", inputSchema: ["type": "object"])
+    let group = ElfToolGroup.worker
+    let resultFeedsBackToModel = true
+    func isAvailable(for role: ElfPromptRole, configuration: ElfConfiguration) -> Bool { true }
+    func run(argumentsJSON: String, context: ElfToolContext) async throws -> ElfToolOutcome {
+        ElfToolOutcome(resultText: "done", endsTheRun: true)
+    }
 }

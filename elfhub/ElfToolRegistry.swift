@@ -79,6 +79,8 @@ struct ElfToolOutcome {
     var createdTaskIdentifiers: [UUID] = []
     /// The call didn't do what was asked; the model gets the reason back.
     var isFailure = false
+    /// The run stops after this round (a worker finished, or asked the user).
+    var endsTheRun = false
 
     static func failure(_ reason: String) -> ElfToolOutcome {
         ElfToolOutcome(resultText: reason, isFailure: true)

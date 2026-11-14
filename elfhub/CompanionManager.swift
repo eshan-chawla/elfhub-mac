@@ -96,6 +96,34 @@ final class CompanionManager: ObservableObject {
         return guidedTutorialController
     }()
 
+    /// True inside the unit-test host, where the app's real data must not
+    /// be acted on.
+    static var isRunningUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
+
+    /// Background tasks the elves work on (see ElfTaskScheduler).
+    lazy var elfTaskScheduler = ElfTaskScheduler(
+        elfManager: elfManager,
+        languageModelProviderForWorker: { [weak self] workingElf in
+            self?.languageModelProviderForBackgroundWork(of: workingElf)
+        }
+    )
+
+    /// The model an elf works with in the background: its own (when it has
+    /// one set up) or the main one — whichever can use tools.
+    private func languageModelProviderForBackgroundWork(of workingElf: Elf) -> LanguageModelProvider? {
+        let elfPreferredConfigurationIdentifier = workingElf.id == ElfManager.mainElfIdentifier
+            ? nil
+            : workingElf.home.readLocalSettings().languageModelConfigurationIdentifier
+        guard let workerConfiguration = ElfTaskScheduler.workerConfiguration(
+            elfPreferredConfiguration: providerConfigurationStore.configurationForNextTurn(preferredConfigurationIdentifier: elfPreferredConfigurationIdentifier),
+            mainConfiguration: providerConfigurationStore.configurationForNextTurn()
+        ) else { return nil }
+        return try? providerConfigurationStore.makeProvider(for: workerConfiguration)
+    }
+
     /// One turn of capture → model → guidance → consent → placement.
     lazy var companionTurnPipeline = CompanionTurnPipeline(
         providerConfigurationStore: providerConfigurationStore,
@@ -528,6 +556,11 @@ final class CompanionManager: ObservableObject {
         wireScreenActionCoordinator()
         bindEscapeStop()
         bindElfNamesForDictation()
+        // Unit tests run inside the app: never pick up (and run, or fail)
+        // the user's real background tasks there.
+        if !Self.isRunningUnitTests {
+            elfTaskScheduler.loadTasksAndResumeInterruptedOnes()
+        }
         notepadPanelManager.startListening(to: companionEventBus)
         bindProviderConfigurationStore()
         applyTranscriptionProviderChoice()

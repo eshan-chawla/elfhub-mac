@@ -14,6 +14,23 @@
 
 import Foundation
 
+/// Limits for a long run (a background task): stop when the time is up or
+/// the model has written this many output tokens.
+struct ElfAgentLoopBudget {
+    var maximumOutputTokens: Int
+    var deadline: Date
+}
+
+enum ElfAgentLoopError: LocalizedError, Equatable {
+    case budgetExceeded
+
+    var errorDescription: String? {
+        switch self {
+        case .budgetExceeded: return "it ran out of time or room for this task"
+        }
+    }
+}
+
 struct ElfAgentLoopResult {
     /// The text of every round, joined.
     var replyText: String
@@ -21,6 +38,7 @@ struct ElfAgentLoopResult {
     var guidanceToolCalls: [LanguageModelToolCall]
     var toolOutcomes: [ElfToolOutcome]
     var roundsUsed: Int
+    var outputTokensUsed: Int = 0
 }
 
 @MainActor
@@ -38,6 +56,7 @@ enum ElfAgentLoop {
         toolContext: ElfToolContext?,
         guidanceToolNames: Set<String>,
         maximumRounds: Int,
+        budget: ElfAgentLoopBudget? = nil,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
         onModelRoundEnded: @MainActor () -> Void
     ) async throws -> ElfAgentLoopResult {
@@ -46,9 +65,11 @@ enum ElfAgentLoop {
         var guidanceToolCalls: [LanguageModelToolCall] = []
         var toolOutcomes: [ElfToolOutcome] = []
         var roundsUsed = 0
+        var outputTokensUsed = 0
 
         for roundNumber in 1...max(1, maximumRounds) {
             try Task.checkCancellation()
+            if let budget, Date() >= budget.deadline { throw ElfAgentLoopError.budgetExceeded }
             // The tools stay defined on the last round (providers refuse a
             // conversation with tool calls but no tools); the model is told
             // to answer instead.
@@ -69,6 +90,8 @@ enum ElfAgentLoop {
             }
             try Task.checkCancellation()
             roundsUsed = roundNumber
+            outputTokensUsed += roundResponse.usage?.outputTokens ?? 0
+            if let budget, outputTokensUsed > budget.maximumOutputTokens { throw ElfAgentLoopError.budgetExceeded }
             onModelRoundEnded()
 
             let trimmedRoundText = roundResponse.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -80,6 +103,7 @@ enum ElfAgentLoop {
 
             var toolResultBlocks: [LanguageModelContentBlock] = []
             var needsAnotherRound = trimmedRoundText.isEmpty
+            var aToolEndedTheRun = false
             for toolCall in roundResponse.toolCalls {
                 if guidanceToolNames.contains(toolCall.toolName) {
                     toolResultBlocks.append(.toolResult(
@@ -98,6 +122,7 @@ enum ElfAgentLoop {
                     toolOutcome = .failure("there's no tool called \(toolCall.toolName).")
                 }
                 toolOutcomes.append(toolOutcome)
+                aToolEndedTheRun = aToolEndedTheRun || toolOutcome.endsTheRun
                 if toolOutcome.isFailure || calledTool?.resultFeedsBackToModel == true {
                     needsAnotherRound = true
                 }
@@ -108,8 +133,9 @@ enum ElfAgentLoop {
                 ))
             }
             // Calls in the last round still run (a file the model says it
-            // saved is saved); there's just no round after it.
-            guard needsAnotherRound, roundNumber < maximumRounds else { break }
+            // saved is saved); there's just no round after it. A tool that
+            // ends the run (finishing a task, asking the user) ends it here.
+            guard needsAnotherRound, roundNumber < maximumRounds, !aToolEndedTheRun else { break }
             messages.append(LanguageModelMessage(role: .assistant, content: roundResponse.assistantContent))
             messages.append(LanguageModelMessage(role: .user, content: toolResultBlocks))
         }
@@ -118,7 +144,8 @@ enum ElfAgentLoop {
             replyText: roundReplyTexts.joined(separator: " "),
             guidanceToolCalls: guidanceToolCalls,
             toolOutcomes: toolOutcomes,
-            roundsUsed: roundsUsed
+            roundsUsed: roundsUsed,
+            outputTokensUsed: outputTokensUsed
         )
     }
 }
