@@ -158,9 +158,24 @@ final class ProviderConfigurationStore: ObservableObject {
     /// The configuration the next turn should use: the active one, or the
     /// fallback while the ChatGPT plan can't answer.
     func configurationForNextTurn(now: Date = Date()) -> ProviderConfiguration? {
+        configurationForNextTurn(preferredConfigurationIdentifier: nil, now: now)
+    }
+
+    /// The configuration an elf's next turn should use: the model the elf
+    /// was given on this Mac when it's set up and ready, otherwise the
+    /// active one — then the ChatGPT-plan fallback as usual.
+    func configurationForNextTurn(preferredConfigurationIdentifier: UUID?, now: Date = Date()) -> ProviderConfiguration? {
+        let elfPreferredConfiguration = preferredConfigurationIdentifier.flatMap { preferredIdentifier in
+            configurations.first { $0.id == preferredIdentifier }
+        }
+        let elfActiveConfiguration = LanguageModelTurnRouting.activeConfiguration(
+            mainActiveConfiguration: activeConfiguration,
+            elfPreferredConfiguration: elfPreferredConfiguration,
+            isElfPreferredConfigurationReady: elfPreferredConfiguration.map(isReady) ?? false
+        )
         let fallbackConfiguration = fallbackConfiguration
         return LanguageModelTurnRouting.configurationForNextTurn(
-            activeConfiguration: activeConfiguration,
+            activeConfiguration: elfActiveConfiguration,
             fallbackConfiguration: fallbackConfiguration,
             isFallbackReady: fallbackConfiguration.map(isReady) ?? false,
             canUseChatGPTPlan: ChatGPTPlanAccount.shared.canUsePlan,

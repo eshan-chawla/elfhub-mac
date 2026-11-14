@@ -19,6 +19,18 @@ enum LanguageModelTurnRouting {
     /// before trying the plan again on a new turn.
     static let chatGPTPlanRetryIntervalInSeconds: TimeInterval = 3600
 
+    /// The model an elf answers with: its own choice (from this Mac's
+    /// models) when it has one and it's ready, otherwise the main model.
+    /// The ChatGPT-plan fallback then applies to whichever it is.
+    static func activeConfiguration(
+        mainActiveConfiguration: ProviderConfiguration?,
+        elfPreferredConfiguration: ProviderConfiguration?,
+        isElfPreferredConfigurationReady: Bool
+    ) -> ProviderConfiguration? {
+        guard let elfPreferredConfiguration, isElfPreferredConfigurationReady else { return mainActiveConfiguration }
+        return elfPreferredConfiguration
+    }
+
     static func configurationForNextTurn(
         activeConfiguration: ProviderConfiguration?,
         fallbackConfiguration: ProviderConfiguration?,

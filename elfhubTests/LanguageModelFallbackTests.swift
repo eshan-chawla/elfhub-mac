@@ -38,6 +38,40 @@ struct LanguageModelFallbackTests {
         )
     }
 
+    // MARK: - An elf's own model
+
+    @Test func aSideElfUsesItsOwnReadyModel() {
+        let ollamaConfiguration = ProviderConfiguration.localServer(.ollama)
+        #expect(LanguageModelTurnRouting.activeConfiguration(
+            mainActiveConfiguration: claudeConfiguration,
+            elfPreferredConfiguration: ollamaConfiguration,
+            isElfPreferredConfigurationReady: true
+        ) == ollamaConfiguration)
+    }
+
+    @Test func aMissingOrUnreadyModelFallsBackToMains() {
+        let ollamaConfiguration = ProviderConfiguration.localServer(.ollama)
+        #expect(LanguageModelTurnRouting.activeConfiguration(
+            mainActiveConfiguration: claudeConfiguration,
+            elfPreferredConfiguration: ollamaConfiguration,
+            isElfPreferredConfigurationReady: false
+        ) == claudeConfiguration)
+        #expect(LanguageModelTurnRouting.activeConfiguration(
+            mainActiveConfiguration: claudeConfiguration,
+            elfPreferredConfiguration: nil,
+            isElfPreferredConfigurationReady: false
+        ) == claudeConfiguration)
+    }
+
+    @Test func thePlanFallbackStillAppliesToASideElfOnThePlan() {
+        let elfActiveConfiguration = LanguageModelTurnRouting.activeConfiguration(
+            mainActiveConfiguration: claudeConfiguration,
+            elfPreferredConfiguration: chatGPTPlanConfiguration,
+            isElfPreferredConfigurationReady: true
+        )
+        #expect(route(active: elfActiveConfiguration, fallback: claudeConfiguration, unavailableSince: referenceDate) == claudeConfiguration)
+    }
+
     @Test func nonPlanModelsAlwaysAnswerThemselves() {
         #expect(route(active: claudeConfiguration, fallback: chatGPTPlanConfiguration, unavailableSince: referenceDate) == claudeConfiguration)
         #expect(route(active: nil, fallback: claudeConfiguration) == nil)
