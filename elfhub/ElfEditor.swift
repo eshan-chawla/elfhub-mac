@@ -69,6 +69,19 @@ final class ElfEditor: ObservableObject {
         elf.configuration = home.readConfiguration()
     }
 
+    /// Other names the elf answers to, cleaned and checked with the name
+    /// rules against every other elf's names and aliases.
+    func updateAliases(_ proposedAliases: [String]) throws {
+        try requireElfFolder()
+        let otherElfNames = ElfNameRules.namesInUse(byElves: elfManager.elves, excludingElfWithIdentifier: elf.id)
+        let cleanedAliases = try elfManager.validatedAliases(
+            proposedAliases,
+            elfName: home.readConfiguration().identity.name,
+            otherElfNames: otherElfNames
+        )
+        try updateConfiguration { configuration in configuration.identity.aliases = cleanedAliases }
+    }
+
     /// Keeps only the first emoji of whatever was typed or pasted.
     func updateEmoji(_ proposedEmoji: String) throws {
         let normalizedEmoji = ElfNameRules.normalizedEmoji(proposedEmoji)

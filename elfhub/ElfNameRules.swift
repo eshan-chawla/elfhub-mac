@@ -48,6 +48,8 @@ nonisolated enum ElfNameProblem: Equatable, Sendable {
 
 nonisolated enum ElfNameRules {
     static let nameCharacterLimit = 32
+    /// Other names an elf answers to ("June" for Juniper).
+    static let maximumAliasCount = 5
     static let reservedNames: Set<String> = ["main", "elfhub", "all", "everyone", "me", "you"]
     private static let tagCharacters: Set<Character> = ["[", "]", ":"]
 
@@ -107,6 +109,32 @@ nonisolated enum ElfNameRules {
             suffixNumber += 1
         }
         return "\(baseIdentifier)-\(suffixNumber)"
+    }
+
+    /// Every name the user could already say to reach an elf: each elf's
+    /// name followed by its aliases, roster order, leaving out one elf (the
+    /// one being renamed or given aliases; nil for a new elf).
+    static func namesInUse(byElves elves: [Elf], excludingElfWithIdentifier excludedElfIdentifier: String?) -> [String] {
+        elves
+            .filter { $0.id != excludedElfIdentifier }
+            .flatMap { [$0.configuration.identity.name] + $0.configuration.identity.aliases }
+    }
+
+    /// Aliases as the user meant them: trimmed, empty ones dropped, and any
+    /// that repeat the elf's own name or an earlier alias (ignoring case and
+    /// accents) dropped, keeping the order.
+    static func cleanedAliases(_ proposedAliases: [String], elfName: String) -> [String] {
+        var foldedNamesSeen: Set<String> = [foldedForComparison(elfName)]
+        var cleanedAliases: [String] = []
+        for proposedAlias in proposedAliases {
+            let trimmedAlias = proposedAlias.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedAlias.isEmpty else { continue }
+            let foldedAlias = foldedForComparison(trimmedAlias)
+            guard !foldedNamesSeen.contains(foldedAlias) else { continue }
+            foldedNamesSeen.insert(foldedAlias)
+            cleanedAliases.append(trimmedAlias)
+        }
+        return cleanedAliases
     }
 
     /// The one emoji an elf goes by: the first emoji of whatever was typed

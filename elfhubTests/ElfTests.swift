@@ -258,6 +258,76 @@ struct ElfTests {
         #expect(elfManager.promptContext().elfName == "elf")
     }
 
+    // MARK: - Aliases
+
+    /// Juniper (also called "June") and Ada.
+    private func makeElfManagerWithJuniperAndAda(elvesDirectory: URL) throws -> ElfManager {
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory, deletedFolderDisposal: .removePermanently)
+        try elfManager.createElf(identity: .init(name: "Juniper", aliases: ["June"]))
+        try elfManager.createElf(identity: .init(name: "Ada"))
+        return elfManager
+    }
+
+    @Test func aliasesAreCleanedOfRepeatsAndTheElfsOwnName() {
+        #expect(ElfNameRules.cleanedAliases([" June ", "june", "Juniper", "", "Jun"], elfName: "Juniper") == ["June", "Jun"])
+    }
+
+    @Test func namesInUseListEveryOtherElfsNameAndAliases() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = try makeElfManagerWithJuniperAndAda(elvesDirectory: elvesDirectory)
+        #expect(ElfNameRules.namesInUse(byElves: elfManager.elves, excludingElfWithIdentifier: "ada") == ["elf", "Juniper", "June"])
+    }
+
+    @Test func anAliasCannotBeAnotherElfsNameOrAlias() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = try makeElfManagerWithJuniperAndAda(elvesDirectory: elvesDirectory)
+        let adaEditor = try ElfEditor(elfIdentifier: "ada", elfManager: elfManager)
+        #expect(throws: ElfManagerError.invalidAlias(alias: "june", problems: [.duplicateOf(elfName: "June")])) {
+            try adaEditor.updateAliases(["june"])
+        }
+        #expect(throws: ElfManagerError.invalidAlias(alias: "Juniper", problems: [.duplicateOf(elfName: "Juniper")])) {
+            try adaEditor.updateAliases(["Juniper"])
+        }
+        #expect(throws: ElfManagerError.invalidAlias(alias: "everyone", problems: [.reservedWord("everyone")])) {
+            try adaEditor.updateAliases(["everyone"])
+        }
+        #expect(elfManager.elf(withIdentifier: "ada")?.configuration.identity.aliases == [])
+    }
+
+    @Test func aNewElfOrRenameCannotTakeAnotherElfsAlias() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = try makeElfManagerWithJuniperAndAda(elvesDirectory: elvesDirectory)
+        #expect(throws: ElfManagerError.invalidName([.duplicateOf(elfName: "June")])) {
+            try elfManager.createElf(identity: .init(name: "June"))
+        }
+        #expect(throws: ElfManagerError.invalidName([.duplicateOf(elfName: "June")])) {
+            try elfManager.renameElf(withIdentifier: "ada", to: "JUNE")
+        }
+    }
+
+    @Test func anElfHasAtMostFiveAliases() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = try makeElfManagerWithJuniperAndAda(elvesDirectory: elvesDirectory)
+        let adaEditor = try ElfEditor(elfIdentifier: "ada", elfManager: elfManager)
+        #expect(throws: ElfManagerError.tooManyAliases(limit: 5)) {
+            try adaEditor.updateAliases(["Axel", "Bram", "Cleo", "Dov", "Eli", "Fen"])
+        }
+    }
+
+    @Test func validAliasesAreSavedCleaned() throws {
+        let (elvesDirectory, cleanUp) = makeTemporaryElvesDirectory()
+        defer { cleanUp() }
+        let elfManager = try makeElfManagerWithJuniperAndAda(elvesDirectory: elvesDirectory)
+        let adaEditor = try ElfEditor(elfIdentifier: "ada", elfManager: elfManager)
+        try adaEditor.updateAliases(["  Addy ", "addy"])
+        #expect(elfManager.elf(withIdentifier: "ada")?.configuration.identity.aliases == ["Addy"])
+        #expect(adaEditor.elf.configuration.identity.aliases == ["Addy"])
+    }
+
     @Test func emojiFieldKeepsOnlyTheFirstEmoji() {
         #expect(ElfNameRules.normalizedEmoji("🧝‍♀️ Juniper") == "🧝‍♀️")
         #expect(ElfNameRules.normalizedEmoji("👍🏽👍") == "👍🏽")

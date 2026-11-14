@@ -16,6 +16,9 @@ import Foundation
 nonisolated enum ElfManagerError: LocalizedError, Equatable {
     /// Only the problems that block the name; warnings are allowed.
     case invalidName([ElfNameProblem])
+    /// Only the problems that block the alias; warnings are allowed.
+    case invalidAlias(alias: String, problems: [ElfNameProblem])
+    case tooManyAliases(limit: Int)
     case cannotDeleteMainElf
     case unknownElf(String)
     /// A new skill would land in a folder another skill already uses.
@@ -25,6 +28,10 @@ nonisolated enum ElfManagerError: LocalizedError, Equatable {
         switch self {
         case let .invalidName(nameProblems):
             return nameProblems.first?.message ?? "That name can't be used."
+        case let .invalidAlias(alias, aliasProblems):
+            return "\"\(alias)\": " + (aliasProblems.first?.message ?? "That name can't be used.")
+        case let .tooManyAliases(limit):
+            return "An elf can have up to \(limit) other names."
         case .cannotDeleteMainElf:
             return "The main elf can't be deleted. You can rename it instead."
         case let .unknownElf(elfIdentifier):
@@ -103,7 +110,9 @@ final class ElfManager: ObservableObject {
     /// `identity`. Name warnings (a prefix of another elf's name) are allowed.
     @discardableResult
     func createElf(identity: ElfConfiguration.Identity) throws -> Elf {
-        try validateName(identity.name, otherElfNames: elves.map(\.configuration.identity.name))
+        let otherElfNames = ElfNameRules.namesInUse(byElves: elves, excludingElfWithIdentifier: nil)
+        try validateName(identity.name, otherElfNames: otherElfNames)
+        let cleanedAliases = try validatedAliases(identity.aliases, elfName: identity.name, otherElfNames: otherElfNames)
         // Every item already in Elves/ counts as taken — folders added in
         // Finder and stray files too — so a new elf never moves into them.
         let elvesFolderItemNames = (try? FileManager.default.contentsOfDirectory(atPath: elvesDirectory.path)) ?? []
@@ -112,6 +121,7 @@ final class ElfManager: ObservableObject {
         let elfHome = ElfHome(directory: elvesDirectory.appendingPathComponent(elfIdentifier, isDirectory: true))
         var trimmedIdentity = identity
         trimmedIdentity.name = identity.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        trimmedIdentity.aliases = cleanedAliases
         try elfHome.createIfNeeded(configuration: ElfConfiguration(identity: trimmedIdentity))
         reloadRoster()
         return elf(withIdentifier: elfIdentifier) ?? Elf(id: elfIdentifier, home: elfHome, configuration: elfHome.readConfiguration())
@@ -120,7 +130,7 @@ final class ElfManager: ObservableObject {
     /// Renames an elf (the main elf too). Its id and folder stay the same.
     func renameElf(withIdentifier elfIdentifier: String, to newName: String) throws {
         guard let renamedElf = elf(withIdentifier: elfIdentifier) else { throw ElfManagerError.unknownElf(elfIdentifier) }
-        let otherElfNames = elves.filter { $0.id != elfIdentifier }.map(\.configuration.identity.name)
+        let otherElfNames = ElfNameRules.namesInUse(byElves: elves, excludingElfWithIdentifier: elfIdentifier)
         try validateName(newName, otherElfNames: otherElfNames)
         var renamedConfiguration = renamedElf.home.readConfiguration()
         renamedConfiguration.identity.name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -140,6 +150,26 @@ final class ElfManager: ObservableObject {
             try FileManager.default.removeItem(at: deletedElf.home.directory)
         }
         reloadRoster()
+    }
+
+    /// Cleans aliases and checks each with the name rules against
+    /// `otherElfNames` and the elf's other aliases. Throws on the first
+    /// alias with a blocking problem.
+    func validatedAliases(_ proposedAliases: [String], elfName: String, otherElfNames: [String]) throws -> [String] {
+        let cleanedAliases = ElfNameRules.cleanedAliases(proposedAliases, elfName: elfName)
+        guard cleanedAliases.count <= ElfNameRules.maximumAliasCount else {
+            throw ElfManagerError.tooManyAliases(limit: ElfNameRules.maximumAliasCount)
+        }
+        for (aliasIndex, alias) in cleanedAliases.enumerated() {
+            var otherAliasesOfThisElf = cleanedAliases
+            otherAliasesOfThisElf.remove(at: aliasIndex)
+            let blockingAliasProblems = ElfNameRules.problems(forName: alias, otherElfNames: otherElfNames + otherAliasesOfThisElf)
+                .filter { !$0.isWarning }
+            if !blockingAliasProblems.isEmpty {
+                throw ElfManagerError.invalidAlias(alias: alias, problems: blockingAliasProblems)
+            }
+        }
+        return cleanedAliases
     }
 
     private func validateName(_ proposedName: String, otherElfNames: [String]) throws {
