@@ -632,7 +632,8 @@ final class CompanionTurnPipeline {
         let assistantTextForHistory = Self.assistantTextForHistory(
             spokenText: spokenText,
             notepad: shownNotepad,
-            fileChanges: turnFileChanges
+            fileChanges: turnFileChanges,
+            screenStepDescriptions: computerUseSession?.performedStepDescriptions ?? []
         )
         if let elfToolContextForTurn, !turnFileChanges.isEmpty {
             // Keeps the change list within its limits (500 changes, 30 days,
@@ -681,20 +682,22 @@ final class CompanionTurnPipeline {
     static func assistantTextForHistory(
         spokenText: String,
         notepad: SavedNotepad?,
-        fileChanges: [ElfChangeLogEntry]
+        fileChanges: [ElfChangeLogEntry],
+        screenStepDescriptions: [String] = []
     ) -> String {
         var assistantTextForHistory = notepad.map { spokenText + "\n\n" + $0.textForConversationHistory } ?? spokenText
         let chatNotes = fileChanges.map(ElfFileTools.chatNote)
         if !chatNotes.isEmpty {
             assistantTextForHistory += "\n\n(you " + chatNotes.joined(separator: "; ") + ")"
         }
+        // What it did on the screen, so "undo that" or "now the other one"
+        // makes sense next turn.
+        if !screenStepDescriptions.isEmpty {
+            assistantTextForHistory += "\n\n(on the screen you did: " + screenStepDescriptions.joined(separator: "; ") + ")"
+        }
         return assistantTextForHistory
     }
 
-    /// Speed versus depth for this turn, on models that support it. A spoken
-    /// question wants a quick answer, so it thinks less. When the reply may
-    /// act on the screen, the balanced default is asked for explicitly so it
-    /// never drops below it. Typed chat keeps the model's own default.
     /// Whether a turn whose model failed may start over on the fallback
     /// model: not once it acted on the screen — replaying from the first
     /// screenshot would redo steps (type again, flip a switch back).
@@ -714,6 +717,10 @@ final class CompanionTurnPipeline {
         isActionModeEnabled && supportsToolCalling && supportsVision && hasScreenCapture
     }
 
+    /// Speed versus depth for this turn, on models that support it. A spoken
+    /// question wants a quick answer, so it thinks less. When the reply may
+    /// act on the screen, the balanced default is asked for explicitly so it
+    /// never drops below it. Typed chat keeps the model's own default.
     nonisolated static func reasoningEffort(isActionModeEnabled: Bool, isSpokenTurn: Bool) -> LanguageModelReasoningEffort? {
         if isActionModeEnabled { return .medium }
         if isSpokenTurn { return .low }

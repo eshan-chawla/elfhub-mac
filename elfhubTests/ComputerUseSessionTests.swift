@@ -162,6 +162,23 @@ struct ComputerUseSessionTests {
         #expect(screen.performedActions.count == 1)
     }
 
+    @Test func whatARunDidIsRememberedInTheConversation() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        _ = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+            toolsetCall("b", "key", #"{"text":"tab","repeat":2}"#),
+        ])
+        #expect(session.performedStepDescriptions == ["click here", "press tab ×2"])
+        let historyText = CompanionTurnPipeline.assistantTextForHistory(
+            spokenText: "done.",
+            notepad: nil,
+            fileChanges: [],
+            screenStepDescriptions: session.performedStepDescriptions
+        )
+        #expect(historyText == "done.\n\n(on the screen you did: click here; press tab ×2)")
+    }
+
     @Test func theRoundStopsAtTheFirstFailure() async {
         let screen = FakeComputerUseScreen()
         let session = makeSession(screen: screen)

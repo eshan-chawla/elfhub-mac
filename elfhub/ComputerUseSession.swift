@@ -83,6 +83,9 @@ final class ComputerUseSession: ComputerUseStepExecutor {
     /// Whether any step tried to act on the screen (so the end of the run
     /// tidies up: the pointer goes back, the pill stops saying it's acting).
     private(set) var didTryToAct = false
+    /// What it did on the screen, in order ("click the Export button"), for
+    /// the conversation history.
+    private(set) var performedStepDescriptions: [String] = []
 
     init(
         screen: ComputerUseScreen,
@@ -206,6 +209,7 @@ final class ComputerUseSession: ComputerUseStepExecutor {
                 switch lastOutcome {
                 case .performed:
                     performedActions.append(action)
+                    performedStepDescriptions.append(repeatCount > 1 ? "\(action.humanReadableDescription) ×\(repeatCount)" : action.humanReadableDescription)
                     needsFreshScreenshot = true
                     results.append((toolCall, "OK.", nil, false))
                 case let .notPerformed(reason):
