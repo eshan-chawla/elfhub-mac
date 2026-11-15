@@ -50,6 +50,16 @@ enum CompanionScreenAction: Equatable {
     /// shift, opt, ctrl, fn.
     indirect case withModifierKeys([String], CompanionScreenAction)
 
+    /// True for a click, drag or scroll with keys held — the only actions
+    /// keys may be held around (never typing, keys, opening, or another wrap).
+    var isPointerActionWithKeysHeld: Bool {
+        guard case let .withModifierKeys(_, innerAction) = self else { return false }
+        switch innerAction {
+        case .click, .doubleClick, .rightClick, .tripleClick, .drag, .scroll: return true
+        default: return false
+        }
+    }
+
     /// The action without any keys held.
     var withoutModifierKeys: CompanionScreenAction {
         if case let .withModifierKeys(_, innerAction) = self { return innerAction.withoutModifierKeys }

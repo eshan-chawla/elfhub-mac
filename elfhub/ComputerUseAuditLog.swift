@@ -96,7 +96,7 @@ extension ComputerUseAuditEntry {
     /// Typed text can be anything the user dictated (an address, a message),
     /// so the log keeps only how long it was.
     static func summaryWithoutTypedText(of resolvedAction: ResolvedScreenAction) -> String {
-        if case let .type(text) = resolvedAction.action {
+        if case let .type(text) = resolvedAction.action.withoutModifierKeys {
             return "type \(text.count) characters"
         }
         return resolvedAction.humanReadableDescription

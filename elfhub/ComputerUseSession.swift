@@ -62,6 +62,8 @@ protocol ComputerUseScreen: AnyObject {
     /// Whether the part of the screen around this point changed a lot since
     /// `capture` was taken (false when that can't be told).
     func targetRegionChanged(since capture: CompanionScreenCapture, aroundScreenshotPixel screenshotPixel: CGPoint) async -> Bool
+    /// The last performed step in words, naming the real element when known.
+    var lastPerformedStepDescription: String? { get }
 }
 
 @MainActor
@@ -83,9 +85,13 @@ final class ComputerUseSession: ComputerUseStepExecutor {
     /// Whether any step tried to act on the screen (so the end of the run
     /// tidies up: the pointer goes back, the pill stops saying it's acting).
     private(set) var didTryToAct = false
-    /// What it did on the screen, in order ("click the Export button"), for
-    /// the conversation history.
+    /// What it did on the screen, in order ("click “Export”"), for the
+    /// conversation history — typed text only as its length.
     private(set) var performedStepDescriptions: [String] = []
+    /// Click targets held back as changed; the same click asked again after
+    /// the fresh screenshot goes through (something there keeps moving —
+    /// a video, a terminal — and the model has now seen it).
+    private var clickTargetsHeldBackAsChanged: [CGPoint] = []
 
     init(
         screen: ComputerUseScreen,
@@ -193,7 +199,9 @@ final class ComputerUseSession: ComputerUseStepExecutor {
                 // A click aimed at something that has since changed (a
                 // dialog opened over it) would land on what the model never saw.
                 if let targetPixel = Self.clickTargetPixel(of: action),
+                   !clickTargetsHeldBackAsChanged.contains(where: { hypot($0.x - targetPixel.x, $0.y - targetPixel.y) <= Self.sameClickTargetDistanceInPixels }),
                    await screen.targetRegionChanged(since: latestCapture, aroundScreenshotPixel: targetPixel) {
+                    clickTargetsHeldBackAsChanged.append(targetPixel)
                     aStepFailed = true
                     needsFreshScreenshot = true
                     results.append((toolCall, "Error: that part of the screen changed since your screenshot (something opened or moved), so nothing was done. look at the fresh screenshot before trying again.", nil, true))
@@ -209,7 +217,13 @@ final class ComputerUseSession: ComputerUseStepExecutor {
                 switch lastOutcome {
                 case .performed:
                     performedActions.append(action)
-                    performedStepDescriptions.append(repeatCount > 1 ? "\(action.humanReadableDescription) ×\(repeatCount)" : action.humanReadableDescription)
+                    let stepDescription: String
+                    if case let .type(typedText) = action.withoutModifierKeys {
+                        stepDescription = "type \(typedText.count) characters"
+                    } else {
+                        stepDescription = screen.lastPerformedStepDescription ?? action.humanReadableDescription
+                    }
+                    performedStepDescriptions.append(repeatCount > 1 ? "\(stepDescription) ×\(repeatCount)" : stepDescription)
                     needsFreshScreenshot = true
                     results.append((toolCall, "OK.", nil, false))
                 case let .notPerformed(reason):
@@ -268,6 +282,9 @@ final class ComputerUseSession: ComputerUseStepExecutor {
             ending: ending
         )
     }
+
+    /// Clicks this close count as the same click (in screenshot pixels).
+    static let sameClickTargetDistanceInPixels: CGFloat = 12
 
     /// Where a click-like action lands (a drag: where it picks up). Scrolls,
     /// pointer moves, typing, keys and opening things aren't checked.
@@ -341,34 +358,31 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
         self.turnToken = turnToken
     }
 
-    /// A frame taken at the same moment as the last screenshot sent, but
-    /// without the privacy changes (black boxes, left-out browsers), so a
-    /// later frame can be compared with it like for like. Never sent.
-    private var referenceFrameForLatestCapture: (sentImageData: Data, referenceImageData: Data)?
-
     private func uncheckedFrame() async throws -> CompanionScreenCapture {
         try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile, appliesPrivacyChecks: false)
     }
 
     func captureScreen() async throws -> CompanionScreenCapture {
-        let referenceFrame = try await uncheckedFrame()
-        let sentCapture = try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile)
-        referenceFrameForLatestCapture = (sentCapture.imageData, referenceFrame.imageData)
-        return sentCapture
+        try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile)
     }
 
     func targetRegionChanged(since capture: CompanionScreenCapture, aroundScreenshotPixel screenshotPixel: CGPoint) async -> Bool {
-        // Only a screenshot this run took has a frame to compare with (the
-        // turn's first one was taken before the run began).
-        guard let referenceFrameForLatestCapture,
-              referenceFrameForLatestCapture.sentImageData == capture.imageData,
-              let currentFrame = try? await uncheckedFrame(),
-              let changedFraction = ScreenshotRegionComparison.changedFraction(
-                beforeJPEG: referenceFrameForLatestCapture.referenceImageData,
-                afterJPEG: currentFrame.imageData,
-                aroundScreenshotPixel: screenshotPixel
-              ) else { return false }
-        return changedFraction >= ScreenshotRegionComparison.changedFractionThatMeansStale
+        // The screenshot the model saw, before masking, against the screen now
+        // with the same windows left out.
+        guard let comparisonImageData = capture.comparisonImageData,
+              let currentFrameData = try? await CompanionScreenCaptureUtility.captureComparisonFrame(like: capture) else { return false }
+        let pixelsPerPoint = CGFloat(capture.screenshotWidthInPixels) / CGFloat(max(capture.displayWidthInPoints, 1))
+        return ScreenshotRegionComparison.isStale(
+            beforeJPEG: comparisonImageData,
+            afterJPEG: currentFrameData,
+            aroundScreenshotPixel: screenshotPixel,
+            regionRadiusInPixels: ScreenshotRegionComparison.regionRadiusInPoints * pixelsPerPoint
+        )
+    }
+
+    /// The real element the last step acted on, in words ("click “Export”").
+    var lastPerformedStepDescription: String? {
+        screenActionCoordinator.lastFiredActionDescription
     }
 
     func captureScreenAfterSettling(previousCapture: CompanionScreenCapture) async throws -> CompanionScreenCapture {
@@ -388,10 +402,7 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
                   let nextFingerprint = ScreenshotFingerprint(jpegData: nextFrame.imageData),
                   latestFingerprint.differs(from: nextFingerprint) else { break }
         }
-        // The settled frame is the reference for the screenshot sent now.
-        let sentCapture = try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile)
-        referenceFrameForLatestCapture = (sentCapture.imageData, latestFrame.imageData)
-        return sentCapture
+        return try await captureScreen()
     }
 
     func captureZoomedRegion(_ regionInScreenshotPixels: CGRect, of capture: CompanionScreenCapture) async throws -> Data {

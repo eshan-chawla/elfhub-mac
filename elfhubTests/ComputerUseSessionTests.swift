@@ -90,6 +90,9 @@ final class FakeComputerUseScreen: ComputerUseScreen {
         targetRegionHasChanged
     }
 
+    var performedDescriptionToReport: String?
+    var lastPerformedStepDescription: String? { performedDescriptionToReport }
+
     var interfaceDescriptionToReturn: String?
     func describeInterface(on capture: CompanionScreenCapture) async -> String? { interfaceDescriptionToReturn }
 }

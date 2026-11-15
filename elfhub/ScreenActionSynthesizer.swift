@@ -44,6 +44,11 @@ enum ScreenActionSynthesizer {
     /// every mouse and scroll event carries them, as a real one would.
     private static var modifierFlagsHeldForPointerEvents: CGEventFlags = []
 
+    /// True while elfhub holds modifier keys down: the user's own key and
+    /// click presses would pick them up (their "w" becoming cmd+W), so the
+    /// interruption monitor swallows those.
+    static var isHoldingModifierKeys: Bool { !modifierFlagsHeldForPointerEvents.isEmpty }
+
     nonisolated private static let pointerEventTypes: Set<CGEventType> = [
         .mouseMoved, .leftMouseDown, .leftMouseUp, .leftMouseDragged,
         .rightMouseDown, .rightMouseUp, .rightMouseDragged, .scrollWheel,
@@ -69,8 +74,9 @@ enum ScreenActionSynthesizer {
         let eventSource = CGEventSource(stateID: .hidSystemState)
         var heldModifierFlags: CGEventFlags = []
         var pressedModifierKeyCodes: [CGKeyCode] = []
+        let previouslyHeldPointerFlags = modifierFlagsHeldForPointerEvents
         defer {
-            modifierFlagsHeldForPointerEvents = []
+            modifierFlagsHeldForPointerEvents = previouslyHeldPointerFlags
             for modifierKeyCode in pressedModifierKeyCodes.reversed() {
                 heldModifierFlags.remove(modifierFlag(forModifierKeyCode: modifierKeyCode))
                 let modifierUp = CGEvent(keyboardEventSource: eventSource, virtualKey: modifierKeyCode, keyDown: false)

@@ -179,14 +179,33 @@ struct ScreenshotFingerprint: Equatable {
 /// The pointer moving or a button lighting up under it changes too little
 /// to count.
 enum ScreenshotRegionComparison {
-    /// Half the side of the square compared, in screenshot pixels.
-    static let regionRadiusInPixels: CGFloat = 120
+    /// Half the side of the square compared, in screen points (turned into
+    /// screenshot pixels by the caller, so it means the same on every model).
+    static let regionRadiusInPoints: CGFloat = 120
     /// This share of the region's cells changed means it's stale.
     static let changedFractionThatMeansStale = 0.3
+    /// The patch right at the target: a small pop-up there (an autocomplete
+    /// list) is a tenth of the region but most of this.
+    static let targetPatchShareOfRadius: CGFloat = 0.3
+    static let targetPatchChangedFractionThatMeansStale = 0.5
+
+    /// Whether the click target's surroundings, or the patch right at it,
+    /// changed enough that the click would land on something unseen.
+    static func isStale(beforeJPEG: Data, afterJPEG: Data, aroundScreenshotPixel screenshotPixel: CGPoint, regionRadiusInPixels: CGFloat) -> Bool {
+        if let regionChange = changedFraction(beforeJPEG: beforeJPEG, afterJPEG: afterJPEG, aroundScreenshotPixel: screenshotPixel, regionRadiusInPixels: regionRadiusInPixels),
+           regionChange >= changedFractionThatMeansStale {
+            return true
+        }
+        if let patchChange = changedFraction(beforeJPEG: beforeJPEG, afterJPEG: afterJPEG, aroundScreenshotPixel: screenshotPixel, regionRadiusInPixels: regionRadiusInPixels * targetPatchShareOfRadius),
+           patchChange >= targetPatchChangedFractionThatMeansStale {
+            return true
+        }
+        return false
+    }
 
     /// The share (0–1) of the region's 16×16 cells whose brightness moved,
     /// or nil when an image can't be read.
-    static func changedFraction(beforeJPEG: Data, afterJPEG: Data, aroundScreenshotPixel screenshotPixel: CGPoint) -> Double? {
+    static func changedFraction(beforeJPEG: Data, afterJPEG: Data, aroundScreenshotPixel screenshotPixel: CGPoint, regionRadiusInPixels: CGFloat = 120) -> Double? {
         guard let beforeImage = decodedImage(beforeJPEG), let afterImage = decodedImage(afterJPEG),
               beforeImage.width == afterImage.width, beforeImage.height == afterImage.height else { return nil }
         let imageBounds = CGRect(x: 0, y: 0, width: beforeImage.width, height: beforeImage.height)

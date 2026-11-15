@@ -145,7 +145,12 @@ struct ResolvedScreenAction {
     /// Plain-English description for the consent card and narration. Prefers
     /// the real element's title over the model's label.
     var humanReadableDescription: String {
-        let targetName: String? = targetElementFacts?.title.map { "“\($0)”" }
+        Self.description(of: action, targetName: targetElementFacts?.title.map { "“\($0)”" })
+    }
+
+    /// Prefers the real element's title over the model's label; keys held
+    /// are named in front ("cmd+drag “Budget.numbers”").
+    private static func description(of action: CompanionScreenAction, targetName: String?) -> String {
         switch action {
         case let .click(_, label, _):
             return "click " + (targetName ?? label.map { "the \($0)" } ?? "here")
@@ -153,12 +158,12 @@ struct ResolvedScreenAction {
             return "double-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
         case let .rightClick(_, label, _):
             return "right-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
-        case let .withModifierKeys(modifierNames, .click(_, label, _)):
-            return modifierNames.joined(separator: "+") + "+click " + (targetName ?? label.map { "the \($0)" } ?? "here")
         case let .tripleClick(_, label, _):
             return "triple-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
         case .drag:
             return "drag " + (targetName ?? "from here")
+        case let .withModifierKeys(modifierNames, innerAction):
+            return modifierNames.joined(separator: "+") + "+" + description(of: innerAction, targetName: targetName)
         default:
             return action.humanReadableDescription
         }
@@ -275,6 +280,9 @@ final class ScreenActionCoordinator: ObservableObject {
     /// there at the end if the user hasn't moved it.
     private var pointerLocationBeforeComputerUseRun: CGPoint?
     private var isFiringComputerUseRunStep = false
+    /// The last run step fired, in words naming the real element — for the
+    /// conversation history (typed text is replaced there by its length).
+    private(set) var lastFiredActionDescription: String?
     /// The run in progress; an older run finishing late can't end it.
     private var currentComputerUseRunIdentifier: UUID?
     /// When the run's last step ended (or the user last okayed one): input
@@ -647,6 +655,8 @@ final class ScreenActionCoordinator: ObservableObject {
     private func perform(_ action: CompanionScreenAction, of resolvedAction: ResolvedScreenAction, mayPressWithAccessibility: Bool) async -> Bool {
         switch action {
         case let .withModifierKeys(modifierNames, innerAction):
+            // Keys are only ever held around a click, drag or scroll.
+            guard action.isPointerActionWithKeysHeld else { return false }
             return await ScreenActionSynthesizer.performWithModifierKeysHeld(modifierNames) {
                 await perform(innerAction, of: resolvedAction, mayPressWithAccessibility: false)
             }
@@ -954,6 +964,7 @@ final class ScreenActionCoordinator: ObservableObject {
         }
 
         let didPerformAction = await perform(resolvedAction)
+        lastFiredActionDescription = resolvedAction.humanReadableDescription
         if isStopRequested {
             recordAuditEntry(for: resolvedAction, approvalProvenance: approvalProvenance, outcome: .stoppedByUser)
             return .stoppedByUser

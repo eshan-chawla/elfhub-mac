@@ -108,6 +108,12 @@ final class GlobalPushToTalkShortcutMonitor: ObservableObject {
             return Unmanaged.passUnretained(event)
         }
 
+        // elfhub's own key presses (keys held for a click) are never the
+        // user pressing push-to-talk.
+        if ScreenActionSynthesizer.isSyntheticEvent(event) {
+            return Unmanaged.passUnretained(event)
+        }
+
         let eventKeyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let shortcutTransition = BuddyPushToTalkShortcut.shortcutTransition(
             for: eventType,

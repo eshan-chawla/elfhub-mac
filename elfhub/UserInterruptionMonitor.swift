@@ -117,6 +117,14 @@ final class UserInterruptionMonitor {
         mouseLocationWhenMonitoringStarted = nil
     }
 
+    /// While elfhub holds modifier keys (a cmd-click), the user's own key
+    /// or click would get them too — their "w" would arrive as cmd+W. Those
+    /// presses are swallowed; they still count as taking over.
+    nonisolated static func shouldSwallowUsersEvent(eventType: CGEventType, isHoldingModifierKeys: Bool) -> Bool {
+        guard isHoldingModifierKeys else { return false }
+        return [.keyDown, .keyUp, .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp, .scrollWheel].contains(eventType)
+    }
+
     private func handleEventTap(eventType: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if eventType == .tapDisabledByTimeout || eventType == .tapDisabledByUserInput {
             if let eventTap {
@@ -154,6 +162,9 @@ final class UserInterruptionMonitor {
                 return Unmanaged.passUnretained(event)
             }
             onUserTookControl?()
+            if Self.shouldSwallowUsersEvent(eventType: eventType, isHoldingModifierKeys: ScreenActionSynthesizer.isHoldingModifierKeys) {
+                return nil
+            }
             return Unmanaged.passUnretained(event)
 
         case .watchEscapeWithoutConsuming:

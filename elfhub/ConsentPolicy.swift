@@ -146,7 +146,7 @@ enum ConsentPolicy {
         if context.targetElementFacts?.isSecureTextField == true {
             return .usersStep(reason: "that's a password field, so please fill it in yourself.")
         }
-        if case .type = context.action, context.isSecureEventInputActive {
+        if case .type = context.action.withoutModifierKeys, context.isSecureEventInputActive {
             return .usersStep(reason: "secure keyboard entry is on right now, usually because a password field is active, so please type that part yourself.")
         }
 

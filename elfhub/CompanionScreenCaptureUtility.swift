@@ -23,6 +23,13 @@ struct CompanionScreenCapture {
     /// top-left-origin bounds via CGDisplayBounds when converting a screenshot
     /// pixel into a point that a real CGEvent click can target.
     let displayID: CGDirectDisplayID
+    /// The same frame before personal numbers were blacked out — never
+    /// sent, only compared with a later frame (`captureComparisonFrame`)
+    /// to tell whether the screen changed under a click target.
+    var comparisonImageData: Data? = nil
+    /// Browsers left out of this frame for showing a private website, so a
+    /// comparison frame leaves out the same ones.
+    var excludedPrivateBrowserProcessIdentifiers: Set<pid_t> = []
 
     // MARK: - Coordinate Mapping
     //
@@ -99,7 +106,9 @@ struct CompanionScreenCapture {
             displayFrame: displayFrame,
             screenshotWidthInPixels: screenshotWidthInPixels,
             screenshotHeightInPixels: screenshotHeightInPixels,
-            displayID: displayID
+            displayID: displayID,
+            comparisonImageData: comparisonImageData,
+            excludedPrivateBrowserProcessIdentifiers: excludedPrivateBrowserProcessIdentifiers
         )
     }
 
@@ -256,6 +265,8 @@ enum CompanionScreenCaptureUtility {
                           userInfo: [NSLocalizedDescriptionKey: "Failed to capture any screen"])
         }
 
+        // Kept before masking, to compare later frames with like for like.
+        let unmaskedJPEGData = jpegData
         var captureLabel = privateBrowserProcessIdentifiers.isEmpty
             ? "user's screen (the one their mouse is on)"
             : "user's screen (the one their mouse is on; a browser is left out because it has a private website open, like a bank or a patient portal)"
@@ -278,8 +289,41 @@ enum CompanionScreenCaptureUtility {
             displayFrame: displayFrame,
             screenshotWidthInPixels: configuration.width,
             screenshotHeightInPixels: configuration.height,
-            displayID: display.displayID
+            displayID: display.displayID,
+            comparisonImageData: unmaskedJPEGData,
+            excludedPrivateBrowserProcessIdentifiers: privateBrowserProcessIdentifiers
         )
+    }
+
+    /// A frame of the same display at the same size, leaving out the same
+    /// windows as `capture` but not masked — only for comparing with
+    /// `capture.comparisonImageData`; never sent.
+    static func captureComparisonFrame(like capture: CompanionScreenCapture) async throws -> Data {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let display = content.displays.first(where: { $0.displayID == capture.displayID }) else {
+            throw NSError(domain: "CompanionScreenCapture", code: -3,
+                          userInfo: [NSLocalizedDescriptionKey: "The display this started on isn't connected any more"])
+        }
+        let ownBundleIdentifier = Bundle.main.bundleIdentifier
+        let screenCapturePrivacyBlocklist = ScreenCapturePrivacyBlocklist.shared
+        let excludedWindows = content.windows.filter { window in
+            let owningBundleIdentifier = window.owningApplication?.bundleIdentifier
+            return owningBundleIdentifier == ownBundleIdentifier
+                || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: owningBundleIdentifier)
+                || window.owningApplication.map { capture.excludedPrivateBrowserProcessIdentifiers.contains($0.processID) } == true
+        }
+        let configuration = SCStreamConfiguration()
+        configuration.width = capture.screenshotWidthInPixels
+        configuration.height = capture.screenshotHeightInPixels
+        let cgImage = try await SCScreenshotManager.captureImage(
+            contentFilter: SCContentFilter(display: display, excludingWindows: excludedWindows),
+            configuration: configuration
+        )
+        guard let jpegData = NSBitmapImageRep(cgImage: cgImage).representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
+            throw NSError(domain: "CompanionScreenCapture", code: -2,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to capture a comparison frame"])
+        }
+        return jpegData
     }
 
     /// Part of a captured display at full resolution (a multi-step run's
