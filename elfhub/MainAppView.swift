@@ -140,6 +140,13 @@ struct MainAppView: View {
             mainAppNavigation.open(requestedMainAppSection)
             companionManager.requestedMainAppSection = nil
         }
+        // A message typed in the main elf's chat to a side elf: its page
+        // (on its chat) is where the question and the reply are.
+        .onReceive(chatViewModel.$elfThreadToShowForTypedMessage) { elfThreadToShow in
+            guard let elfThreadToShow else { return }
+            mainAppNavigation.open(.elf(elfThreadToShow))
+            chatViewModel.elfThreadToShowForTypedMessage = nil
+        }
         // A .elf being imported (from Finder, the hub or onboarding).
         .sheet(item: $companionManager.pendingElfImport) { pendingElfImport in
             ElfImportPreviewSheet(
@@ -162,6 +169,8 @@ struct MainAppView: View {
         // An elf deleted in the hub or removed in Finder can't keep its page.
         .onReceive(elfManager.$elves) { rosterElves in
             mainAppNavigation.showMainElfIfElfIsGone(existingElfIdentifiers: Set(rosterElves.map(\.id)))
+            // …and its chat becomes one of the main elf's.
+            chatViewModel.detachChatsOfElvesThatAreGone(existingElfIdentifiers: Set(rosterElves.map(\.id)))
         }
         // Folders added or removed in Finder show up when elfhub comes back.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -333,6 +342,8 @@ struct MainAppView: View {
                     }
                     chatView
                 }
+                // Back from an elf's page: the main elf's chat again.
+                .onAppear { chatViewModel.showMainChat() }
             case let .elf(elfIdentifier):
                 ElfHubPage(
                     companionManager: companionManager,

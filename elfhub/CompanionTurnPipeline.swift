@@ -99,6 +99,27 @@ final class CompanionTurnPipeline {
         }
     }
 
+    /// The history for this turn: a side elf remembers its own ongoing chat
+    /// (its last six exchanges), the main elf the main chat.
+    static func historyTurnsForTurn(
+        speakingElfName: String?,
+        mainElfName: String,
+        mainConversationHistory: [LanguageModelHistoryTurn],
+        speakingElfThreadHistory: [LanguageModelHistoryTurn]
+    ) -> [LanguageModelHistoryTurn] {
+        historyTurns(
+            forSpeakingElfName: speakingElfName,
+            mainElfName: mainElfName,
+            from: speakingElfName == nil ? mainConversationHistory : speakingElfThreadHistory
+        )
+    }
+
+    /// Only the main elf's turns go into the main chat's history; a side
+    /// elf's are in its own chat.
+    static func recordsInMainConversationHistory(speakingElfName: String?) -> Bool {
+        speakingElfName == nil
+    }
+
     /// The active elf's part of each prompt (soul, profile, skills…), read
     /// at the start of every turn.
     private let elfPromptContextProvider: () async -> ElfPromptContext
@@ -112,6 +133,9 @@ final class CompanionTurnPipeline {
     /// The web and the user's folders, for the elf answering — when it may
     /// use them.
     private let outsideToolsProvider: (Elf) -> [ElfTool]
+    /// A side elf's own ongoing chat, as history for its turns (read from
+    /// the saved chat, where its earlier replies are).
+    private let sideElfThreadHistoryProvider: (Elf) -> [LanguageModelHistoryTurn]
     /// What the main elf should hear about background work before the
     /// user's newest message, if anything (see ElfStatusBlock).
     private let mainElfStatusProvider: () -> ElfMainStatusUpdate?
@@ -126,6 +150,7 @@ final class CompanionTurnPipeline {
         elfForToolsProvider: @escaping () -> Elf? = { nil },
         mainElfManagerToolsProvider: @escaping () -> [ElfTool] = { [] },
         outsideToolsProvider: @escaping (Elf) -> [ElfTool] = { _ in [] },
+        sideElfThreadHistoryProvider: @escaping (Elf) -> [LanguageModelHistoryTurn] = { _ in [] },
         mainElfStatusProvider: @escaping () -> ElfMainStatusUpdate? = { nil },
         onMainElfStatusDelivered: @escaping ([UUID]) -> Void = { _ in }
     ) {
@@ -136,6 +161,7 @@ final class CompanionTurnPipeline {
         self.elfForToolsProvider = elfForToolsProvider
         self.mainElfManagerToolsProvider = mainElfManagerToolsProvider
         self.outsideToolsProvider = outsideToolsProvider
+        self.sideElfThreadHistoryProvider = sideElfThreadHistoryProvider
         self.mainElfStatusProvider = mainElfStatusProvider
         self.onMainElfStatusDelivered = onMainElfStatusDelivered
     }
@@ -442,7 +468,12 @@ final class CompanionTurnPipeline {
 
         let initialRequest = LanguageModelRequest(
             systemPrompt: systemPrompt,
-            history: Self.historyTurns(forSpeakingElfName: speakingElfName, mainElfName: mainElfName, from: conversationHistory),
+            history: Self.historyTurnsForTurn(
+                speakingElfName: speakingElfName,
+                mainElfName: mainElfName,
+                mainConversationHistory: conversationHistory,
+                speakingElfThreadHistory: speakingElfName == nil ? [] : (elfToolContextForTurn.map(sideElfThreadHistoryProvider) ?? [])
+            ),
             userText: userTextForModel,
             images: imagesForModel,
             tools: guidanceTools + elfToolDefinitions,
@@ -552,13 +583,15 @@ final class CompanionTurnPipeline {
             // 20 MB of backups).
             try? ElfChangeLog(home: elfToolContextForTurn.home).prune(now: Date())
         }
-        conversationHistory.append(LanguageModelHistoryTurn(
-            userText: userText,
-            assistantText: assistantTextForHistory,
-            speakingElfName: speakingElfName
-        ))
-        if conversationHistory.count > Self.maximumHistoryTurns {
-            conversationHistory.removeFirst(conversationHistory.count - Self.maximumHistoryTurns)
+        if Self.recordsInMainConversationHistory(speakingElfName: speakingElfName) {
+            conversationHistory.append(LanguageModelHistoryTurn(
+                userText: userText,
+                assistantText: assistantTextForHistory,
+                speakingElfName: speakingElfName
+            ))
+            if conversationHistory.count > Self.maximumHistoryTurns {
+                conversationHistory.removeFirst(conversationHistory.count - Self.maximumHistoryTurns)
+            }
         }
 
         if let mainElfStatusUpdate {

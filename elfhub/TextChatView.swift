@@ -30,6 +30,17 @@ final class TextChatViewModel: ObservableObject {
     /// Shown above the chat whose turn the ChatGPT plan handed to the
     /// fallback model (or took over again), until the user dismisses it.
     @Published private(set) var languageModelSwitchChatNotice: LanguageModelSwitchChatNotice?
+    /// Set when a message typed in the main elf's chat went to a side elf:
+    /// the main window opens that elf's page, where the reply is.
+    @Published var elfThreadToShowForTypedMessage: String?
+    /// The main elf's chat that was open before an elf's chat was shown, so
+    /// going back to the chat (or talking to main) continues it.
+    private var lastMainConversationIdentifier: UUID?
+
+    /// Whether the chat on screen is a side elf's own ongoing chat.
+    var isShowingElfThread: Bool {
+        activeConversation.elfIdentifier != nil
+    }
 
     /// The switch notice for the chat on screen, if it belongs to that chat.
     var visibleLanguageModelSwitchNotice: LanguageModelSwitchNotice? {
@@ -54,10 +65,31 @@ final class TextChatViewModel: ObservableObject {
     /// What an empty chat says — the main window opens on chat, so this is
     /// also where people learn how to talk to elfhub.
     var emptyConversationHint: String {
+        if let elfIdentifier = activeConversation.elfIdentifier {
+            let elfName = elfName(forIdentifier: elfIdentifier)
+            return "This is your chat with \(elfName). Type below, or say “\(elfName), …” anywhere — whatever you ask \(elfName) lands here, and so do the tasks you give it."
+        }
         if companionManager.interactionInputMode.isVoiceInputEnabled {
             return "Hold \(companionManager.pushToTalkShortcutOption.displayText) anywhere to talk, or type below — elfhub can see your screen when you ask."
         }
         return "Type below to ask anything — elfhub can see your screen when you ask."
+    }
+
+    /// The chat's title: "Chat with Tom" for an elf's own chat.
+    var chatTitle: String {
+        guard let elfIdentifier = activeConversation.elfIdentifier else { return activeConversation.title }
+        return "Chat with \(elfName(forIdentifier: elfIdentifier))"
+    }
+
+    var composerPlaceholder: String {
+        guard let elfIdentifier = activeConversation.elfIdentifier else { return "Message elfhub…" }
+        return "Message \(elfName(forIdentifier: elfIdentifier))…"
+    }
+
+    /// The main elf's chats (and those of elves since deleted) — the
+    /// sidebar's list and the compact window's menu.
+    var mainConversations: [ChatConversation] {
+        chatConversationStore.mainConversations(existingElfIdentifiers: Set(companionManager.elfManager.elves.map(\.id)))
     }
 
     // MARK: Conversations
@@ -66,14 +98,59 @@ final class TextChatViewModel: ObservableObject {
     func startNewConversation() {
         guard !isResponding else { return }
         activeConversation = ChatConversation()
+        lastMainConversationIdentifier = nil
         companionManager.companionTurnPipeline.clearConversationHistory()
+    }
+
+    /// Shows a side elf's one ongoing chat (empty until the first message).
+    /// The main elf's history stays as it is: its chat is still where
+    /// talking to main goes.
+    func openElfThread(forElfIdentifier elfIdentifier: String) {
+        guard activeConversation.elfIdentifier != elfIdentifier else { return }
+        if activeConversation.elfIdentifier == nil, !activeConversation.messages.isEmpty {
+            lastMainConversationIdentifier = activeConversation.id
+        }
+        activeConversation = chatConversationStore.elfThread(forElfIdentifier: elfIdentifier)
+            ?? ChatConversation.elfThread(elfIdentifier: elfIdentifier, title: elfName(forIdentifier: elfIdentifier))
+        composerElfSelection = ChatComposerElfSelection()
+    }
+
+    /// An elf was deleted (or its folder removed): its chat becomes an
+    /// ordinary chat of the main elf's, also when it's on screen.
+    func detachChatsOfElvesThatAreGone(existingElfIdentifiers: Set<String>) {
+        chatConversationStore.detachElfThreads(ofElvesNotIn: existingElfIdentifiers)
+        if let activeElfIdentifier = activeConversation.elfIdentifier,
+           existingElfIdentifiers.contains(ElfManager.mainElfIdentifier),
+           !existingElfIdentifiers.contains(activeElfIdentifier) {
+            activeConversation.elfIdentifier = nil
+        }
+    }
+
+    /// Back to the main elf's chat after an elf's page: the one that was
+    /// open, else a new one.
+    func showMainChat() {
+        guard isShowingElfThread else { return }
+        // The main elf's history wasn't touched while the elf's chat was
+        // on screen, so it still matches this chat.
+        activeConversation = lastMainConversationIdentifier.flatMap { chatConversationStore.conversation(withIdentifier: $0) }
+            ?? ChatConversation()
+    }
+
+    private func elfName(forIdentifier elfIdentifier: String) -> String {
+        companionManager.elfManager.elf(withIdentifier: elfIdentifier)?.configuration.identity.name ?? elfIdentifier
     }
 
     /// Reopens a saved conversation and gives the model its recent exchanges.
     func openConversation(withIdentifier conversationIdentifier: UUID) {
         guard !isResponding,
               let savedConversation = chatConversationStore.conversation(withIdentifier: conversationIdentifier) else { return }
+        // An elf's chat opens on its page instead.
+        if let elfIdentifier = savedConversation.elfIdentifier, companionManager.elfManager.elf(withIdentifier: elfIdentifier) != nil {
+            openElfThread(forElfIdentifier: elfIdentifier)
+            return
+        }
         activeConversation = savedConversation
+        lastMainConversationIdentifier = savedConversation.id
         companionManager.companionTurnPipeline.replaceConversationHistory(
             with: savedConversation.historyTurns(
                 maximumTurnCount: CompanionTurnPipeline.maximumHistoryTurns,
@@ -100,13 +177,21 @@ final class TextChatViewModel: ObservableObject {
         draft = ""
 
         // Who answers is decided now, so the reply is theirs from the start.
+        // In an elf's own chat, that elf answers.
+        let pickedElfIdentifier = composerElfSelection.takeElfIdentifierForSending()
         let speakingElf = companionManager.addressedElf(
             for: trimmed,
-            chosenElfIdentifier: composerElfSelection.takeElfIdentifierForSending()
+            chosenElfIdentifier: activeConversation.elfIdentifier ?? pickedElfIdentifier
         )
         let chosenElfIdentifier = speakingElf?.id ?? ElfManager.mainElfIdentifier
         var recordedExchange = beginExchange(userText: trimmed, inputSource: .typed, speakingElfIdentifier: speakingElf?.id)
         isResponding = true
+        // Typed in main's chat to a side elf: show its chat, where the
+        // question and the reply now are.
+        if recordedExchange.conversationIdentifier != activeConversation.id, let sideElfIdentifier = recordedExchange.speakingElfIdentifier {
+            elfThreadToShowForTypedMessage = sideElfIdentifier
+            openElfThread(forElfIdentifier: sideElfIdentifier)
+        }
 
         currentTask = Task { [weak self] in
             guard let self else { return }
@@ -167,26 +252,54 @@ final class TextChatViewModel: ObservableObject {
         var speakingElfIdentifier: String? = nil
     }
 
-    /// Adds the question and an empty reply bubble to the open conversation
-    /// and saves it. A spoken question after a long quiet spell starts a new
-    /// conversation instead (see `shouldStartNewConversation(forVoiceTurnAt:)`).
+    /// Adds the question and an empty reply bubble and saves it — in the
+    /// side elf's own chat when one answers, else in the main elf's chat
+    /// (see ChatThreadRouting). A spoken question to main after a long
+    /// quiet spell starts a new chat instead
+    /// (see `shouldStartNewConversation(forVoiceTurnAt:)`).
     func beginExchange(
         userText: String,
         inputSource: StoredChatMessage.InputSource,
         speakingElfIdentifier: String? = nil
     ) -> RecordedExchange {
-        if inputSource == .spoken, !isResponding,
-           activeConversation.shouldStartNewConversation(forVoiceTurnAt: Date()) {
-            startNewConversation()
+        switch ChatThreadRouting.destination(speakingElfIdentifier: speakingElfIdentifier, activeConversation: activeConversation) {
+        case .activeConversation:
+            if activeConversation.elfIdentifier == nil, inputSource == .spoken, !isResponding,
+               activeConversation.shouldStartNewConversation(forVoiceTurnAt: Date()) {
+                startNewConversation()
+            }
+            return appendExchange(userText: userText, inputSource: inputSource, speakingElfIdentifier: speakingElfIdentifier, to: &activeConversation)
+        case let .elfThread(elfIdentifier):
+            var elfThread = chatConversationStore.elfThread(forElfIdentifier: elfIdentifier)
+                ?? ChatConversation.elfThread(elfIdentifier: elfIdentifier, title: elfName(forIdentifier: elfIdentifier))
+            return appendExchange(userText: userText, inputSource: inputSource, speakingElfIdentifier: speakingElfIdentifier, to: &elfThread)
+        case .mainChat:
+            var mainChat = lastMainConversationIdentifier.flatMap { chatConversationStore.conversation(withIdentifier: $0) }
+                ?? ChatConversation()
+            if inputSource == .spoken, mainChat.shouldStartNewConversation(forVoiceTurnAt: Date()) {
+                mainChat = ChatConversation()
+                companionManager.companionTurnPipeline.clearConversationHistory()
+            }
+            let recordedExchange = appendExchange(userText: userText, inputSource: inputSource, speakingElfIdentifier: nil, to: &mainChat)
+            lastMainConversationIdentifier = mainChat.id
+            return recordedExchange
         }
-        let exchangeIdentifiers = activeConversation.appendExchange(
+    }
+
+    private func appendExchange(
+        userText: String,
+        inputSource: StoredChatMessage.InputSource,
+        speakingElfIdentifier: String?,
+        to conversation: inout ChatConversation
+    ) -> RecordedExchange {
+        let exchangeIdentifiers = conversation.appendExchange(
             userText: userText,
             inputSource: inputSource,
             speakingElfIdentifier: speakingElfIdentifier
         )
-        chatConversationStore.save(activeConversation)
+        chatConversationStore.save(conversation)
         return RecordedExchange(
-            conversationIdentifier: activeConversation.id,
+            conversationIdentifier: conversation.id,
             userMessageIdentifier: exchangeIdentifiers.userMessageIdentifier,
             assistantMessageIdentifier: exchangeIdentifiers.assistantMessageIdentifier,
             speakingElfIdentifier: speakingElfIdentifier
@@ -435,7 +548,7 @@ struct TextChatView: View {
 
     private var chatHeader: some View {
         HStack(spacing: 8) {
-            Text(viewModel.activeConversation.title)
+            Text(viewModel.chatTitle)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(DS.Colors.textPrimary)
                 .lineLimit(1)
@@ -445,10 +558,10 @@ struct TextChatView: View {
 
             if showsRecentChatsMenu {
                 Menu {
-                    if chatConversationStore.conversations.isEmpty {
+                    if viewModel.mainConversations.isEmpty {
                         Text("No saved chats yet")
                     }
-                    ForEach(chatConversationStore.conversations.prefix(20)) { conversation in
+                    ForEach(viewModel.mainConversations.prefix(20)) { conversation in
                         Button(conversation.title) {
                             viewModel.openConversation(withIdentifier: conversation.id)
                         }
@@ -604,9 +717,12 @@ struct TextChatView: View {
 
     private var composer: some View {
         HStack(spacing: 8) {
-            ChatComposerElfPicker(viewModel: viewModel)
+            // In an elf's own chat, that elf answers: no picker.
+            if !viewModel.isShowingElfThread {
+                ChatComposerElfPicker(viewModel: viewModel)
+            }
 
-            TextField("Message elfhub…", text: $viewModel.draft, axis: .vertical)
+            TextField(viewModel.composerPlaceholder, text: $viewModel.draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundColor(DS.Colors.textPrimary)
@@ -679,7 +795,7 @@ struct ChatConversationSidebarList: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    if chatConversationStore.conversations.isEmpty {
+                    if viewModel.mainConversations.isEmpty {
                         Text(chatConversationStore.isSavingChatsEnabled
                              ? "Everything you ask — typed or spoken — is saved on this Mac and shows up here."
                              : "Saving chats is off (Settings › Privacy).")
@@ -689,7 +805,7 @@ struct ChatConversationSidebarList: View {
                             .padding(.horizontal, 12)
                             .padding(.top, 4)
                     }
-                    ForEach(chatConversationStore.conversations) { conversation in
+                    ForEach(viewModel.mainConversations) { conversation in
                         ConversationListRow(
                             conversation: conversation,
                             isSelected: conversation.id == viewModel.activeConversation.id,

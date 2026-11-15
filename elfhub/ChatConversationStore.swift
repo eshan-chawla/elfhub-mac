@@ -141,8 +141,34 @@ struct ChatConversation: Codable, Identifiable, Equatable {
     let createdAt: Date
     var updatedAt: Date
     var messages: [StoredChatMessage]
+    /// Nil for the main elf's chats (the sidebar's list). A side elf's one
+    /// ongoing chat — everything the user says to it, wherever they said
+    /// it — carries that elf's identifier and shows on its page.
+    var elfIdentifier: String?
 
     static let untitledConversationTitle = "New chat"
+
+    /// A side elf's ongoing chat, before its first message.
+    static func elfThread(elfIdentifier: String, title: String) -> ChatConversation {
+        var elfThread = ChatConversation(title: title)
+        elfThread.elfIdentifier = elfIdentifier
+        return elfThread
+    }
+
+    /// An imported elf's chats as its one ongoing chat, oldest message
+    /// first; nil when there were none.
+    static func mergedElfThread(from importedChats: [ChatConversation], elfIdentifier: String, title: String) -> ChatConversation? {
+        guard !importedChats.isEmpty else { return nil }
+        let orderedChats = importedChats.sorted { $0.createdAt < $1.createdAt }
+        var mergedThread = ChatConversation(
+            title: title,
+            createdAt: orderedChats.first?.createdAt ?? Date(),
+            messages: orderedChats.flatMap(\.messages)
+        )
+        mergedThread.elfIdentifier = elfIdentifier
+        mergedThread.updatedAt = orderedChats.map(\.updatedAt).max() ?? mergedThread.createdAt
+        return mergedThread
+    }
 
     init(id: UUID = UUID(), title: String = ChatConversation.untitledConversationTitle, createdAt: Date = Date(), messages: [StoredChatMessage] = []) {
         self.id = id
@@ -160,7 +186,8 @@ struct ChatConversation: Codable, Identifiable, Equatable {
         inputSource: StoredChatMessage.InputSource,
         speakingElfIdentifier: String? = nil
     ) -> (userMessageIdentifier: UUID, assistantMessageIdentifier: UUID) {
-        if messages.isEmpty {
+        // A side elf's chat keeps its name as its title.
+        if messages.isEmpty, elfIdentifier == nil {
             title = ChatConversation.title(forFirstUserMessage: userText)
         }
         let userMessage = StoredChatMessage(role: .user, text: userText, inputSource: inputSource)
@@ -326,6 +353,30 @@ struct ChatConversation: Codable, Identifiable, Equatable {
     }
 }
 
+/// Where a new exchange is recorded.
+enum ChatExchangeDestination: Equatable {
+    /// The chat on screen.
+    case activeConversation
+    /// That side elf's ongoing chat (made if it has none yet).
+    case elfThread(String)
+    /// The main elf's latest chat (or a new one), because a side elf's chat
+    /// is on screen.
+    case mainChat
+}
+
+/// Each side elf has one ongoing chat: whatever the user says to it — by
+/// name or with the picker, typed or spoken, from any page — goes there,
+/// and whatever goes to the main elf goes to the main elf's chats.
+enum ChatThreadRouting {
+    static func destination(speakingElfIdentifier: String?, activeConversation: ChatConversation) -> ChatExchangeDestination {
+        let sideElfIdentifier = speakingElfIdentifier == ElfManager.mainElfIdentifier ? nil : speakingElfIdentifier
+        if let sideElfIdentifier {
+            return activeConversation.elfIdentifier == sideElfIdentifier ? .activeConversation : .elfThread(sideElfIdentifier)
+        }
+        return activeConversation.elfIdentifier == nil ? .activeConversation : .mainChat
+    }
+}
+
 @MainActor
 final class ChatConversationStore: ObservableObject {
     /// Saved conversations, most recently updated first.
@@ -367,6 +418,20 @@ final class ChatConversationStore: ObservableObject {
         conversations.first { $0.id == conversationIdentifier }
     }
 
+    /// A side elf's ongoing chat, once it has one.
+    func elfThread(forElfIdentifier elfIdentifier: String) -> ChatConversation? {
+        conversations.first { $0.elfIdentifier == elfIdentifier }
+    }
+
+    /// The sidebar's chats: the main elf's, plus the chats of elves that
+    /// have since been deleted (so nothing said to them disappears).
+    func mainConversations(existingElfIdentifiers: Set<String>) -> [ChatConversation] {
+        conversations.filter { conversation in
+            guard let elfIdentifier = conversation.elfIdentifier else { return true }
+            return !existingElfIdentifiers.contains(elfIdentifier)
+        }
+    }
+
     // MARK: - Writing
 
     /// Adds or replaces a conversation and writes it to disk. Empty
@@ -381,6 +446,23 @@ final class ChatConversationStore: ObservableObject {
 
         guard isSavingChatsEnabled else { return }
         writeConversationToDisk(updatedConversation)
+    }
+
+    /// The chats of elves that are gone (deleted, or removed in Finder)
+    /// become ordinary main-elf chats, in place — so nothing said to them
+    /// disappears, and a new elf that gets the same name starts its own.
+    /// Skipped when the roster has no main elf (it's always there; an empty
+    /// roster means it couldn't be read).
+    func detachElfThreads(ofElvesNotIn existingElfIdentifiers: Set<String>) {
+        guard existingElfIdentifiers.contains(ElfManager.mainElfIdentifier) else { return }
+        for conversationIndex in conversations.indices {
+            guard let elfIdentifier = conversations[conversationIndex].elfIdentifier,
+                  !existingElfIdentifiers.contains(elfIdentifier) else { continue }
+            conversations[conversationIndex].elfIdentifier = nil
+            if isSavingChatsEnabled {
+                writeConversationToDisk(conversations[conversationIndex])
+            }
+        }
     }
 
     func deleteConversation(withIdentifier conversationIdentifier: UUID) {

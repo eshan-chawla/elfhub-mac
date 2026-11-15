@@ -9,7 +9,7 @@
 //  elf: a name of its own if it clashes ("Juniper 2"), its web and folder
 //  switches back to the defaults (an import can't grant itself more), no
 //  folder grants, the model it was made with when this Mac has it (else the
-//  main elf's), and its chats under new ids.
+//  main elf's), and its chats under new ids, as its one ongoing chat.
 //
 
 import Foundation
@@ -184,6 +184,7 @@ enum ElfImporter {
         elfManager.reloadRoster()
         guard let importedElf = elfManager.elf(withIdentifier: elfIdentifier) else { throw ElfManagerError.unknownElf(elfIdentifier) }
 
+        var importedChats: [ChatConversation] = []
         for exportedChat in importPreview.chats {
             var importedChat = ChatConversation(id: UUID(), title: exportedChat.title, createdAt: exportedChat.createdAt, messages: [])
             // Ordinary exchanges with new ids: nothing from the file can pose
@@ -200,7 +201,15 @@ enum ElfImporter {
                 )
             }
             importedChat.updatedAt = exportedChat.updatedAt
-            onImportedChat(importedChat)
+            importedChats.append(importedChat)
+        }
+        // A side elf has one ongoing chat: what came with it becomes that chat.
+        if let importedThread = ChatConversation.mergedElfThread(
+            from: importedChats,
+            elfIdentifier: importedElf.id,
+            title: importedElf.configuration.identity.name
+        ) {
+            onImportedChat(importedThread)
         }
         return importedElf
     }

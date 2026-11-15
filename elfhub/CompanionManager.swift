@@ -169,6 +169,15 @@ final class CompanionManager: ObservableObject {
             )
         },
         outsideToolsProvider: { [weak self] elf in self?.outsideTools(for: elf) ?? [] },
+        sideElfThreadHistoryProvider: { [weak self] sideElf in
+            // Its replies are named as its own, so none is marked as another elf's.
+            self?.chatConversationStore.elfThread(forElfIdentifier: sideElf.id)?.historyTurns(
+                maximumTurnCount: CompanionTurnPipeline.sideElfMaximumHistoryTurns,
+                elfNameForIdentifier: { [weak self] elfIdentifier in
+                    self?.elfManager.elf(withIdentifier: elfIdentifier)?.configuration.identity.name
+                }
+            ) ?? []
+        },
         mainElfStatusProvider: { [weak self] in self?.mainElfStatusUpdate() },
         onMainElfStatusDelivered: { [weak self] reportedTaskIdentifiers in
             self?.elfTaskScheduler.markReported(taskIdentifiers: reportedTaskIdentifiers)
@@ -355,7 +364,11 @@ final class CompanionManager: ObservableObject {
             requestKind = .quick
         }
         guard requestKind == .long else { return nil }
-        let recentExchanges = textChatViewModel.activeConversation
+        // What was said just before, in the chat the request came from (the
+        // elf's own chat when the user talked to it).
+        let originConversation = originConversationIdentifier.flatMap { chatConversationStore.conversation(withIdentifier: $0) }
+            ?? textChatViewModel.activeConversation
+        let recentExchanges = originConversation
             .historyTurns(maximumTurnCount: 3)
             .map { ElfTaskConversationTurn(userText: $0.userText, assistantText: $0.assistantText) }
         do {

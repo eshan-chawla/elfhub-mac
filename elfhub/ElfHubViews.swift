@@ -314,20 +314,103 @@ struct ElfHubPage: View {
         return elfEditor.isMainElf ? "Your main elf — the one you talk to." : "One of your elves."
     }
 
+    /// A side elf's page opens on its chat.
+    @State private var selectedTab = ElfPageTab.chat
+
     var body: some View {
-        MainAppPage(title: pageTitle, subtitle: pageSubtitle) {
-            if !elfEditor.isMainElf {
-                Text("Talk to \(elfEditor.elf.configuration.identity.name) by starting with its name — “\(elfEditor.elf.configuration.identity.name), what's this?” — or pick it in the chat.")
-                    .font(.system(size: 12))
-                    .foregroundColor(DS.Colors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        if elfEditor.isMainElf {
+            // The main elf's chats are the sidebar's; its page is its settings.
+            MainAppPage(title: pageTitle, subtitle: pageSubtitle) {
+                ElfSettingsContent(
+                    companionManager: companionManager,
+                    elfEditor: elfEditor,
+                    onOpenModelSettings: onOpenModelSettings,
+                    onElfDeleted: onElfDeleted
+                )
             }
-            ElfSettingsContent(
-                companionManager: companionManager,
-                elfEditor: elfEditor,
-                onOpenModelSettings: onOpenModelSettings,
-                onElfDeleted: onElfDeleted
-            )
+        } else {
+            sideElfPage
+        }
+    }
+
+    /// A side elf's page: its one ongoing chat, what it did (tasks and file
+    /// changes), and its settings.
+    private var sideElfPage: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pageTitle)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(DS.Colors.textPrimary)
+                    Text(pageSubtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textTertiary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Picker("", selection: $selectedTab) {
+                    ForEach(ElfPageTab.allCases) { elfPageTab in
+                        Text(elfPageTab.title).tag(elfPageTab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .pointerCursor()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            Divider().background(DS.Colors.borderSubtle)
+
+            switch selectedTab {
+            case .chat:
+                TextChatView(viewModel: companionManager.textChatViewModel, showsRecentChatsMenu: false)
+                    .onAppear { companionManager.textChatViewModel.openElfThread(forElfIdentifier: elfEditor.elf.id) }
+            case .work:
+                MainAppPage {
+                    Text("What \(elfEditor.elf.configuration.identity.name) worked on: tasks you or \(companionManager.elfManager.mainElf.configuration.identity.name) gave it, and every file it changed.")
+                        .font(.system(size: 12))
+                        .foregroundColor(DS.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ElfTasksSection(elfEditor: elfEditor, elfTaskScheduler: companionManager.elfTaskScheduler)
+                        .mainAppCard()
+                    ElfChangesSection(elfEditor: elfEditor)
+                        .mainAppCard()
+                }
+                .onAppear { elfEditor.reload() }
+            case .settings:
+                MainAppPage {
+                    Text("Talk to \(elfEditor.elf.configuration.identity.name) here in its chat, or anywhere by starting with its name — “\(elfEditor.elf.configuration.identity.name), what's this?”.")
+                        .font(.system(size: 12))
+                        .foregroundColor(DS.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ElfSettingsContent(
+                        companionManager: companionManager,
+                        elfEditor: elfEditor,
+                        onOpenModelSettings: onOpenModelSettings,
+                        onElfDeleted: onElfDeleted,
+                        includesWorkSections: false
+                    )
+                }
+            }
+        }
+        .background(DS.Colors.background)
+    }
+}
+
+/// The tabs of a side elf's page.
+enum ElfPageTab: String, CaseIterable, Identifiable {
+    case chat
+    case work
+    case settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .chat: return "Chat"
+        case .work: return "Work"
+        case .settings: return "Settings"
         }
     }
 }
@@ -337,6 +420,8 @@ struct ElfSettingsContent: View {
     @ObservedObject var elfEditor: ElfEditor
     let onOpenModelSettings: () -> Void
     let onElfDeleted: () -> Void
+    /// Its tasks and file changes; a side elf shows them on its Work tab.
+    var includesWorkSections = true
 
     var body: some View {
         Text("An elf's soul, its notes about you and its skills go to your language model with every question it answers, like the rest of the conversation. They're plain files in its home folder — edit them here or in any text editor.")
@@ -383,12 +468,16 @@ struct ElfSettingsContent: View {
         .mainAppCard()
         ElfSkillsSection(elfEditor: elfEditor)
             .mainAppCard()
-        ElfTasksSection(elfEditor: elfEditor, elfTaskScheduler: companionManager.elfTaskScheduler)
-            .mainAppCard()
+        if includesWorkSections {
+            ElfTasksSection(elfEditor: elfEditor, elfTaskScheduler: companionManager.elfTaskScheduler)
+                .mainAppCard()
+        }
         ElfFolderGrantsSection(elfEditor: elfEditor)
             .mainAppCard()
-        ElfChangesSection(elfEditor: elfEditor)
-            .mainAppCard()
+        if includesWorkSections {
+            ElfChangesSection(elfEditor: elfEditor)
+                .mainAppCard()
+        }
         ElfHomeAndExportSection(companionManager: companionManager, elfEditor: elfEditor)
             .mainAppCard()
         if !elfEditor.isMainElf {

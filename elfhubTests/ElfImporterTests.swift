@@ -130,6 +130,8 @@ struct ElfImporterTests {
         let importedElf = try ElfImporter.install(importPreview, elfManager: fixture.elfManager, importsDirectory: fixture.importsDirectory, onImportedChat: { importedChats.append($0) })
         let importedChat = try #require(importedChats.first)
         #expect(importedChat.messages.last?.speakingElfIdentifier == importedElf.id)
+        // It comes in as the imported elf's own ongoing chat.
+        #expect(importedChat.elfIdentifier == importedElf.id)
         let exportedChat = try #require(importPreview.chats.first)
         #expect(importedChat.id != exportedChat.id)
     }
