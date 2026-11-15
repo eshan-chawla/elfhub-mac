@@ -170,7 +170,8 @@ enum ConsentPolicy {
     static func consequentialEffect(of context: ScreenActionConsentContext) -> ConsentSensitiveEffect? {
         let isSensitiveContext = sensitiveContextReason(of: context) != nil
         switch context.action {
-        case let .click(_, modelLabel, _), let .doubleClick(_, modelLabel, _):
+        case let .click(_, modelLabel, _), let .doubleClick(_, modelLabel, _),
+             let .rightClick(_, modelLabel, _), let .tripleClick(_, modelLabel, _):
             // The real title wins; the model's label can only add caution.
             return sensitiveEffect(forTargetText: context.targetElementFacts?.title)
                 ?? sensitiveEffect(forTargetText: modelLabel)
@@ -192,7 +193,11 @@ enum ConsentPolicy {
                 return .send
             }
             return nil
-        case .scroll:
+        // A drag picks up what's under its start (judged there by title);
+        // moving the pointer changes nothing.
+        case .drag:
+            return sensitiveEffect(forTargetText: context.targetElementFacts?.title)
+        case .scroll, .moveMouse:
             return nil
         }
     }

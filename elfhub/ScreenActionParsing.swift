@@ -30,6 +30,15 @@ enum CompanionScreenAction: Equatable {
     case scroll(screenshotPixel: CGPoint, direction: ScreenActionSynthesizer.ScrollDirection, screenNumber: Int?)
     case type(text: String)
     case key(comboString: String)
+    // Used by the multi-step loop (computer use); single-shot replies and
+    // tags never produce these.
+    case rightClick(screenshotPixel: CGPoint, label: String?, screenNumber: Int?)
+    case tripleClick(screenshotPixel: CGPoint, label: String?, screenNumber: Int?)
+    /// Press at one point, move to another, release (moving a slider,
+    /// selecting text, dragging a file).
+    case drag(fromScreenshotPixel: CGPoint, toScreenshotPixel: CGPoint, screenNumber: Int?)
+    /// Move the pointer without clicking (to show a hover menu).
+    case moveMouse(screenshotPixel: CGPoint, screenNumber: Int?)
 
     /// Short human-readable description used in the consent card and narration,
     /// e.g. "click the save button" or "press cmd+s".
@@ -45,6 +54,14 @@ enum CompanionScreenAction: Equatable {
             return "type \"\(text)\""
         case let .key(comboString):
             return "press \(comboString)"
+        case let .rightClick(_, label, _):
+            return "right-click \(label.map { "the \($0)" } ?? "here")"
+        case let .tripleClick(_, label, _):
+            return "triple-click \(label.map { "the \($0)" } ?? "here")"
+        case .drag:
+            return "drag from here to there"
+        case .moveMouse:
+            return "move the pointer here"
         }
     }
 }

@@ -121,6 +121,18 @@ enum ScreenGuidanceCoordinateNormalizer {
                 return .act(.doubleClick(screenshotPixel: convertPoint(modelPoint, screenNumber: screenNumber), label: label, screenNumber: screenNumber))
             case let .scroll(modelPoint, direction, screenNumber):
                 return .act(.scroll(screenshotPixel: convertPoint(modelPoint, screenNumber: screenNumber), direction: direction, screenNumber: screenNumber))
+            case let .rightClick(modelPoint, label, screenNumber):
+                return .act(.rightClick(screenshotPixel: convertPoint(modelPoint, screenNumber: screenNumber), label: label, screenNumber: screenNumber))
+            case let .tripleClick(modelPoint, label, screenNumber):
+                return .act(.tripleClick(screenshotPixel: convertPoint(modelPoint, screenNumber: screenNumber), label: label, screenNumber: screenNumber))
+            case let .drag(modelStartPoint, modelEndPoint, screenNumber):
+                return .act(.drag(
+                    fromScreenshotPixel: convertPoint(modelStartPoint, screenNumber: screenNumber),
+                    toScreenshotPixel: convertPoint(modelEndPoint, screenNumber: screenNumber),
+                    screenNumber: screenNumber
+                ))
+            case let .moveMouse(modelPoint, screenNumber):
+                return .act(.moveMouse(screenshotPixel: convertPoint(modelPoint, screenNumber: screenNumber), screenNumber: screenNumber))
             case .type, .key:
                 return command
             }

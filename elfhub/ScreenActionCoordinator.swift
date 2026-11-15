@@ -78,6 +78,8 @@ struct ResolvedScreenAction {
     /// The consequential effect (send, delete, …), if any — used to word the
     /// confirmation and to require the verb in a spoken yes.
     let consequentialEffect: ConsentSensitiveEffect?
+    /// Where a drag lets go (Core Graphics global); nil for everything else.
+    var coreGraphicsDragEndPoint: CGPoint? = nil
 
     /// Plain-English description for the consent card and narration. Prefers
     /// the real element's title over the model's label.
@@ -88,6 +90,12 @@ struct ResolvedScreenAction {
             return "click " + (targetName ?? label.map { "the \($0)" } ?? "here")
         case let .doubleClick(_, label, _):
             return "double-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
+        case let .rightClick(_, label, _):
+            return "right-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
+        case let .tripleClick(_, label, _):
+            return "triple-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
+        case .drag:
+            return "drag " + (targetName ?? "from here")
         default:
             return action.humanReadableDescription
         }
@@ -583,6 +591,21 @@ final class ScreenActionCoordinator: ObservableObject {
                 speak?("i couldn't work out how to press \(comboString), so i stopped there.")
                 return false
             }
+        case .rightClick:
+            guard let coreGraphicsTargetPoint = resolvedAction.coreGraphicsTargetPoint else { return false }
+            await ScreenActionSynthesizer.performRightClick(at: coreGraphicsTargetPoint)
+        case .tripleClick:
+            guard let coreGraphicsTargetPoint = resolvedAction.coreGraphicsTargetPoint else { return false }
+            await ScreenActionSynthesizer.performTripleClick(at: coreGraphicsTargetPoint)
+        case .drag:
+            guard let coreGraphicsStartPoint = resolvedAction.coreGraphicsTargetPoint,
+                  let coreGraphicsEndPoint = resolvedAction.coreGraphicsDragEndPoint else { return false }
+            await ScreenActionSynthesizer.performDrag(from: coreGraphicsStartPoint, to: coreGraphicsEndPoint, shouldContinue: { [weak self] in
+                !(self?.isStopRequested ?? true)
+            })
+        case .moveMouse:
+            guard let coreGraphicsTargetPoint = resolvedAction.coreGraphicsTargetPoint else { return false }
+            ScreenActionSynthesizer.movePointer(to: coreGraphicsTargetPoint)
         }
         return true
     }
@@ -614,6 +637,11 @@ final class ScreenActionCoordinator: ObservableObject {
         var appKitTargetPoint: CGPoint?
         var displayFrame: CGRect?
         var targetElementFacts: AccessibilityElementFacts?
+        var coreGraphicsDragEndPoint: CGPoint?
+        if case let .drag(_, toScreenshotPixel, screenNumber) = action,
+           let dragEndCapture = CompanionScreenCapture.targetCapture(screenNumber: screenNumber, in: screenCaptures) {
+            coreGraphicsDragEndPoint = dragEndCapture.coreGraphicsGlobalPoint(fromScreenshotPixel: toScreenshotPixel)
+        }
 
         if let actionTarget = Self.targetScreenshotPixel(of: action),
            let targetCapture = CompanionScreenCapture.targetCapture(screenNumber: actionTarget.screenNumber, in: screenCaptures) {
@@ -656,14 +684,15 @@ final class ScreenActionCoordinator: ObservableObject {
             targetElementFacts: targetElementFacts,
             frontmostApplicationBundleIdentifier: frontmostApplicationBundleIdentifier,
             consentDecision: ConsentPolicy.evaluate(consentContext),
-            consequentialEffect: ConsentPolicy.consequentialEffect(of: consentContext)
+            consequentialEffect: ConsentPolicy.consequentialEffect(of: consentContext),
+            coreGraphicsDragEndPoint: coreGraphicsDragEndPoint
         )
     }
 
     private static func isKeystrokeAction(_ action: CompanionScreenAction) -> Bool {
         switch action {
         case .type, .key: return true
-        case .click, .doubleClick, .scroll: return false
+        case .click, .doubleClick, .scroll, .rightClick, .tripleClick, .drag, .moveMouse: return false
         }
     }
 
@@ -671,8 +700,14 @@ final class ScreenActionCoordinator: ObservableObject {
         switch action {
         case let .click(screenshotPixel, _, screenNumber),
              let .doubleClick(screenshotPixel, _, screenNumber),
-             let .scroll(screenshotPixel, _, screenNumber):
+             let .scroll(screenshotPixel, _, screenNumber),
+             let .rightClick(screenshotPixel, _, screenNumber),
+             let .tripleClick(screenshotPixel, _, screenNumber),
+             let .moveMouse(screenshotPixel, screenNumber):
             return (screenshotPixel, screenNumber)
+        // A drag is judged by where it starts: that's what it picks up.
+        case let .drag(fromScreenshotPixel, _, screenNumber):
+            return (fromScreenshotPixel, screenNumber)
         case .type, .key:
             return nil
         }
@@ -687,7 +722,7 @@ final class ScreenActionCoordinator: ObservableObject {
         displayBounds: CGRect
     ) -> CGPoint? {
         switch action {
-        case .click, .doubleClick:
+        case .click, .doubleClick, .rightClick, .tripleClick:
             guard let targetElementFacts,
                   let elementFrame = targetElementFacts.frameInCoreGraphicsGlobalCoordinates,
                   AccessibilitySnapping.isElementUsableForSnapping(
@@ -730,10 +765,15 @@ final class ScreenActionCoordinator: ObservableObject {
 
     private static func modelLabel(of action: CompanionScreenAction) -> String? {
         switch action {
-        case let .click(_, label, _), let .doubleClick(_, label, _):
+        case let .click(_, label, _), let .doubleClick(_, label, _),
+             let .rightClick(_, label, _), let .tripleClick(_, label, _):
             return label
         case .scroll:
             return "scroll here"
+        case .drag:
+            return "drag from here"
+        case .moveMouse:
+            return "pointer"
         case .type, .key:
             return nil
         }

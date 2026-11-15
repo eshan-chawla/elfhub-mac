@@ -99,6 +99,59 @@ enum ScreenActionSynthesizer {
         await postMouseClickPair(at: coreGraphicsGlobalPoint, clickState: 2)
     }
 
+    /// A left triple-click (selects a whole line or paragraph): three pairs
+    /// with a rising click state on the same spot.
+    static func performTripleClick(at coreGraphicsGlobalPoint: CGPoint) async {
+        await postMouseMove(to: coreGraphicsGlobalPoint)
+        await postMouseClickPair(at: coreGraphicsGlobalPoint, clickState: 1)
+        await postMouseClickPair(at: coreGraphicsGlobalPoint, clickState: 2)
+        await postMouseClickPair(at: coreGraphicsGlobalPoint, clickState: 3)
+    }
+
+    /// A right click, which opens the context menu.
+    static func performRightClick(at coreGraphicsGlobalPoint: CGPoint) async {
+        await postMouseMove(to: coreGraphicsGlobalPoint)
+        let eventSource = CGEventSource(stateID: .hidSystemState)
+        postTaggedEvent(CGEvent(mouseEventSource: eventSource, mouseType: .rightMouseDown,
+                                mouseCursorPosition: coreGraphicsGlobalPoint, mouseButton: .right))
+        await interEventPause()
+        postTaggedEvent(CGEvent(mouseEventSource: eventSource, mouseType: .rightMouseUp,
+                                mouseCursorPosition: coreGraphicsGlobalPoint, mouseButton: .right))
+    }
+
+    /// Presses at `startPoint`, moves to `endPoint` in small steps (apps
+    /// only notice a drag through intermediate positions), then lets go.
+    /// The button is always released — even when stopped halfway — so the
+    /// user's mouse is never left held down.
+    static func performDrag(from startPoint: CGPoint, to endPoint: CGPoint, shouldContinue: () -> Bool = { true }) async {
+        await postMouseMove(to: startPoint)
+        let eventSource = CGEventSource(stateID: .hidSystemState)
+        postTaggedEvent(CGEvent(mouseEventSource: eventSource, mouseType: .leftMouseDown,
+                                mouseCursorPosition: startPoint, mouseButton: .left))
+        var lastPosition = startPoint
+        let intermediateStepCount = 12
+        for stepNumber in 1...intermediateStepCount {
+            guard shouldContinue() else { break }
+            await interEventPause()
+            let fraction = CGFloat(stepNumber) / CGFloat(intermediateStepCount)
+            lastPosition = CGPoint(
+                x: startPoint.x + (endPoint.x - startPoint.x) * fraction,
+                y: startPoint.y + (endPoint.y - startPoint.y) * fraction
+            )
+            postTaggedEvent(CGEvent(mouseEventSource: eventSource, mouseType: .leftMouseDragged,
+                                    mouseCursorPosition: lastPosition, mouseButton: .left))
+        }
+        await interEventPause()
+        postTaggedEvent(CGEvent(mouseEventSource: eventSource, mouseType: .leftMouseUp,
+                                mouseCursorPosition: lastPosition, mouseButton: .left))
+        lastSyntheticPointerLocation = lastPosition
+    }
+
+    /// Moves the pointer without clicking (to open a hover menu).
+    static func movePointer(to coreGraphicsGlobalPoint: CGPoint) {
+        postMouseMoveWithoutPause(to: coreGraphicsGlobalPoint)
+    }
+
     private static func postMouseMove(to point: CGPoint) async {
         postMouseMoveWithoutPause(to: point)
         // Give the target app a beat to register the hover before the click.

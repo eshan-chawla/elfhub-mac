@@ -83,6 +83,10 @@ extension ComputerUseAuditEntry {
         case .scroll: return "scroll"
         case .type: return "type"
         case .key: return "key"
+        case .rightClick: return "right_click"
+        case .tripleClick: return "triple_click"
+        case .drag: return "drag"
+        case .moveMouse: return "move_mouse"
         }
     }
 
