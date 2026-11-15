@@ -60,6 +60,53 @@ enum ScreenActionApprovalProvenance: String, Codable {
 /// Identifies one turn, so only the newest turn's actions may run.
 typealias ScreenActionTurnToken = UUID
 
+/// What happened to one action in a multi-step run.
+enum ComputerUseActionOutcome: Equatable {
+    case performed
+    /// Not carried out, for a reason the model can work around (a key it
+    /// couldn't press, the screen changed while waiting for the user).
+    case notPerformed(reason: String)
+    /// The user said no, or didn't answer in time: the run ends.
+    case declinedByUser
+    /// Esc, the user grabbing the mouse or keyboard, or a newer turn: the run ends.
+    case stoppedByUser
+    /// The user's own step (a password, a private app), or acting isn't
+    /// possible right now: the run ends and the reason is said.
+    case handedToUser(reason: String)
+
+    var endsTheRun: Bool {
+        switch self {
+        case .performed, .notPerformed: return false
+        case .declinedByUser, .stoppedByUser, .handedToUser: return true
+        }
+    }
+}
+
+/// What the user has allowed so far in one multi-step run: once they've
+/// said go, ordinary steps in the same apps don't ask again; a step into
+/// another app, or one ConsentPolicy says needs an explicit yes, still does.
+@MainActor
+final class ComputerUseRunApproval {
+    private(set) var approvalProvenance: ScreenActionApprovalProvenance?
+    private(set) var approvedApplicationBundleIdentifiers: Set<String> = []
+
+    var isApproved: Bool { approvalProvenance != nil }
+
+    func recordApproval(_ provenance: ScreenActionApprovalProvenance, applicationBundleIdentifier: String?) {
+        if approvalProvenance == nil {
+            approvalProvenance = provenance
+        }
+        if let applicationBundleIdentifier {
+            approvedApplicationBundleIdentifiers.insert(applicationBundleIdentifier)
+        }
+    }
+
+    func coversApplication(_ applicationBundleIdentifier: String?) -> Bool {
+        guard let applicationBundleIdentifier else { return true }
+        return approvedApplicationBundleIdentifiers.contains(applicationBundleIdentifier)
+    }
+}
+
 /// One action with everything resolved before anything fires: where it lands,
 /// what real element is there, and how much consent it needs.
 struct ResolvedScreenAction {
@@ -205,6 +252,17 @@ final class ScreenActionCoordinator: ObservableObject {
     /// Auto-cancels a consent card the user never answers, so a stale prompt
     /// doesn't fire much later against a screen that has since changed.
     private var pendingConsentTimeoutTask: Task<Void, Never>?
+    /// Set while a multi-step run waits on the consent card: confirming or
+    /// cancelling answers the run instead of firing a stored chain.
+    private var pendingRunApprovalContinuation: CheckedContinuation<ScreenActionApprovalProvenance?, Never>?
+    /// Where the pointer was when the current run started, so it goes back
+    /// there at the end if the user hasn't moved it.
+    private var pointerLocationBeforeComputerUseRun: CGPoint?
+    private var isFiringComputerUseRunStep = false
+
+    /// True while a multi-step run is paused for the user's yes or no — a
+    /// push-to-talk then answers it rather than cancelling the run.
+    var isComputerUseRunAwaitingApproval: Bool { pendingRunApprovalContinuation != nil }
     private static let pendingConsentTimeout: TimeInterval = 20
 
     // MARK: - Execution state
@@ -350,6 +408,12 @@ final class ScreenActionCoordinator: ObservableObject {
     /// re-checked against the live screen as they fire.
     func confirmPendingActions(approvalProvenance: ScreenActionApprovalProvenance = .userClickedConfirm) {
         guard let pendingConsent else { return }
+        if let pendingRunApprovalContinuation {
+            self.pendingRunApprovalContinuation = nil
+            clearPending()
+            pendingRunApprovalContinuation.resume(returning: approvalProvenance)
+            return
+        }
         clearPending()
         fireActions(
             pendingConsent.resolvedActions,
@@ -384,6 +448,10 @@ final class ScreenActionCoordinator: ObservableObject {
             recordAuditEntry(for: resolvedAction, approvalProvenance: nil, outcome: .declinedOrDropped)
         }
         clearPending()
+        if let pendingRunApprovalContinuation {
+            self.pendingRunApprovalContinuation = nil
+            pendingRunApprovalContinuation.resume(returning: nil)
+        }
     }
 
     private func clearPending() {
@@ -588,7 +656,11 @@ final class ScreenActionCoordinator: ObservableObject {
         case let .key(comboString):
             let didPressKeyCombo = await ScreenActionSynthesizer.performKeyCombo(comboString: comboString)
             if !didPressKeyCombo {
-                speak?("i couldn't work out how to press \(comboString), so i stopped there.")
+                // In a run the model hears about it in the step's result
+                // and can try another way.
+                if !isFiringComputerUseRunStep {
+                    speak?("i couldn't work out how to press \(comboString), so i stopped there.")
+                }
                 return false
             }
         case .rightClick:
@@ -608,6 +680,174 @@ final class ScreenActionCoordinator: ObservableObject {
             ScreenActionSynthesizer.movePointer(to: coreGraphicsTargetPoint)
         }
         return true
+    }
+
+    // MARK: - Multi-step runs (computer use)
+
+    /// Called when a multi-step run starts: remembers where the pointer is.
+    func beginComputerUseRun() {
+        pointerLocationBeforeComputerUseRun = ScreenActionSynthesizer.currentPointerLocation()
+    }
+
+    /// Called when the run ends however it ends: the pointer goes back if
+    /// the user hasn't touched it, and the pill stops saying it's acting.
+    func finishComputerUseRun() {
+        if let pointerLocationBeforeComputerUseRun {
+            ScreenActionSynthesizer.restorePointerIfUntouched(to: pointerLocationBeforeComputerUseRun)
+        }
+        pointerLocationBeforeComputerUseRun = nil
+        emitCompanionEvent?(.actionsFinished)
+    }
+
+    /// One action of a multi-step run, resolved against the screen as it is
+    /// now and judged like any other: the user's own step ends the run; an
+    /// action ConsentPolicy flags, the first step (when every action needs
+    /// a yes), and a step into an app the user hasn't okayed wait for the
+    /// card; then it's previewed with the pointer and fired, stoppable with
+    /// Esc or by touching the mouse or keyboard.
+    func performActionInComputerUseRun(
+        _ action: CompanionScreenAction,
+        screenCapture: CompanionScreenCapture,
+        userUtterance: String,
+        turnToken: ScreenActionTurnToken,
+        runApproval: ComputerUseRunApproval,
+        stepDescription: String
+    ) async -> ComputerUseActionOutcome {
+        guard isActionModeEnabled else {
+            return .handedToUser(reason: "acting on the screen is switched off.")
+        }
+        guard turnToken == currentTurnToken else { return .stoppedByUser }
+        guard hasAccessibilityPermission?() == true else {
+            return .handedToUser(reason: "i'd need accessibility permission to actually do that. you can turn it on from my menu bar panel.")
+        }
+
+        let screenCaptures = [screenCapture]
+        var resolvedAction = await resolveSingleAction(action, screenCaptures: screenCaptures, userUtterance: userUtterance)
+        guard turnToken == currentTurnToken, !Task.isCancelled else { return .stoppedByUser }
+
+        if case let .usersStep(reason) = resolvedAction.consentDecision {
+            previewTarget(of: resolvedAction)
+            recordAuditEntry(for: resolvedAction, approvalProvenance: runApproval.approvalProvenance, outcome: .handedToUser)
+            return .handedToUser(reason: reason)
+        }
+
+        let targetApplicationBundleIdentifier = resolvedAction.targetElementFacts?.owningApplicationBundleIdentifier
+            ?? resolvedAction.frontmostApplicationBundleIdentifier
+        let stepLeavesApprovedApplications = runApproval.isApproved && !runApproval.coversApplication(targetApplicationBundleIdentifier)
+        let needsApproval = resolvedAction.requiresExplicitConfirmation
+            || (executionMode == .confirmEachAction && (!runApproval.isApproved || stepLeavesApprovedApplications))
+
+        if needsApproval {
+            let approvalProvenance = await requestApprovalInComputerUseRun(
+                for: resolvedAction,
+                screenCaptures: screenCaptures,
+                userUtterance: userUtterance,
+                spokenIntroduction: stepLeavesApprovedApplications ? "this next step is in another app. " : nil
+            )
+            guard let approvalProvenance else { return .declinedByUser }
+            guard turnToken == currentTurnToken, !Task.isCancelled else { return .stoppedByUser }
+            runApproval.recordApproval(approvalProvenance, applicationBundleIdentifier: targetApplicationBundleIdentifier)
+
+            // Approval is bound to what was shown: the target is checked
+            // again now, since waiting for an answer takes time.
+            let freshlyResolvedAction = await resolveSingleAction(action, screenCaptures: screenCaptures, userUtterance: userUtterance)
+            guard freshlyResolvedAction.targetsSameElement(as: resolvedAction) else {
+                recordAuditEntry(for: freshlyResolvedAction, approvalProvenance: approvalProvenance, outcome: .screenChanged)
+                return .notPerformed(reason: "the screen changed while waiting for the user's okay, so nothing was done. take a new screenshot.")
+            }
+            if case let .usersStep(reason) = freshlyResolvedAction.consentDecision {
+                recordAuditEntry(for: freshlyResolvedAction, approvalProvenance: approvalProvenance, outcome: .handedToUser)
+                return .handedToUser(reason: reason)
+            }
+            resolvedAction = freshlyResolvedAction
+        } else if !runApproval.isApproved {
+            // Firing without a card: the standing "do it without asking" mode.
+            runApproval.recordApproval(.autoFireMode, applicationBundleIdentifier: targetApplicationBundleIdentifier)
+        } else {
+            runApproval.recordApproval(runApproval.approvalProvenance ?? .autoFireMode, applicationBundleIdentifier: targetApplicationBundleIdentifier)
+        }
+
+        return await fireActionInComputerUseRun(
+            resolvedAction,
+            approvalProvenance: runApproval.approvalProvenance ?? .autoFireMode,
+            stepDescription: stepDescription
+        )
+    }
+
+    /// Shows the consent card for one run step and waits for the answer:
+    /// the provenance of a yes, or nil for no, a timeout, a newer turn or
+    /// the run being cancelled.
+    private func requestApprovalInComputerUseRun(
+        for resolvedAction: ResolvedScreenAction,
+        screenCaptures: [CompanionScreenCapture],
+        userUtterance: String,
+        spokenIntroduction: String?
+    ) async -> ScreenActionApprovalProvenance? {
+        guard !Task.isCancelled else { return nil }
+        // An older card (a run can't have two) is dropped first.
+        cancelPendingActions(speakDenial: false)
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                pendingRunApprovalContinuation = continuation
+                armPendingConsent(
+                    resolvedActions: [resolvedAction],
+                    screenCaptures: screenCaptures,
+                    userUtterance: userUtterance,
+                    spokenIntroduction: spokenIntroduction
+                )
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelPendingActions(speakDenial: false)
+            }
+        }
+    }
+
+    /// Previews and fires one approved run step with the stop monitor on.
+    private func fireActionInComputerUseRun(
+        _ resolvedAction: ResolvedScreenAction,
+        approvalProvenance: ScreenActionApprovalProvenance,
+        stepDescription: String
+    ) async -> ComputerUseActionOutcome {
+        isStopRequested = false
+        isRunningActions = true
+        isFiringComputerUseRunStep = true
+        emitCompanionEvent?(.actionsStarted(summary: stepDescription))
+        userInterruptionMonitor.onEscapePressed = { [weak self] in
+            self?.stopRunningActions(spokenReason: "stopped.")
+        }
+        userInterruptionMonitor.onUserTookControl = { [weak self] in
+            self?.stopRunningActions(spokenReason: "okay, you've got it.")
+        }
+        userInterruptionMonitor.start(mode: .stopActionsOnEscapeOrUserInput)
+        defer {
+            userInterruptionMonitor.stop()
+            isRunningActions = false
+            isFiringComputerUseRunStep = false
+        }
+
+        if resolvedAction.appKitTargetPoint != nil {
+            previewTarget(of: resolvedAction)
+            try? await Task.sleep(nanoseconds: Self.previewBeforeFiringNanoseconds)
+        }
+        if isStopRequested || Task.isCancelled {
+            recordAuditEntry(for: resolvedAction, approvalProvenance: approvalProvenance, outcome: .stoppedByUser)
+            return .stoppedByUser
+        }
+
+        let didPerformAction = await perform(resolvedAction)
+        if isStopRequested {
+            recordAuditEntry(for: resolvedAction, approvalProvenance: approvalProvenance, outcome: .stoppedByUser)
+            return .stoppedByUser
+        }
+        recordAuditEntry(
+            for: resolvedAction,
+            approvalProvenance: approvalProvenance,
+            outcome: didPerformAction ? .performed : .notPerformed
+        )
+        return didPerformAction
+            ? .performed
+            : .notPerformed(reason: "\(resolvedAction.humanReadableDescription) didn't go through.")
     }
 
     // MARK: - Resolution

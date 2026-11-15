@@ -100,6 +100,7 @@ enum ElfAgentLoop {
         budget: ElfAgentLoopBudget? = nil,
         textOnlyRoundNudge: String? = nil,
         maximumTextOnlyRoundNudges: Int = 2,
+        computerUseExecutor: ComputerUseStepExecutor? = nil,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
         onModelRoundEnded: @MainActor () -> Void
     ) async throws -> ElfAgentLoopResult {
@@ -110,6 +111,9 @@ enum ElfAgentLoop {
         var roundsUsed = 0
         var outputTokensUsed = 0
         var textOnlyRoundNudgesUsed = 0
+        // Set when a run on the screen was stopped by its guard: the next
+        // round is the model's last, to sum up without acting.
+        var isComputerUseSummaryRound = false
         let providerWebSearch = providerWebSearch(
             toolRegistry: toolRegistry,
             toolContext: toolContext,
@@ -123,10 +127,14 @@ enum ElfAgentLoop {
             // conversation with tool calls but no tools); the model is told
             // to answer instead.
             let isLastAllowedRound = roundNumber == maximumRounds && roundNumber > 1
+            var roundSystemPrompt = initialRequest.systemPrompt
+            if isComputerUseSummaryRound {
+                roundSystemPrompt += "\n\n" + ComputerUseSession.runEndedInstruction
+            } else if isLastAllowedRound {
+                roundSystemPrompt += "\n\n" + answerNowInstruction
+            }
             var roundRequest = LanguageModelRequest(
-                systemPrompt: isLastAllowedRound
-                    ? initialRequest.systemPrompt + "\n\n" + answerNowInstruction
-                    : initialRequest.systemPrompt,
+                systemPrompt: roundSystemPrompt,
                 messages: messages,
                 // The model's own search replaces the stand-in web_search
                 // (the same name can't be two tools).
@@ -135,6 +143,7 @@ enum ElfAgentLoop {
                 reasoningEffort: initialRequest.reasoningEffort
             )
             roundRequest.providerWebSearch = providerWebSearch
+            roundRequest.usesAnthropicComputerToolset = initialRequest.usesAnthropicComputerToolset
             let roundResponse = try await languageModelProvider.streamResponse(roundRequest) { streamEvent in
                 if case let .textDelta(textDelta) = streamEvent {
                     onReplyTextDelta(textDelta)
@@ -159,7 +168,14 @@ enum ElfAgentLoop {
             if !trimmedRoundText.isEmpty {
                 roundReplyTexts.append(trimmedRoundText)
             }
-            guidanceToolCalls += roundResponse.toolCalls.filter { guidanceToolNames.contains($0.toolName) }
+            // Steps on the screen (in a run) are carried out below, not drawn later.
+            let computerUseToolCalls = computerUseExecutor == nil
+                ? []
+                : roundResponse.toolCalls.filter(ComputerUseToolCallTranslator.isComputerUseCall)
+            let computerUseToolCallIdentifiers = Set(computerUseToolCalls.map(\.toolCallIdentifier))
+            guidanceToolCalls += roundResponse.toolCalls.filter { toolCall in
+                guidanceToolNames.contains(toolCall.toolName) && !computerUseToolCallIdentifiers.contains(toolCall.toolCallIdentifier)
+            }
             // The server paused a long turn (its own searches): sending the
             // turn back as it is lets it carry on.
             if roundResponse.stopReason == .pausedByServer, roundResponse.toolCalls.isEmpty, roundNumber < maximumRounds {
@@ -181,7 +197,7 @@ enum ElfAgentLoop {
             var toolResultBlocks: [LanguageModelContentBlock] = []
             var needsAnotherRound = trimmedRoundText.isEmpty
             var aToolEndedTheRun = false
-            for toolCall in roundResponse.toolCalls {
+            for toolCall in roundResponse.toolCalls where !computerUseToolCallIdentifiers.contains(toolCall.toolCallIdentifier) {
                 if guidanceToolNames.contains(toolCall.toolName) {
                     toolResultBlocks.append(.toolResult(
                         toolCallIdentifier: toolCall.toolCallIdentifier,
@@ -208,6 +224,36 @@ enum ElfAgentLoop {
                     toolName: toolCall.toolName,
                     resultText: toolOutcome.resultText
                 ))
+            }
+            // The round's steps on the screen, in order, each answered (with
+            // a fresh screenshot after acting).
+            if let computerUseExecutor, !computerUseToolCalls.isEmpty {
+                try Task.checkCancellation()
+                let wasAlreadyOver = computerUseExecutor.hasEnded
+                let computerUseStepResult = await computerUseExecutor.runStep(computerUseToolCalls)
+                toolResultBlocks += computerUseStepResult.resultBlocks
+                try Task.checkCancellation()
+                switch computerUseStepResult.ending {
+                case let .stopNow(spokenReason):
+                    // The user stopped it, said no, or it's their step: no
+                    // more rounds. Their step's reason is said and kept.
+                    if let spokenReason {
+                        onReplyTextDelta((roundReplyTexts.isEmpty ? "" : " ") + spokenReason)
+                        roundReplyTexts.append(spokenReason)
+                    }
+                    aToolEndedTheRun = true
+                case .summarize:
+                    isComputerUseSummaryRound = true
+                    needsAnotherRound = true
+                case nil:
+                    // Calls after the run ended aren't carried out, and the
+                    // model doesn't get another round.
+                    if wasAlreadyOver {
+                        aToolEndedTheRun = true
+                    } else {
+                        needsAnotherRound = true
+                    }
+                }
             }
             // Calls in the last round still run (a file the model says it
             // saved is saved); there's just no round after it. A tool that

@@ -80,6 +80,24 @@ struct ComputerUseToolCallTranslatorTests {
         #expect(command(functionCall(#"{"action":"wait","seconds":1.5}"#)) == .wait(seconds: 1.5))
     }
 
+    @Test func aZoomFillsTheUsualScreenshotSizeButNeverPassesTheScreensOwnPixels() {
+        // A 300×150-pixel region of a 1280×800 screenshot of a 2560×1600
+        // Retina screen is 600×300 real pixels: shown at that size, not blown up.
+        let retinaZoom = ScreenshotGeometry.zoomedRegionOutputSize(
+            regionInScreenshotPixels: CGRect(x: 0, y: 0, width: 300, height: 150),
+            screenshotSize: sentImageSize,
+            nativePixelsPerScreenshotPixel: 2
+        )
+        #expect(retinaZoom.widthInPixels == 600 && retinaZoom.heightInPixels == 300)
+        // A wide region is scaled down to fit the screenshot's width.
+        let wideZoom = ScreenshotGeometry.zoomedRegionOutputSize(
+            regionInScreenshotPixels: CGRect(x: 0, y: 0, width: 1000, height: 100),
+            screenshotSize: sentImageSize,
+            nativePixelsPerScreenshotPixel: 2
+        )
+        #expect(wideZoom.widthInPixels == 1280 && wideZoom.heightInPixels == 128)
+    }
+
     @Test func onlyComputerCallsAreHandled() {
         #expect(ComputerUseToolCallTranslator.isComputerUseCall(toolsetCall("left_click", "{}")))
         #expect(ComputerUseToolCallTranslator.isComputerUseCall(functionCall("{}")))

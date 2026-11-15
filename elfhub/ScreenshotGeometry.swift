@@ -159,6 +159,26 @@ enum ScreenshotGeometry {
         return (targetWidth, targetHeight)
     }
 
+    /// Output size for a zoom into `regionInScreenshotPixels`: as large as
+    /// the usual screenshot allows (aspect ratio kept), but never more
+    /// pixels than the screen really has there — blowing it up adds nothing.
+    static func zoomedRegionOutputSize(
+        regionInScreenshotPixels: CGRect,
+        screenshotSize: CGSize,
+        nativePixelsPerScreenshotPixel: CGFloat
+    ) -> (widthInPixels: Int, heightInPixels: Int) {
+        guard regionInScreenshotPixels.width > 0, regionInScreenshotPixels.height > 0 else { return (1, 1) }
+        let fitScale = min(
+            screenshotSize.width / regionInScreenshotPixels.width,
+            screenshotSize.height / regionInScreenshotPixels.height
+        )
+        let scale = min(fitScale, max(nativePixelsPerScreenshotPixel, 1))
+        return (
+            max(1, Int((regionInScreenshotPixels.width * scale).rounded())),
+            max(1, Int((regionInScreenshotPixels.height * scale).rounded()))
+        )
+    }
+
     /// True when an image of this size is within a model's limits, so a
     /// screenshot taken for one model can be sent to another unchanged.
     static func imageFits(widthInPixels: Int, heightInPixels: Int, profile: ModelVisionProfile) -> Bool {

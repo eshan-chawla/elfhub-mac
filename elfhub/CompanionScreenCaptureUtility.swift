@@ -161,6 +161,13 @@ enum CompanionScreenCaptureUtility {
     /// is silently resized by the provider and the model's coordinates then
     /// drift away from the dimensions it was told.
     static func captureCursorScreenAsJPEG(visionProfile: ModelVisionProfile) async throws -> [CompanionScreenCapture] {
+        [try await captureDisplayAsJPEG(displayID: nil, visionProfile: visionProfile)]
+    }
+
+    /// The same capture of one particular display (nil = the one under the
+    /// cursor). A multi-step run stays on the display it started on, even
+    /// if the pointer wanders to another one.
+    static func captureDisplayAsJPEG(displayID requestedDisplayID: CGDirectDisplayID?, visionProfile: ModelVisionProfile) async throws -> CompanionScreenCapture {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
 
         guard !content.displays.isEmpty else {
@@ -200,8 +207,16 @@ enum CompanionScreenCaptureUtility {
         // The cursor's display; if it can't be resolved (e.g. a display was
         // unplugged mid-turn) the first display still answers the turn.
         let cursorDisplayIndex = indexOfScreenFrame(containingCursorLocation: NSEvent.mouseLocation, in: displayFrames) ?? 0
-        let display = content.displays[cursorDisplayIndex]
-        let displayFrame = displayFrames[cursorDisplayIndex]
+        let requestedDisplayIndex = requestedDisplayID.flatMap { requestedDisplayID in
+            content.displays.firstIndex { $0.displayID == requestedDisplayID }
+        }
+        if requestedDisplayID != nil && requestedDisplayIndex == nil {
+            throw NSError(domain: "CompanionScreenCapture", code: -3,
+                          userInfo: [NSLocalizedDescriptionKey: "The display this started on isn't connected any more"])
+        }
+        let capturedDisplayIndex = requestedDisplayIndex ?? cursorDisplayIndex
+        let display = content.displays[capturedDisplayIndex]
+        let displayFrame = displayFrames[capturedDisplayIndex]
 
         let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
 
@@ -228,7 +243,7 @@ enum CompanionScreenCaptureUtility {
                           userInfo: [NSLocalizedDescriptionKey: "Failed to capture any screen"])
         }
 
-        return [CompanionScreenCapture(
+        return CompanionScreenCapture(
             imageData: jpegData,
             label: "user's screen (the one their mouse is on)",
             isCursorScreen: true,
@@ -238,7 +253,62 @@ enum CompanionScreenCaptureUtility {
             screenshotWidthInPixels: configuration.width,
             screenshotHeightInPixels: configuration.height,
             displayID: display.displayID
-        )]
+        )
+    }
+
+    /// Part of a captured display at full resolution (a multi-step run's
+    /// zoom), sized to the usual screenshot, as JPEG. The region is in
+    /// `capture`'s screenshot pixels; the model keeps answering in the full
+    /// screenshot's coordinates.
+    static func captureZoomedRegionAsJPEG(
+        of capture: CompanionScreenCapture,
+        regionInScreenshotPixels: CGRect
+    ) async throws -> Data {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let display = content.displays.first(where: { $0.displayID == capture.displayID }) else {
+            throw NSError(domain: "CompanionScreenCapture", code: -3,
+                          userInfo: [NSLocalizedDescriptionKey: "The display this started on isn't connected any more"])
+        }
+        let ownBundleIdentifier = Bundle.main.bundleIdentifier
+        let screenCapturePrivacyBlocklist = ScreenCapturePrivacyBlocklist.shared
+        let excludedWindows = content.windows.filter { window in
+            let owningBundleIdentifier = window.owningApplication?.bundleIdentifier
+            return owningBundleIdentifier == ownBundleIdentifier
+                || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: owningBundleIdentifier)
+        }
+        let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
+
+        let topLeftInDisplayPoints = capture.displayLocalPoint(fromScreenshotPixel: regionInScreenshotPixels.origin)
+        let bottomRightInDisplayPoints = capture.displayLocalPoint(fromScreenshotPixel: CGPoint(
+            x: regionInScreenshotPixels.maxX,
+            y: regionInScreenshotPixels.maxY
+        ))
+        let backingScaleFactor = nsScreensByDisplayID()[capture.displayID]?.backingScaleFactor ?? 1
+        let nativePixelsPerScreenshotPixel = CGFloat(capture.displayWidthInPoints) * backingScaleFactor
+            / CGFloat(max(capture.screenshotWidthInPixels, 1))
+        let outputSize = ScreenshotGeometry.zoomedRegionOutputSize(
+            regionInScreenshotPixels: regionInScreenshotPixels,
+            screenshotSize: capture.sentImageSize,
+            nativePixelsPerScreenshotPixel: nativePixelsPerScreenshotPixel
+        )
+
+        let configuration = SCStreamConfiguration()
+        configuration.sourceRect = CGRect(
+            x: topLeftInDisplayPoints.x,
+            y: topLeftInDisplayPoints.y,
+            width: bottomRightInDisplayPoints.x - topLeftInDisplayPoints.x,
+            height: bottomRightInDisplayPoints.y - topLeftInDisplayPoints.y
+        )
+        configuration.width = outputSize.widthInPixels
+        configuration.height = outputSize.heightInPixels
+
+        let cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+        guard let jpegData = NSBitmapImageRep(cgImage: cgImage)
+                .representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else {
+            throw NSError(domain: "CompanionScreenCapture", code: -2,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to capture the zoomed region"])
+        }
+        return jpegData
     }
 
     /// Core Graphics display ID of the screen the cursor is on right now.
