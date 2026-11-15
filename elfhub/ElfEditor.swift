@@ -127,6 +127,12 @@ final class ElfEditor: ObservableObject {
         elfManager.reloadRoster()
     }
 
+    /// What the elf may reach beyond its own folder (the web; the web and
+    /// the user's folders in one task).
+    func updateCapabilities(_ updateCapabilities: (inout ElfConfiguration.Capabilities) -> Void) throws {
+        try updateConfiguration { configuration in updateCapabilities(&configuration.capabilities) }
+    }
+
     /// Changes which of this Mac's models and voices the elf uses.
     func updateLocalSettings(_ updateLocalSettings: (inout ElfLocalSettings) -> Void) throws {
         try requireElfFolder()

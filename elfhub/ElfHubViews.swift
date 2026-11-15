@@ -1071,6 +1071,17 @@ private struct ElfBehaviourSection: View {
                 isOn: behaviourToggleBinding(\.takesNotes)
             )
             SettingsToggleRow(
+                iconName: "globe",
+                title: "Can use the web",
+                detail: elfEditor.isMainElf
+                    ? "Off for your main elf by default: it hands web research to your other elves."
+                    : "Searches and opens web pages for its tasks — only pages it's led to: search results and their links, or addresses you give it. What it reads goes to your language model like the rest of the conversation.",
+                isOn: Binding(
+                    get: { elfEditor.elf.configuration.capabilities.isWebEnabled(isMainElf: elfEditor.isMainElf) },
+                    set: { isWebEnabled in try? elfEditor.updateCapabilities { $0.webEnabled = isWebEnabled } }
+                )
+            )
+            SettingsToggleRow(
                 iconName: "books.vertical",
                 title: "Learn skills from our work",
                 detail: "Lets your elf save how things are done at work (tools, steps, conventions) as skills.",

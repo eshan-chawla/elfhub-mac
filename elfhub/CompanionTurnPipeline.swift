@@ -109,6 +109,9 @@ final class CompanionTurnPipeline {
     /// The main elf's extra tools as manager (assigning and checking
     /// tasks, searching chats), added to its turns only.
     private let mainElfManagerToolsProvider: () -> [ElfTool]
+    /// The web and the user's folders, for the elf answering — when it may
+    /// use them.
+    private let outsideToolsProvider: (Elf) -> [ElfTool]
     /// What the main elf should hear about background work before the
     /// user's newest message, if anything (see ElfStatusBlock).
     private let mainElfStatusProvider: () -> ElfMainStatusUpdate?
@@ -122,6 +125,7 @@ final class CompanionTurnPipeline {
         elfPromptContextProvider: @escaping () async -> ElfPromptContext = { .starter },
         elfForToolsProvider: @escaping () -> Elf? = { nil },
         mainElfManagerToolsProvider: @escaping () -> [ElfTool] = { [] },
+        outsideToolsProvider: @escaping (Elf) -> [ElfTool] = { _ in [] },
         mainElfStatusProvider: @escaping () -> ElfMainStatusUpdate? = { nil },
         onMainElfStatusDelivered: @escaping ([UUID]) -> Void = { _ in }
     ) {
@@ -131,6 +135,7 @@ final class CompanionTurnPipeline {
         self.elfPromptContextProvider = elfPromptContextProvider
         self.elfForToolsProvider = elfForToolsProvider
         self.mainElfManagerToolsProvider = mainElfManagerToolsProvider
+        self.outsideToolsProvider = outsideToolsProvider
         self.mainElfStatusProvider = mainElfStatusProvider
         self.onMainElfStatusDelivered = onMainElfStatusDelivered
     }
@@ -345,7 +350,9 @@ final class CompanionTurnPipeline {
         let coordinateConvention = capabilities.visionProfile.coordinateConvention
         // The main elf also manages its elves (tasks) and searches chats.
         let elfToolRegistry = ElfToolRegistry(
-            tools: ElfFileTools.allTools + (elfTurnSetup.role == .mainForeground ? mainElfManagerToolsProvider() : [])
+            tools: ElfFileTools.allTools
+                + (elfTurnSetup.role == .mainForeground ? mainElfManagerToolsProvider() : [])
+                + (elfToolContextForTurn.map(outsideToolsProvider) ?? [])
         )
         var screenCaptures = capturedScreenCaptures
 

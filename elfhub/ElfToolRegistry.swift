@@ -51,6 +51,12 @@ final class ElfToolContext {
     /// Content the elf has read this turn that could steer what it writes.
     var influencedBy: Set<ElfChangeLogEntry.Influence>
     let turnEffectLedger: ElfTurnEffectLedger
+    /// Which web pages it may open: search results, links on pages it
+    /// opened, and addresses the user said.
+    var fetchPageURLPolicy = FetchPageURLPolicy()
+    /// The web and the user's folders it used this turn or task — one or
+    /// the other, unless the elf allows both.
+    var usedResources: Set<ElfOutsideResource> = []
 
     init(
         elf: Elf,
@@ -66,7 +72,27 @@ final class ElfToolContext {
         self.userUtterance = userUtterance
         self.influencedBy = influencedBy
         self.turnEffectLedger = turnEffectLedger
+        fetchPageURLPolicy.recordUserUtterance(userUtterance)
     }
+
+    /// Starts using the web or the user's folders, or says why it can't:
+    /// a task uses one or the other unless the elf allows both.
+    func beginUsing(_ outsideResource: ElfOutsideResource) -> String? {
+        let otherResource: ElfOutsideResource = outsideResource == .web ? .userFolders : .web
+        if usedResources.contains(otherResource), !elf.configuration.capabilities.allowsWebAndUserFoldersTogether {
+            return outsideResource == .web
+                ? "you've worked with the user's files this time, so the web is off for now (a task uses one or the other). say so to the user."
+                : "you've used the web this time, so the user's folders are off for now (a task uses one or the other). say so to the user."
+        }
+        usedResources.insert(outsideResource)
+        return nil
+    }
+}
+
+/// Places beyond the elf's own folder.
+enum ElfOutsideResource: Hashable {
+    case web
+    case userFolders
 }
 
 struct ElfToolOutcome {

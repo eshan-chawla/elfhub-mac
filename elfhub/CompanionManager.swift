@@ -108,8 +108,18 @@ final class CompanionManager: ObservableObject {
         elfManager: elfManager,
         languageModelProviderForWorker: { [weak self] workingElf in
             self?.languageModelProviderForBackgroundWork(of: workingElf)
-        }
+        },
+        outsideToolsForElf: { [weak self] workingElf in self?.outsideTools(for: workingElf) ?? [] }
     )
+
+    /// Fetches web pages for elves (one shared ephemeral session).
+    private let webPageFetcher = URLSessionWebPageFetcher()
+
+    /// The web (when the elf may use it) for this elf's turns and tasks.
+    func outsideTools(for elf: Elf) -> [ElfTool] {
+        guard elf.configuration.capabilities.isWebEnabled(isMainElf: elf.id == ElfManager.mainElfIdentifier) else { return [] }
+        return ElfWebTools.tools(pageFetcher: webPageFetcher, webSearchProvider: nil)
+    }
 
     /// Whether an elf can work in the background: it (or the main elf) has
     /// a model that can use tools.
@@ -154,6 +164,7 @@ final class CompanionManager: ObservableObject {
                 savedConversationsProvider: { [weak self] in self?.chatConversationStore.conversations ?? [] }
             )
         },
+        outsideToolsProvider: { [weak self] elf in self?.outsideTools(for: elf) ?? [] },
         mainElfStatusProvider: { [weak self] in self?.mainElfStatusUpdate() },
         onMainElfStatusDelivered: { [weak self] reportedTaskIdentifiers in
             self?.elfTaskScheduler.markReported(taskIdentifiers: reportedTaskIdentifiers)

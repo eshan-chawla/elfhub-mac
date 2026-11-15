@@ -12,6 +12,7 @@ import Foundation
 import Testing
 @testable import elfhub
 
+@MainActor
 struct ElfWebToolTests {
 
     @Test func onlyLinkedURLsAreFetched() throws {
@@ -65,5 +66,115 @@ struct ElfWebToolTests {
         #expect(!extractedPage.text.contains("color:red"))
         #expect(!extractedPage.text.contains("enable js"))
         #expect(extractedPage.linkURLs.map(\.absoluteString) == ["https://example.com/book?x=1", "https://other.example/page"])
+    }
+
+    // MARK: fetch_page
+
+    /// Pages served from memory instead of the network.
+    private final class FakeWebPageFetcher: ElfWebPageFetcher {
+        var pagesByURL: [String: ElfFetchedWebPage] = [:]
+        private(set) var fetchedURLs: [URL] = []
+
+        func fetch(_ url: URL) async throws -> ElfFetchedWebPage {
+            fetchedURLs.append(url)
+            guard let fetchedPage = pagesByURL[url.absoluteString] else { throw URLError(.fileDoesNotExist) }
+            return fetchedPage
+        }
+    }
+
+    private func makeToolContext(
+        userUtterance: String = "find flights to Lisbon",
+        capabilities: ElfConfiguration.Capabilities = ElfConfiguration.Capabilities()
+    ) throws -> (toolContext: ElfToolContext, cleanUp: () -> Void) {
+        let homeDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("elf-\(UUID().uuidString)", isDirectory: true)
+        let home = ElfHome(directory: homeDirectory)
+        try home.createIfNeeded(configuration: ElfConfiguration(capabilities: capabilities))
+        let toolContext = ElfToolContext(
+            elf: Elf(id: "juniper", home: home, configuration: home.readConfiguration()),
+            changeLog: ElfChangeLog(home: home),
+            origin: .turn(conversationIdentifier: nil),
+            userUtterance: userUtterance,
+            turnEffectLedger: ElfTurnEffectLedger()
+        )
+        return (toolContext, { try? FileManager.default.removeItem(at: homeDirectory) })
+    }
+
+    private func fetchPage(_ address: String, with fetcher: FakeWebPageFetcher, context toolContext: ElfToolContext) async throws -> ElfToolOutcome {
+        let fetchPageTool = try #require(ElfWebTools.tools(pageFetcher: fetcher, webSearchProvider: nil).first { $0.definition.name == "fetch_page" })
+        let argumentsJSON = String(decoding: try JSONSerialization.data(withJSONObject: ["url": address]), as: UTF8.self)
+        return try await fetchPageTool.run(argumentsJSON: argumentsJSON, context: toolContext)
+    }
+
+    private func htmlPage(_ html: String) -> ElfFetchedWebPage {
+        ElfFetchedWebPage(finalURL: nil, mimeType: "text/html", data: Data(html.utf8))
+    }
+
+    @Test func fetchPageOpensOnlyPagesTheElfWasLedTo() async throws {
+        let (toolContext, cleanUp) = try makeToolContext()
+        defer { cleanUp() }
+        let fetcher = FakeWebPageFetcher()
+        fetcher.pagesByURL["https://example.com/flights"] = htmlPage(#"<title>Flights</title><p>TAP direct.</p><a href="/fares">fares</a>"#)
+        fetcher.pagesByURL["https://example.com/fares"] = htmlPage("<p>From 99.</p>")
+        toolContext.fetchPageURLPolicy.recordSearchResults([try #require(URL(string: "https://example.com/flights"))])
+
+        let firstOutcome = try await fetchPage("https://example.com/flights", with: fetcher, context: toolContext)
+        #expect(!firstOutcome.isFailure)
+        #expect(firstOutcome.resultText.contains("TAP direct."))
+        #expect(toolContext.influencedBy.contains(.web))
+        let linkedOutcome = try await fetchPage("https://example.com/fares", with: fetcher, context: toolContext)
+        #expect(linkedOutcome.resultText.contains("From 99."))
+        let unlinkedOutcome = try await fetchPage("https://evil.example/steal", with: fetcher, context: toolContext)
+        #expect(unlinkedOutcome.isFailure)
+        #expect(fetcher.fetchedURLs.map(\.absoluteString) == ["https://example.com/flights", "https://example.com/fares"])
+    }
+
+    @Test func aPageThatIsNotTextIsRefused() async throws {
+        let (toolContext, cleanUp) = try makeToolContext(userUtterance: "read https://example.com/photo.jpg")
+        defer { cleanUp() }
+        let fetcher = FakeWebPageFetcher()
+        fetcher.pagesByURL["https://example.com/photo.jpg"] = ElfFetchedWebPage(finalURL: nil, mimeType: "image/jpeg", data: Data([0xFF, 0xD8]))
+        #expect(try await fetchPage("https://example.com/photo.jpg", with: fetcher, context: toolContext).isFailure)
+    }
+
+    @Test func aRedirectIntoTheUsersNetworkIsRefused() async throws {
+        let (toolContext, cleanUp) = try makeToolContext(userUtterance: "read https://example.com/go")
+        defer { cleanUp() }
+        let fetcher = FakeWebPageFetcher()
+        fetcher.pagesByURL["https://example.com/go"] = ElfFetchedWebPage(
+            finalURL: URL(string: "http://192.168.1.1/admin"), mimeType: "text/html", data: Data("<p>router</p>".utf8)
+        )
+        let outcome = try await fetchPage("https://example.com/go", with: fetcher, context: toolContext)
+        #expect(outcome.isFailure)
+        #expect(!outcome.resultText.contains("router"))
+    }
+
+    // MARK: Capabilities and web-or-folders
+
+    @Test func mainHasNoWebByDefaultAndOtherElvesDo() throws {
+        #expect(!ElfConfiguration.Capabilities().isWebEnabled(isMainElf: true))
+        #expect(ElfConfiguration.Capabilities().isWebEnabled(isMainElf: false))
+        #expect(ElfConfiguration.Capabilities(webEnabled: true).isWebEnabled(isMainElf: true))
+        #expect(!ElfConfiguration.Capabilities(webEnabled: false).isWebEnabled(isMainElf: false))
+        let olderConfiguration = try JSONDecoder().decode(ElfConfiguration.self, from: Data(#"{"identity":{"name":"Pip"}}"#.utf8))
+        #expect(olderConfiguration.capabilities == ElfConfiguration.Capabilities())
+    }
+
+    @Test func aTaskThatUsedUserFoldersCannotUseTheWeb() async throws {
+        let (toolContext, cleanUp) = try makeToolContext(userUtterance: "read https://example.com/a")
+        defer { cleanUp() }
+        let fetcher = FakeWebPageFetcher()
+        fetcher.pagesByURL["https://example.com/a"] = htmlPage("<p>a</p>")
+        toolContext.usedResources.insert(.userFolders)
+        let lockedOutcome = try await fetchPage("https://example.com/a", with: fetcher, context: toolContext)
+        #expect(lockedOutcome.isFailure)
+        #expect(fetcher.fetchedURLs.isEmpty)
+
+        let (bothContext, cleanUpBoth) = try makeToolContext(
+            userUtterance: "read https://example.com/a",
+            capabilities: ElfConfiguration.Capabilities(allowsWebAndUserFoldersTogether: true)
+        )
+        defer { cleanUpBoth() }
+        bothContext.usedResources.insert(.userFolders)
+        #expect(!(try await fetchPage("https://example.com/a", with: fetcher, context: bothContext)).isFailure)
     }
 }

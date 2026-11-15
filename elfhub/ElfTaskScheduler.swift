@@ -35,6 +35,8 @@ final class ElfTaskScheduler: ObservableObject {
     private let elfManager: ElfManager
     private let languageModelProviderForWorker: (Elf) -> LanguageModelProvider?
     private let maximumOutputTokensPerTask: Int
+    /// The web and the user's folders, for elves that may use them.
+    private let outsideToolsForElf: (Elf) -> [ElfTool]
     private var runningTaskHandles: [UUID: Task<Void, Never>] = [:]
     private var taskIdentifiersBeingCancelled: Set<UUID> = []
     /// Tasks of a deleted elf: stopped, never saved or reported again.
@@ -45,8 +47,10 @@ final class ElfTaskScheduler: ObservableObject {
     init(
         elfManager: ElfManager,
         languageModelProviderForWorker: @escaping (Elf) -> LanguageModelProvider?,
-        maximumOutputTokensPerTask: Int = ElfTaskScheduler.maximumOutputTokensPerTask
+        maximumOutputTokensPerTask: Int = ElfTaskScheduler.maximumOutputTokensPerTask,
+        outsideToolsForElf: @escaping (Elf) -> [ElfTool] = { _ in [] }
     ) {
+        self.outsideToolsForElf = outsideToolsForElf
         self.elfManager = elfManager
         self.languageModelProviderForWorker = languageModelProviderForWorker
         self.maximumOutputTokensPerTask = maximumOutputTokensPerTask
@@ -222,8 +226,8 @@ final class ElfTaskScheduler: ObservableObject {
 
     /// A worker's tools: its own folder and skills, plus progress, asking
     /// and finishing. No screen tools and no task tools.
-    static func workerToolRegistry(session: ElfWorkerSession) -> ElfToolRegistry {
-        ElfToolRegistry(tools: ElfFileTools.allTools + ElfWorkerTools.tools(session: session))
+    static func workerToolRegistry(session: ElfWorkerSession, outsideTools: [ElfTool] = []) -> ElfToolRegistry {
+        ElfToolRegistry(tools: ElfFileTools.allTools + ElfWorkerTools.tools(session: session) + outsideTools)
     }
 
     /// Said to a worker that answered with words only.
@@ -266,7 +270,7 @@ final class ElfTaskScheduler: ObservableObject {
             ElfPromptContext.reading(home: workingElfHome, role: .backgroundWorker(taskInstruction: taskInstruction))
         }.value
         let systemPrompt = (elfPromptContext.promptSections + [Self.workerInstructions]).joined(separator: "\n\n")
-        let workerToolRegistry = Self.workerToolRegistry(session: workerSession)
+        let workerToolRegistry = Self.workerToolRegistry(session: workerSession, outsideTools: outsideToolsForElf(workingElf))
         let turnEffectLedger = ElfTurnEffectLedger()
         let toolContext = ElfToolContext(
             elf: workingElf,

@@ -42,6 +42,32 @@ nonisolated struct ElfConfiguration: Codable, Equatable, Sendable {
     /// The setup the elf was used with, so an imported elf can suggest it.
     /// Filled in when exporting. Never holds API keys.
     var preferredModels: PreferredModels?
+    /// What the elf may reach beyond its own folder.
+    var capabilities: Capabilities
+
+    nonisolated struct Capabilities: Codable, Equatable, Sendable {
+        /// Web search and opening pages. nil: on for side elves, off for
+        /// the main elf.
+        var webEnabled: Bool?
+        /// A task may use both the web and the user's folders. Off by
+        /// default, so a page can't steer an elf into the user's files.
+        var allowsWebAndUserFoldersTogether: Bool
+
+        init(webEnabled: Bool? = nil, allowsWebAndUserFoldersTogether: Bool = false) {
+            self.webEnabled = webEnabled
+            self.allowsWebAndUserFoldersTogether = allowsWebAndUserFoldersTogether
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            webEnabled = try container.decodeIfPresent(Bool.self, forKey: .webEnabled)
+            allowsWebAndUserFoldersTogether = try container.decodeIfPresent(Bool.self, forKey: .allowsWebAndUserFoldersTogether) ?? false
+        }
+
+        func isWebEnabled(isMainElf: Bool) -> Bool {
+            webEnabled ?? !isMainElf
+        }
+    }
 
     nonisolated struct Identity: Codable, Equatable, Sendable {
         var name: String
@@ -146,12 +172,14 @@ nonisolated struct ElfConfiguration: Codable, Equatable, Sendable {
     init(
         identity: Identity = Identity(),
         behaviour: Behaviour = Behaviour(),
-        preferredModels: PreferredModels? = nil
+        preferredModels: PreferredModels? = nil,
+        capabilities: Capabilities = Capabilities()
     ) {
         self.schemaVersion = Self.currentSchemaVersion
         self.identity = identity
         self.behaviour = behaviour
         self.preferredModels = preferredModels
+        self.capabilities = capabilities
     }
 
     init(from decoder: Decoder) throws {
@@ -160,6 +188,7 @@ nonisolated struct ElfConfiguration: Codable, Equatable, Sendable {
         identity = try container.decodeIfPresent(Identity.self, forKey: .identity) ?? Identity()
         behaviour = try container.decodeIfPresent(Behaviour.self, forKey: .behaviour) ?? Behaviour()
         preferredModels = try container.decodeIfPresent(PreferredModels.self, forKey: .preferredModels)
+        capabilities = (try? container.decodeIfPresent(Capabilities.self, forKey: .capabilities)) ?? Capabilities()
     }
 }
 
