@@ -97,6 +97,8 @@ final class ComputerUseSession: ComputerUseStepExecutor {
     /// the fresh screenshot goes through (something there keeps moving —
     /// a video, a terminal — and the model has now seen it).
     private var clickTargetsHeldBackAsChanged: [CGPoint] = []
+    /// Whether the last finished round had a step that failed.
+    private(set) var lastRoundHadFailure = false
 
     init(
         screen: ComputerUseScreen,
@@ -326,6 +328,7 @@ final class ComputerUseSession: ComputerUseStepExecutor {
         }
         hasEnded = round.ending != nil
         ending = ending ?? round.ending
+        lastRoundHadFailure = round.aStepFailed
 
         // Where a step's time goes, for tuning (never what's on screen).
         companionLogger.info("Computer use step \(round.stepNumber, privacy: .public): \(round.results.count, privacy: .public) calls, acting \(Int(round.timeSpentActing * 1000), privacy: .public) ms, settling and looking \(Int(timeSpentLooking * 1000), privacy: .public) ms, whole step \(Int(Date().timeIntervalSince(round.startedAt) * 1000), privacy: .public) ms")
