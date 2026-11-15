@@ -72,6 +72,9 @@ final class ComputerUseSession: ComputerUseStepExecutor {
     private var loopGuard: ComputerUseLoopGuard
     private(set) var latestCapture: CompanionScreenCapture
     private(set) var hasEnded = false
+    /// Whether any step tried to act on the screen (so the end of the run
+    /// tidies up: the pointer goes back, the pill stops saying it's acting).
+    private(set) var didTryToAct = false
 
     init(
         screen: ComputerUseScreen,
@@ -170,6 +173,7 @@ final class ComputerUseSession: ComputerUseStepExecutor {
             case let .act(action, repeatCount):
                 let stepDescription = "step \(stepNumber) of \(ComputerUseLoopGuard.maximumSteps) · \(action.humanReadableDescription)"
                 var lastOutcome = ComputerUseActionOutcome.performed
+                didTryToAct = true
                 for _ in 0..<repeatCount {
                     lastOutcome = await screen.perform(action, on: latestCapture, stepDescription: stepDescription)
                     guard lastOutcome == .performed else { break }

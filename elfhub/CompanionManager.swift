@@ -1244,11 +1244,15 @@ final class CompanionManager: ObservableObject {
             NotificationCenter.default.post(name: .dismissCompanionPanel, object: nil)
 
             // Cancel any in-progress response, speech and running actions from
-            // a previous utterance, and clear its pointer and annotations.
-            currentResponseTask?.cancel()
+            // a previous utterance, and clear its pointer and annotations —
+            // unless a multi-step run is waiting for a yes or no: then this
+            // is the answer, and the run (and its pointer) waits for it.
             stopSpeech()
-            screenActionCoordinator.stopRunningActions(spokenReason: nil)
-            companionEventBus.emit(.turnStarted(primaryFocusScreenFrame: nil))
+            if !screenActionCoordinator.isComputerUseRunAwaitingApproval {
+                currentResponseTask?.cancel()
+                screenActionCoordinator.stopRunningActions(spokenReason: nil)
+                companionEventBus.emit(.turnStarted(primaryFocusScreenFrame: nil))
+            }
 
             // While the keys are held, pressing and dragging the mouse draws
             // on the screen instead of clicking (see UserScreenInk.swift).

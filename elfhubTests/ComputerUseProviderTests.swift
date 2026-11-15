@@ -66,6 +66,11 @@ struct ComputerUseProviderTests {
         #expect(!ClaudeAPI.supportsComputerToolset(model: "claude-sonnet-4-6"))
     }
 
+    @Test func aRunOnTheScreenIsNeverHandedToAFallbackModelThatMightNotTakeTheToolset() {
+        #expect(ClaudeAPI.shouldRequestServerSideFallback(model: "claude-opus-5-5", isDirectToAnthropic: true))
+        #expect(!ClaudeAPI.shouldRequestServerSideFallback(model: "claude-opus-5-5", isDirectToAnthropic: true, usesComputerToolset: true))
+    }
+
     @Test func claudeResultsEchoTheToolsetNameAndCarryTheScreenshot() throws {
         let body = ClaudeAPI.buildRequestBody(model: "claude-opus-5-5", request: followUpRequest(result: computerToolResult(isError: true)), isDirectToAnthropic: false)
         let messages = try #require(body["messages"] as? [[String: Any]])

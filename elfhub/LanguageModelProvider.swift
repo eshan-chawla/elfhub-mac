@@ -273,10 +273,15 @@ protocol LanguageModelProvider {
     /// Whether the model can search the web itself when a request asks
     /// (`LanguageModelRequest.providerWebSearch`).
     var supportsProviderWebSearch: Bool { get }
+
+    /// Whether the model takes Claude's computer toolset (else a run on the
+    /// screen uses elfhub's own perform_screen_action).
+    var supportsAnthropicComputerToolset: Bool { get }
 }
 
 extension LanguageModelProvider {
     var supportsProviderWebSearch: Bool { false }
+    var supportsAnthropicComputerToolset: Bool { false }
     var supportsVision: Bool { capabilities.supportsVision }
 }
 

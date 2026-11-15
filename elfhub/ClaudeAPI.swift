@@ -74,9 +74,11 @@ final class ClaudeAPI {
 
     /// Whether server-side refusal fallbacks are available for this model and
     /// route: the Claude API itself (not other Anthropic-compatible proxies)
-    /// and not Haiku, which has no server-side fallback.
-    static func shouldRequestServerSideFallback(model: String, isDirectToAnthropic: Bool) -> Bool {
-        guard isDirectToAnthropic else { return false }
+    /// and not Haiku, which has no server-side fallback. Never for a run on
+    /// the user's screen: the fallback model may not take the computer
+    /// toolset, and a rejected request would end the run.
+    static func shouldRequestServerSideFallback(model: String, isDirectToAnthropic: Bool, usesComputerToolset: Bool = false) -> Bool {
+        guard isDirectToAnthropic, !usesComputerToolset else { return false }
         let lowercasedModel = model.lowercased()
         let fallbackCapableModelPrefixes = ["claude-opus-5", "claude-fable-5", "claude-sonnet-5-5"]
         return fallbackCapableModelPrefixes.contains { lowercasedModel.hasPrefix($0) }
@@ -201,7 +203,8 @@ final class ClaudeAPI {
         let startTime = Date()
         let requestsServerSideFallback = Self.shouldRequestServerSideFallback(
             model: model,
-            isDirectToAnthropic: isDirectToAnthropic
+            isDirectToAnthropic: isDirectToAnthropic,
+            usesComputerToolset: languageModelRequest.usesAnthropicComputerToolset && Self.supportsComputerToolset(model: model)
         )
 
         var betaNames: [String] = []

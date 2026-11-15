@@ -24,6 +24,12 @@ final class AnthropicLanguageModelProvider: LanguageModelProvider {
     /// talking to the Claude API itself with the user's key.
     var supportsProviderWebSearch: Bool { claudeAPI.isDirectToAnthropic }
 
+    /// Claude's computer toolset, for multi-step runs on the screen: only on
+    /// the Claude API itself, for models that take it.
+    var supportsAnthropicComputerToolset: Bool {
+        claudeAPI.isDirectToAnthropic && ClaudeAPI.supportsComputerToolset(model: claudeAPI.model)
+    }
+
     func streamResponse(
         _ request: LanguageModelRequest,
         onStreamEvent: @MainActor @Sendable (LanguageModelStreamEvent) -> Void

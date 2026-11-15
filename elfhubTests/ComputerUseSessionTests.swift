@@ -202,6 +202,27 @@ struct ComputerUseSessionTests {
         #expect(screen.performedActions.count == ComputerUseLoopGuard.maximumSteps)
     }
 
+    // MARK: - When a turn acts in steps
+
+    @Test func aTurnActsInStepsOnlyWithActionModeToolsAndVision() {
+        #expect(CompanionTurnPipeline.actsInSteps(isActionModeEnabled: true, supportsToolCalling: true, supportsVision: true, hasScreenCapture: true))
+        #expect(!CompanionTurnPipeline.actsInSteps(isActionModeEnabled: false, supportsToolCalling: true, supportsVision: true, hasScreenCapture: true))
+        #expect(!CompanionTurnPipeline.actsInSteps(isActionModeEnabled: true, supportsToolCalling: false, supportsVision: true, hasScreenCapture: true))
+        #expect(!CompanionTurnPipeline.actsInSteps(isActionModeEnabled: true, supportsToolCalling: true, supportsVision: false, hasScreenCapture: true))
+        #expect(!CompanionTurnPipeline.actsInSteps(isActionModeEnabled: true, supportsToolCalling: true, supportsVision: true, hasScreenCapture: false))
+    }
+
+    @Test func theStepByStepPromptReplacesTheOneShotActionInstructions() {
+        let stepPrompt = CompanionPromptBuilder.systemPrompt(
+            coordinateConvention: .imagePixels, guidanceEncoding: .nativeTools, includesScreenActions: true, actsInSteps: true
+        )
+        let oneShotPrompt = CompanionPromptBuilder.systemPrompt(
+            coordinateConvention: .imagePixels, guidanceEncoding: .nativeTools, includesScreenActions: true
+        )
+        #expect(stepPrompt.contains(CompanionPromptBuilder.stepByStepActionInstructions))
+        #expect(!oneShotPrompt.contains(CompanionPromptBuilder.stepByStepActionInstructions))
+    }
+
     // MARK: - In the agent loop
 
     @Test func theAgentLoopSendsStepResultsBackUntilTheModelAnswers() async throws {
