@@ -79,33 +79,30 @@ enum ComputerUseToolCallTranslator {
             }
             return .zoom(regionInScreenshotPixels: region)
         case "left_click", "right_click", "double_click", "triple_click", "mouse_move":
-            if let modifierRefusal = stepReader.modifierRefusal() { return modifierRefusal }
             guard let targetPoint = stepReader.point(named: "coordinate") else {
                 return stepReader.missingOrOffScreenPointRefusal(named: "coordinate")
             }
-            return .act(pointerAction(memberName: memberName, targetPoint: targetPoint, label: nil), repeatCount: 1)
+            return withHeldKeys(.act(pointerAction(memberName: memberName, targetPoint: targetPoint, label: nil), repeatCount: 1), modifierText: stepReader.string(named: "text"))
         case "left_click_drag":
-            if let modifierRefusal = stepReader.modifierRefusal() { return modifierRefusal }
             guard let startPoint = stepReader.point(named: "start_coordinate") else {
                 return stepReader.missingOrOffScreenPointRefusal(named: "start_coordinate")
             }
             guard let endPoint = stepReader.point(named: "coordinate") else {
                 return stepReader.missingOrOffScreenPointRefusal(named: "coordinate")
             }
-            return .act(.drag(fromScreenshotPixel: startPoint, toScreenshotPixel: endPoint, screenNumber: nil), repeatCount: 1)
+            return withHeldKeys(.act(.drag(fromScreenshotPixel: startPoint, toScreenshotPixel: endPoint, screenNumber: nil), repeatCount: 1), modifierText: stepReader.string(named: "text"))
         case "scroll":
-            if let modifierRefusal = stepReader.modifierRefusal() { return modifierRefusal }
             guard let targetPoint = stepReader.point(named: "coordinate") else {
                 return stepReader.missingOrOffScreenPointRefusal(named: "coordinate")
             }
             guard let direction = stepReader.string(named: "scroll_direction").flatMap(ScreenActionSynthesizer.ScrollDirection.init(rawValue:)) else {
                 return .refuse(reason: "scroll needs scroll_direction: up, down, left or right.")
             }
-            return scrollCommand(
+            return withHeldKeys(scrollCommand(
                 targetPoint: targetPoint,
                 direction: direction,
                 amountInTenthsOfScreen: stepReader.integer(named: "scroll_amount")
-            )
+            ), modifierText: stepReader.string(named: "text"))
         case "type":
             guard let text = stepReader.rawString(named: "text"), !text.isEmpty else {
                 return .refuse(reason: "type needs the text to type.")
@@ -142,23 +139,23 @@ enum ComputerUseToolCallTranslator {
                 return .refuse(reason: "\(actionName) needs x and y inside the screenshot.")
             }
             let memberName = ["click": "left_click", "move": "mouse_move"][actionName] ?? actionName
-            return .act(pointerAction(memberName: memberName, targetPoint: targetPoint, label: label), repeatCount: 1)
+            return withHeldKeys(.act(pointerAction(memberName: memberName, targetPoint: targetPoint, label: label), repeatCount: 1), modifierText: stepReader.string(named: "modifiers"))
         case "drag":
             guard let startPoint = stepReader.point(xName: "x", yName: "y"),
                   let endPoint = stepReader.point(xName: "x2", yName: "y2") else {
                 return .refuse(reason: "drag needs x, y (where to press) and x2, y2 (where to let go) inside the screenshot.")
             }
-            return .act(.drag(fromScreenshotPixel: startPoint, toScreenshotPixel: endPoint, screenNumber: nil), repeatCount: 1)
+            return withHeldKeys(.act(.drag(fromScreenshotPixel: startPoint, toScreenshotPixel: endPoint, screenNumber: nil), repeatCount: 1), modifierText: stepReader.string(named: "modifiers"))
         case "scroll":
             guard let targetPoint = stepReader.point(xName: "x", yName: "y"),
                   let direction = stepReader.string(named: "direction").flatMap(ScreenActionSynthesizer.ScrollDirection.init(rawValue:)) else {
                 return .refuse(reason: "scroll needs x, y and a direction (up, down, left, right).")
             }
-            return scrollCommand(
+            return withHeldKeys(scrollCommand(
                 targetPoint: targetPoint,
                 direction: direction,
                 amountInTenthsOfScreen: stepReader.integer(named: "repeat")
-            )
+            ), modifierText: stepReader.string(named: "modifiers"))
         case "type":
             guard let text = stepReader.rawString(named: "text"), !text.isEmpty else {
                 return .refuse(reason: "type needs the text to type.")
@@ -183,6 +180,23 @@ enum ComputerUseToolCallTranslator {
         case "mouse_move": return .moveMouse(screenshotPixel: targetPoint, screenNumber: nil)
         default: return .click(screenshotPixel: targetPoint, label: label, screenNumber: nil)
         }
+    }
+
+    /// A click, drag or scroll with keys held ("cmd", "shift+cmd"), or a
+    /// refusal naming a key that isn't a modifier.
+    private static func withHeldKeys(_ stepCommand: ComputerUseStepCommand, modifierText: String?) -> ComputerUseStepCommand {
+        guard let modifierText, case let .act(action, repeatCount) = stepCommand else { return stepCommand }
+        var modifierNames: [String] = []
+        for modifierToken in modifierText.lowercased().split(whereSeparator: { $0 == "+" || $0 == " " }) {
+            guard let modifierName = CompanionScreenAction.canonicalModifierKeyName(String(modifierToken)) else {
+                return .refuse(reason: "\(modifierToken) isn't a key that can be held with a click (use cmd, shift, opt or ctrl).")
+            }
+            if !modifierNames.contains(modifierName) {
+                modifierNames.append(modifierName)
+            }
+        }
+        guard !modifierNames.isEmpty else { return stepCommand }
+        return .act(.withModifierKeys(modifierNames, action), repeatCount: repeatCount)
     }
 
     /// One scroll as far as asked (each unit a tenth of the screen), so it
@@ -297,12 +311,6 @@ private struct StepArgumentReader {
         )
     }
 
-    /// Clicks and scrolls with keys held aren't carried out yet.
-    func modifierRefusal() -> ComputerUseStepCommand? {
-        guard string(named: "text") != nil else { return nil }
-        return .refuse(reason: "clicking or scrolling with keys held isn't supported; do it without the keys, or use a keyboard shortcut.")
-    }
-
     func missingOrOffScreenPointRefusal(named argumentName: String) -> ComputerUseStepCommand {
         .refuse(reason: "\(argumentName) must be an [x, y] point inside the screenshot (\(Int(sentImageSize.width))×\(Int(sentImageSize.height))).")
     }
@@ -349,6 +357,7 @@ extension GuidanceToolDefinitions {
                 "direction": ["type": "string", "enum": ["up", "down", "left", "right"]],
                 "text": ["type": "string", "description": "literal text to type into the focused field"],
                 "keys": ["type": "string", "description": "shortcut such as cmd+s, return, tab, esc"],
+                "modifiers": ["type": "string", "description": "click, drag or scroll with keys held, like cmd or shift+cmd"],
                 "repeat": ["type": "integer", "description": "key: how many times (1-20). scroll: how far, in tenths of the screen (5 = half a screen, 10 = a full screen)"],
                 "seconds": ["type": "number", "description": "wait: how long, up to 10"],
             ],

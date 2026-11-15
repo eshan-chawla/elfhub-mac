@@ -81,6 +81,7 @@ struct ComputerUseRunSafetyTests {
 
     @Test func doubleOrTripleClickingADefaultButtonAsksLikeAClick() {
         for action in [
+            CompanionScreenAction.withModifierKeys(["shift"], .click(screenshotPixel: CGPoint(x: 5, y: 5), label: nil, screenNumber: nil)),
             CompanionScreenAction.doubleClick(screenshotPixel: CGPoint(x: 5, y: 5), label: nil, screenNumber: nil),
             .tripleClick(screenshotPixel: CGPoint(x: 5, y: 5), label: nil, screenNumber: nil),
         ] {

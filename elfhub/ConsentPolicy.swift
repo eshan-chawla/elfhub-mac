@@ -52,7 +52,7 @@ enum ScreenActionConsentDecision: Equatable {
 }
 
 struct ScreenActionConsentContext {
-    let action: CompanionScreenAction
+    var action: CompanionScreenAction
     /// The real element the action lands on: the element under the target
     /// point for click/scroll, the focused element for type/key, when known.
     let targetElementFacts: AccessibilityElementFacts?
@@ -214,6 +214,11 @@ enum ConsentPolicy {
                 ?? sensitiveEffect(forTargetText: context.targetElementFacts?.title)
         case .scroll, .moveMouse, .openApplication, .openWebsite:
             return nil
+        // Keys held don't change what's clicked: judged like the click.
+        case let .withModifierKeys(_, innerAction):
+            var innerContext = context
+            innerContext.action = innerAction
+            return consequentialEffect(of: innerContext)
         }
     }
 
@@ -258,6 +263,7 @@ enum ConsentPolicy {
     static func isClickOnTarget(_ action: CompanionScreenAction) -> Bool {
         switch action {
         case .click, .doubleClick, .tripleClick: return true
+        case let .withModifierKeys(_, innerAction): return isClickOnTarget(innerAction)
         default: return false
         }
     }

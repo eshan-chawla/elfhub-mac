@@ -45,6 +45,30 @@ enum CompanionScreenAction: Equatable {
     /// Open an app by name, or a web address in the user's browser.
     case openApplication(name: String)
     case openWebsite(url: URL)
+    /// A click, drag or scroll with keys held (cmd-click opens a link in a
+    /// new tab, shift-click selects a range). Names are canonical: cmd,
+    /// shift, opt, ctrl, fn.
+    indirect case withModifierKeys([String], CompanionScreenAction)
+
+    /// The action without any keys held.
+    var withoutModifierKeys: CompanionScreenAction {
+        if case let .withModifierKeys(_, innerAction) = self { return innerAction.withoutModifierKeys }
+        return self
+    }
+
+    /// One modifier's name as elfhub writes it, or nil for a key that
+    /// isn't a modifier. "super", "meta" and "command" are ⌘ (what Claude
+    /// and other tools call it); "alt" and "option" are ⌥.
+    static func canonicalModifierKeyName(_ modifierToken: String) -> String? {
+        switch modifierToken.lowercased() {
+        case "cmd", "command", "super", "meta", "win", "windows": return "cmd"
+        case "shift": return "shift"
+        case "opt", "option", "alt": return "opt"
+        case "ctrl", "control": return "ctrl"
+        case "fn", "function": return "fn"
+        default: return nil
+        }
+    }
 
     /// Half a screen, when no amount is given (the [SCROLL] tag).
     static let defaultScrollAmountInTenthsOfScreen = 5
@@ -76,6 +100,8 @@ enum CompanionScreenAction: Equatable {
         case let .openWebsite(url):
             // The whole address: a query can carry data out.
             return "open \(url.absoluteString)"
+        case let .withModifierKeys(modifierNames, innerAction):
+            return modifierNames.joined(separator: "+") + "+" + innerAction.humanReadableDescription
         }
     }
 }

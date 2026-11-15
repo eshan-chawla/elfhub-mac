@@ -112,6 +112,8 @@ struct ComputerUseLoopGuard {
         case let .type(text): return "type:" + text
         case let .openApplication(name): return "open:" + name.lowercased()
         case let .openWebsite(url): return "open:" + url.absoluteString
+        case let .withModifierKeys(modifierNames, innerAction):
+            return repetitionSignature(of: innerAction).map { modifierNames.joined(separator: "+") + "+" + $0 }
         case .scroll, .key, .moveMouse: return nil
         }
     }

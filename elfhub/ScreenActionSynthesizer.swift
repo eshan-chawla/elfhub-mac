@@ -40,11 +40,54 @@ enum ScreenActionSynthesizer {
         event.getIntegerValueField(.eventSourceUserData) == syntheticEventMarker
     }
 
+    /// Keys held for a click, drag or scroll (performWithModifierKeysHeld);
+    /// every mouse and scroll event carries them, as a real one would.
+    private static var modifierFlagsHeldForPointerEvents: CGEventFlags = []
+
+    nonisolated private static let pointerEventTypes: Set<CGEventType> = [
+        .mouseMoved, .leftMouseDown, .leftMouseUp, .leftMouseDragged,
+        .rightMouseDown, .rightMouseUp, .rightMouseDragged, .scrollWheel,
+    ]
+
     /// Tags the event as elfhub's own and posts it.
     private static func postTaggedEvent(_ event: CGEvent?) {
         guard let event else { return }
         event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        if !modifierFlagsHeldForPointerEvents.isEmpty, pointerEventTypes.contains(event.type) {
+            event.flags = event.flags.union(modifierFlagsHeldForPointerEvents)
+        }
         event.post(tap: .cghidEventTap)
+    }
+
+    /// Presses these modifier keys (real key presses, so apps that watch
+    /// the keys see them), runs `pointerAction` with every mouse event
+    /// carrying them, then lets go — always, even when stopped halfway.
+    /// False, having done nothing, when a name isn't a modifier.
+    static func performWithModifierKeysHeld(_ modifierNames: [String], pointerAction: () async -> Bool) async -> Bool {
+        let modifierKeys = modifierNames.compactMap { modifierKey(for: $0) }
+        guard modifierKeys.count == modifierNames.count, !modifierKeys.isEmpty else { return false }
+        let eventSource = CGEventSource(stateID: .hidSystemState)
+        var heldModifierFlags: CGEventFlags = []
+        var pressedModifierKeyCodes: [CGKeyCode] = []
+        defer {
+            modifierFlagsHeldForPointerEvents = []
+            for modifierKeyCode in pressedModifierKeyCodes.reversed() {
+                heldModifierFlags.remove(modifierFlag(forModifierKeyCode: modifierKeyCode))
+                let modifierUp = CGEvent(keyboardEventSource: eventSource, virtualKey: modifierKeyCode, keyDown: false)
+                modifierUp?.flags = heldModifierFlags
+                postTaggedEvent(modifierUp)
+            }
+        }
+        for modifierKey in modifierKeys {
+            heldModifierFlags.insert(modifierKey.flag)
+            let modifierDown = CGEvent(keyboardEventSource: eventSource, virtualKey: modifierKey.keyCode, keyDown: true)
+            modifierDown?.flags = heldModifierFlags
+            postTaggedEvent(modifierDown)
+            pressedModifierKeyCodes.append(modifierKey.keyCode)
+        }
+        modifierFlagsHeldForPointerEvents = heldModifierFlags
+        await interEventPause()
+        return await pointerAction()
     }
 
     // MARK: - Scroll Direction

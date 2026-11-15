@@ -89,6 +89,7 @@ extension ComputerUseAuditEntry {
         case .moveMouse: return "move_mouse"
         case .openApplication: return "open_app"
         case .openWebsite: return "open_website"
+        case let .withModifierKeys(_, innerAction): return actionKindName(of: innerAction) + "_with_keys"
         }
     }
 

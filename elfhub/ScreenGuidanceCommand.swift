@@ -140,6 +140,13 @@ enum ScreenGuidanceCoordinateNormalizer {
                 return .act(.moveMouse(screenshotPixel: convertPoint(modelPoint, screenNumber: screenNumber), screenNumber: screenNumber))
             case .type, .key, .openApplication, .openWebsite:
                 return command
+            case let .withModifierKeys(modifierNames, innerAction):
+                guard case let .act(convertedInnerAction) = convertToScreenshotPixels(
+                    .act(innerAction),
+                    convention: convention,
+                    sentImageSizeForScreenNumber: sentImageSizeForScreenNumber
+                ) else { return command }
+                return .act(.withModifierKeys(modifierNames, convertedInnerAction))
             }
         }
     }

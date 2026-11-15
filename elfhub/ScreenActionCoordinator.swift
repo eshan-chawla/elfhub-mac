@@ -153,6 +153,8 @@ struct ResolvedScreenAction {
             return "double-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
         case let .rightClick(_, label, _):
             return "right-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
+        case let .withModifierKeys(modifierNames, .click(_, label, _)):
+            return modifierNames.joined(separator: "+") + "+click " + (targetName ?? label.map { "the \($0)" } ?? "here")
         case let .tripleClick(_, label, _):
             return "triple-click " + (targetName ?? label.map { "the \($0)" } ?? "here")
         case .drag:
@@ -637,13 +639,24 @@ final class ScreenActionCoordinator: ObservableObject {
     /// Posts the real events for one action. Returns false if the chain
     /// should stop (e.g. typing would go into a password field).
     private func perform(_ resolvedAction: ResolvedScreenAction) async -> Bool {
-        switch resolvedAction.action {
+        await perform(resolvedAction.action, of: resolvedAction, mayPressWithAccessibility: true)
+    }
+
+    /// `action` is the resolved action's own, or (keys held) the action
+    /// inside it; Accessibility presses ignore held keys, so they're off then.
+    private func perform(_ action: CompanionScreenAction, of resolvedAction: ResolvedScreenAction, mayPressWithAccessibility: Bool) async -> Bool {
+        switch action {
+        case let .withModifierKeys(modifierNames, innerAction):
+            return await ScreenActionSynthesizer.performWithModifierKeysHeld(modifierNames) {
+                await perform(innerAction, of: resolvedAction, mayPressWithAccessibility: false)
+            }
         case .click:
             guard let coreGraphicsTargetPoint = resolvedAction.coreGraphicsTargetPoint else { return false }
             // Most precise channel first: a native button is pressed through
             // Accessibility (no pointer move, no focus steal). If that isn't
             // possible, a real click does it.
-            if AccessibilityElementActions.shouldPressWithAccessibility(resolvedAction.targetElementFacts),
+            if mayPressWithAccessibility,
+               AccessibilityElementActions.shouldPressWithAccessibility(resolvedAction.targetElementFacts),
                await AccessibilityElementActions.pressElement(
                    atCoreGraphicsGlobalPoint: coreGraphicsTargetPoint,
                    expectedRole: resolvedAction.targetElementFacts?.role,
@@ -984,7 +997,7 @@ final class ScreenActionCoordinator: ObservableObject {
         var targetElementFacts: AccessibilityElementFacts?
         var coreGraphicsDragEndPoint: CGPoint?
         var dragDropTargetElementFacts: AccessibilityElementFacts?
-        if case let .drag(_, toScreenshotPixel, screenNumber) = action,
+        if case let .drag(_, toScreenshotPixel, screenNumber) = action.withoutModifierKeys,
            let dragEndCapture = CompanionScreenCapture.targetCapture(screenNumber: screenNumber, in: screenCaptures) {
             let dragEndPoint = dragEndCapture.coreGraphicsGlobalPoint(fromScreenshotPixel: toScreenshotPixel)
             coreGraphicsDragEndPoint = dragEndPoint
@@ -1063,6 +1076,7 @@ final class ScreenActionCoordinator: ObservableObject {
         switch action {
         case .type, .key: return true
         case .click, .doubleClick, .scroll, .rightClick, .tripleClick, .drag, .moveMouse, .openApplication, .openWebsite: return false
+        case let .withModifierKeys(_, innerAction): return isKeystrokeAction(innerAction)
         }
     }
 
@@ -1080,6 +1094,8 @@ final class ScreenActionCoordinator: ObservableObject {
             return (fromScreenshotPixel, screenNumber)
         case .type, .key, .openApplication, .openWebsite:
             return nil
+        case let .withModifierKeys(_, innerAction):
+            return targetScreenshotPixel(of: innerAction)
         }
     }
 
@@ -1091,7 +1107,7 @@ final class ScreenActionCoordinator: ObservableObject {
         targetElementFacts: AccessibilityElementFacts?,
         displayBounds: CGRect
     ) -> CGPoint? {
-        switch action {
+        switch action.withoutModifierKeys {
         case .click, .doubleClick, .rightClick, .tripleClick:
             guard let targetElementFacts,
                   let elementFrame = targetElementFacts.frameInCoreGraphicsGlobalCoordinates,
@@ -1146,6 +1162,8 @@ final class ScreenActionCoordinator: ObservableObject {
             return "pointer"
         case .type, .key, .openApplication, .openWebsite:
             return nil
+        case let .withModifierKeys(_, innerAction):
+            return modelLabel(of: innerAction)
         }
     }
 

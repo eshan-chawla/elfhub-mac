@@ -274,6 +274,8 @@ final class ComputerUseSession: ComputerUseStepExecutor {
             return screenshotPixel
         case let .drag(startPixel, _, _):
             return startPixel
+        case let .withModifierKeys(_, innerAction):
+            return clickTargetPixel(of: innerAction)
         case .scroll, .moveMouse, .type, .key, .openApplication, .openWebsite:
             return nil
         }

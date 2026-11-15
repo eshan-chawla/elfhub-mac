@@ -63,12 +63,25 @@ struct ComputerUseToolCallTranslatorTests {
         }
         #expect(isRefused(command(toolsetCall("left_click", #"{"coordinate":[5000,300]}"#))))
         #expect(isRefused(command(toolsetCall("left_click", "{}"))))
-        #expect(isRefused(command(toolsetCall("left_click", #"{"coordinate":[5,5],"text":"cmd"}"#))))
+        #expect(isRefused(command(toolsetCall("left_click", #"{"coordinate":[5,5],"text":"hyper"}"#))))
         #expect(isRefused(command(toolsetCall("wait", #"{"duration":60}"#))))
         #expect(isRefused(command(toolsetCall("key", #"{"text":"a","repeat":50}"#))))
         #expect(isRefused(command(toolsetCall("type", #"{"text":""}"#))))
         #expect(isRefused(command(toolsetCall("hold_key", #"{"text":"shift","duration":1}"#))))
         #expect(isRefused(command(toolsetCall("zoom", #"{"region":[400,350,100,200]}"#))))
+    }
+
+    @Test func clicksAndScrollsCanHoldKeys() {
+        #expect(command(toolsetCall("left_click", #"{"coordinate":[500,300],"text":"cmd"}"#))
+            == .act(.withModifierKeys(["cmd"], .click(screenshotPixel: CGPoint(x: 500, y: 300), label: nil, screenNumber: nil)), repeatCount: 1))
+        #expect(command(toolsetCall("scroll", #"{"coordinate":[500,400],"scroll_direction":"down","scroll_amount":3,"text":"shift"}"#))
+            == .act(.withModifierKeys(["shift"], .scroll(screenshotPixel: CGPoint(x: 500, y: 400), direction: .down, screenNumber: nil, amountInTenthsOfScreen: 3)), repeatCount: 1))
+        #expect(command(functionCall(#"{"action":"click","x":10,"y":20,"modifiers":"cmd+shift"}"#))
+            == .act(.withModifierKeys(["cmd", "shift"], .click(screenshotPixel: CGPoint(x: 10, y: 20), label: nil, screenNumber: nil)), repeatCount: 1))
+        // Claude says "super" for the command key.
+        #expect(command(toolsetCall("left_click", #"{"coordinate":[5,5],"text":"super"}"#))
+            == .act(.withModifierKeys(["cmd"], .click(screenshotPixel: CGPoint(x: 5, y: 5), label: nil, screenNumber: nil)), repeatCount: 1))
+        #expect(CompanionScreenAction.withModifierKeys(["cmd"], .click(screenshotPixel: .zero, label: "link", screenNumber: nil)).humanReadableDescription == "cmd+click the link")
     }
 
     @Test func otherModelsUseTheExtendedScreenActionToolInTheirOwnCoordinates() {
