@@ -47,10 +47,10 @@ struct ElfTaskReportingTests {
             elfNameForIdentifier: { $0 == "juniper" ? "Juniper" : "Writer" }
         )
         #expect(statusBlock?.hasPrefix("[elfhub status]") == true)
-        #expect(statusBlock?.contains("Juniper finished \"find flights\": TAP has a direct flight on the 3rd.") == true)
+        #expect(statusBlock?.contains("Juniper finished \"find flights\": «TAP has a direct flight on the 3rd.»") == true)
         #expect(statusBlock?.contains("files/flights.md") == true)
         #expect(statusBlock?.contains("Writer is working on \"draft the post\"") == true)
-        #expect(statusBlock?.contains("Juniper asks (task \(askingTask.id.uuidString.prefix(8).lowercased())): which area?") == true)
+        #expect(statusBlock?.contains("Juniper asks (task \(askingTask.id.uuidString.prefix(8).lowercased())): «which area?»") == true)
         #expect(ElfStatusBlock.text(unreportedFinishedTasks: [], runningTasks: [], tasksWaitingForAnswers: [], elfNameForIdentifier: { $0 }) == nil)
     }
 
@@ -94,7 +94,7 @@ struct ElfTaskReportingTests {
     @Test func shortcutsDecideWithoutAModel() {
         #expect(ElfTaskClassifier.shortcutKind(for: "research flights to Lisbon") == .long)
         #expect(ElfTaskClassifier.shortcutKind(for: "can you draft the launch post") == .long)
-        #expect(ElfTaskClassifier.shortcutKind(for: "look into why the build fails, in the background") == .long)
+        #expect(ElfTaskClassifier.shortcutKind(for: "please look into why the build fails, in the background") == .long)
         #expect(ElfTaskClassifier.shortcutKind(for: "click the save button") == .screen)
         #expect(ElfTaskClassifier.shortcutKind(for: "fill in this form on my screen") == .screen)
         #expect(ElfTaskClassifier.shortcutKind(for: "what's this button?") == .quick)
@@ -151,5 +151,13 @@ struct ElfTaskReportingTests {
         #expect(decodedConversation.messages.last?.taskIdentifier == taskIdentifier)
         #expect(decodedConversation.messages.last?.speakingElfIdentifier == "juniper")
         #expect(decodedConversation.historyTurns(maximumTurnCount: 10).isEmpty)
+    }
+
+    @Test func questionsAboutTheScreenAreNotSentToTheBackground() {
+        #expect(ElfTaskClassifier.shortcutKind(for: "explain this draft") == .quick)
+        #expect(ElfTaskClassifier.shortcutKind(for: "why won't this compile?") != .long)
+        #expect(ElfTaskClassifier.shortcutKind(for: "find out what this button does") != .long)
+        #expect(ElfTaskClassifier.shortcutKind(for: "look into this error") != .long)
+        #expect(ElfTaskClassifier.shortcutKind(for: "is the draft ready?") != .long)
     }
 }

@@ -167,6 +167,7 @@ final class CompanionTurnPipeline {
         userInkStrokes: [UserInkStroke] = [],
         isSpokenTurn: Bool = false,
         speakingElf: Elf? = nil,
+        conversationIdentifier: UUID? = nil,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
         onModelRoundEnded: @escaping @MainActor () -> Void = {},
         onElfFileChanged: @escaping @MainActor (_ fileChange: ElfChangeLogEntry, _ elfIdentifier: String) -> Void = { _, _ in },
@@ -227,6 +228,7 @@ final class CompanionTurnPipeline {
                 elfTurnSetup: elfTurnSetup,
                 mainElfName: mainElf?.configuration.identity.name ?? ElfConfiguration.Identity().name,
                 turnEffectLedger: turnEffectLedger,
+                conversationIdentifier: conversationIdentifier,
                 onReplyTextDelta: onReplyTextDelta,
                 onModelRoundEnded: onModelRoundEnded
             )
@@ -282,6 +284,7 @@ final class CompanionTurnPipeline {
                 elfTurnSetup: elfTurnSetup,
                 mainElfName: mainElf?.configuration.identity.name ?? ElfConfiguration.Identity().name,
                 turnEffectLedger: turnEffectLedger,
+                conversationIdentifier: conversationIdentifier,
                 onReplyTextDelta: onReplyTextDelta,
                 onModelRoundEnded: onModelRoundEnded
             )
@@ -334,6 +337,7 @@ final class CompanionTurnPipeline {
         elfTurnSetup: ElfTurnSetup,
         mainElfName: String,
         turnEffectLedger: ElfTurnEffectLedger,
+        conversationIdentifier: UUID?,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
         onModelRoundEnded: @escaping @MainActor () -> Void
     ) async throws -> TurnResult {
@@ -443,13 +447,14 @@ final class CompanionTurnPipeline {
             ElfToolContext(
                 elf: elfToolSetup,
                 changeLog: ElfChangeLog(home: elfToolSetup.home),
-                origin: .turn(conversationIdentifier: nil),
+                origin: .turn(conversationIdentifier: conversationIdentifier),
                 userUtterance: userText,
                 // The screenshot is the user's own view, sent every turn with
                 // them watching, so it isn't counted; files and web pages the
                 // elf reads are (see the tools) — and so are the notes a
                 // model without tools is shown in its prompt.
-                influencedBy: elfPromptContext.preloadedNotes.isEmpty ? [] : [.file],
+                // An elf's report in the status block counts as read text too.
+                influencedBy: elfPromptContext.preloadedNotes.isEmpty && mainElfStatusUpdate?.carriesElfWrittenText != true ? [] : [.file],
                 turnEffectLedger: turnEffectLedger
             )
         }

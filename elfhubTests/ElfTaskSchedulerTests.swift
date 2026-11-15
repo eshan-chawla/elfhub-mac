@@ -77,12 +77,79 @@ struct ElfTaskSchedulerTests {
         #expect(ElfTaskStore(home: juniperHome).tasks().first?.status == .done)
     }
 
-    @Test func aRunThatEndsWithoutFinishingUsesItsReplyAsTheSummary() async throws {
-        let (scheduler, _, _, cleanUp) = try makeScheduler(scriptedResponses: [ScriptedLanguageModelProvider.reply("All done: three options.")])
+    @Test func aNarratingRoundIsNudgedToFinish() async throws {
+        let (scheduler, provider, _, cleanUp) = try makeScheduler(scriptedResponses: [
+            ScriptedLanguageModelProvider.reply("Sure! I'll start by looking up flights."),
+            ScriptedLanguageModelProvider.toolCalls([finishCall("TAP flies direct.")]),
+        ])
         defer { cleanUp() }
-        let elfTask = try scheduler.enqueue(elfIdentifier: "juniper", instruction: "find options")
+        let elfTask = try scheduler.enqueue(elfIdentifier: "juniper", instruction: "find flights")
         await scheduler.waitUntilIdle()
-        #expect(scheduler.tasks.first { $0.id == elfTask.id }?.result?.summary == "All done: three options.")
+        #expect(scheduler.tasks.first { $0.id == elfTask.id }?.status == .done)
+        #expect(scheduler.tasks.first { $0.id == elfTask.id }?.result?.summary == "TAP flies direct.")
+        let nudgeText = provider.receivedRequests.last?.messages.last?.content.compactMap { contentBlock -> String? in
+            if case let .text(text) = contentBlock { return text }
+            return nil
+        }.joined()
+        #expect(nudgeText?.contains("finish_task") == true)
+    }
+
+    @Test func aRunThatNeverFinishesIsNotReportedAsDone() async throws {
+        let (scheduler, _, _, cleanUp) = try makeScheduler(scriptedResponses: [
+            ScriptedLanguageModelProvider.reply("Sure! I'll start."),
+            ScriptedLanguageModelProvider.reply("Working on it."),
+            ScriptedLanguageModelProvider.reply("Still working."),
+        ])
+        defer { cleanUp() }
+        let elfTask = try scheduler.enqueue(elfIdentifier: "juniper", instruction: "find flights")
+        await scheduler.waitUntilIdle()
+        let stoppedTask = try #require(scheduler.tasks.first { $0.id == elfTask.id })
+        #expect(stoppedTask.status == .failed)
+        #expect(stoppedTask.result == nil)
+        #expect(stoppedTask.failureReason?.contains("without finishing") == true)
+    }
+
+    @Test func finishedFilesAreOnlyFilesTheElfReallyHas() async throws {
+        let (scheduler, _, _, cleanUp) = try makeScheduler(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([ScriptedLanguageModelProvider.toolCall("write_file", ["path": "files/a.md", "content": "a"])]),
+            ScriptedLanguageModelProvider.toolCalls([finishCall("done.", files: ["files/a.md", "files/invented.md", "../../etc/passwd"])]),
+        ])
+        defer { cleanUp() }
+        let elfTask = try scheduler.enqueue(elfIdentifier: "juniper", instruction: "write a")
+        await scheduler.waitUntilIdle()
+        #expect(scheduler.tasks.first { $0.id == elfTask.id }?.result?.filePaths == ["files/a.md"])
+    }
+
+    @Test func deletingAnElfStopsAndForgetsItsTasks() async throws {
+        let (scheduler, provider, elfManager, cleanUp) = try makeScheduler(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([ScriptedLanguageModelProvider.toolCall("write_file", ["path": "files/a.md", "content": "a"])]),
+        ])
+        defer { cleanUp() }
+        provider.responseDelayInSeconds = 5
+        var finishedTaskCount = 0
+        scheduler.onTaskFinished = { _ in finishedTaskCount += 1 }
+        _ = try scheduler.enqueue(elfIdentifier: "juniper", instruction: "write a")
+        let juniperDirectory = try #require(elfManager.elf(withIdentifier: "juniper")).home.directory
+        await scheduler.cancelAndForgetTasks(forElfIdentifier: "juniper")
+        try elfManager.deleteElf(withIdentifier: "juniper")
+        await scheduler.waitUntilIdle()
+        #expect(scheduler.tasks.isEmpty)
+        #expect(finishedTaskCount == 0)
+        #expect(!FileManager.default.fileExists(atPath: juniperDirectory.path))
+    }
+
+    @Test func aTaskFileCopiedIntoAnotherElfsFolderRunsOnce() throws {
+        let (scheduler, _, elfManager, cleanUp) = try makeScheduler(scriptedResponses: [])
+        defer { cleanUp() }
+        let juniperHome = try #require(elfManager.elf(withIdentifier: "juniper")).home
+        var interruptedTask = ElfTask(elfIdentifier: "juniper", instruction: "find flights")
+        interruptedTask.status = .done
+        try ElfTaskStore(home: juniperHome).save(interruptedTask)
+        // The user duplicated Juniper's folder in Finder.
+        try elfManager.createElf(identity: .init(name: "Juniper copy"))
+        try ElfTaskStore(home: try #require(elfManager.elf(withIdentifier: "juniper-copy")).home).save(interruptedTask)
+        scheduler.loadTasksAndResumeInterruptedOnes()
+        #expect(scheduler.tasks.map(\.id) == [interruptedTask.id])
     }
 
     @Test func askUserParksTheTaskUntilAnswered() async throws {
@@ -151,7 +218,7 @@ struct ElfTaskSchedulerTests {
         #expect(ElfTaskScheduler.workerConfiguration(elfPreferredConfiguration: nil, mainConfiguration: textOnlyConfiguration) == nil)
     }
 
-    @Test func aTaskForAnElfThatIsGoneFails() async throws {
+    @Test func enqueueingForAnUnknownElfIsRefused() async throws {
         let (scheduler, _, _, cleanUp) = try makeScheduler(scriptedResponses: [])
         defer { cleanUp() }
         #expect(throws: ElfManagerError.unknownElf("nobody")) {

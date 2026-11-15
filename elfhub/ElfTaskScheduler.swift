@@ -37,6 +37,8 @@ final class ElfTaskScheduler: ObservableObject {
     private let maximumOutputTokensPerTask: Int
     private var runningTaskHandles: [UUID: Task<Void, Never>] = [:]
     private var taskIdentifiersBeingCancelled: Set<UUID> = []
+    /// Tasks of a deleted elf: stopped, never saved or reported again.
+    private var forgottenTaskIdentifiers: Set<UUID> = []
 
     /// `languageModelProviderForWorker` gives the model an elf works with in
     /// the background (one that can use tools), or nil when there's none.
@@ -56,10 +58,17 @@ final class ElfTaskScheduler: ObservableObject {
     /// queued again and started.
     func loadTasksAndResumeInterruptedOnes() {
         var loadedTasks: [ElfTask] = []
+        var loadedTaskIdentifiers: Set<UUID> = []
         for elf in elfManager.elves {
             let elfTaskStore = ElfTaskStore(home: elf.home)
             _ = try? elfTaskStore.requeueInterruptedTasks()
-            loadedTasks += elfTaskStore.tasks()
+            // Only the elf's own tasks, each once — a folder duplicated in
+            // Finder carries copies of the original's task files.
+            for storedTask in elfTaskStore.tasks()
+            where storedTask.elfIdentifier == elf.id && !loadedTaskIdentifiers.contains(storedTask.id) {
+                loadedTasks.append(storedTask)
+                loadedTaskIdentifiers.insert(storedTask.id)
+            }
         }
         tasks = loadedTasks.sorted { $0.createdAt < $1.createdAt }
         startTasksThatHaveRoom()
@@ -124,6 +133,20 @@ final class ElfTaskScheduler: ObservableObject {
             guard var reportedTask = task(withIdentifier: taskIdentifier), !reportedTask.reportedToUser else { continue }
             reportedTask.reportedToUser = true
             store(reportedTask)
+        }
+    }
+
+    /// Before an elf is deleted: its tasks stop, and are forgotten — not
+    /// saved, not reported. Waits for a running one to stop, so it can't
+    /// write into the folder as it goes to the Trash.
+    func cancelAndForgetTasks(forElfIdentifier elfIdentifier: String) async {
+        let forgottenTasks = tasks.filter { $0.elfIdentifier == elfIdentifier }
+        forgottenTaskIdentifiers.formUnion(forgottenTasks.map(\.id))
+        tasks.removeAll { $0.elfIdentifier == elfIdentifier }
+        for forgottenTask in forgottenTasks {
+            guard let runningTaskHandle = runningTaskHandles[forgottenTask.id] else { continue }
+            runningTaskHandle.cancel()
+            await runningTaskHandle.value
         }
     }
 
@@ -203,6 +226,9 @@ final class ElfTaskScheduler: ObservableObject {
         ElfToolRegistry(tools: ElfFileTools.allTools + ElfWorkerTools.tools(session: session))
     }
 
+    /// Said to a worker that answered with words only.
+    static let finishNudge = "you haven't finished the task yet. keep working with your tools, call ask_user if you need the user, or call finish_task with a short summary when you're done."
+
     static let workerInstructions = """
     how to work on this task: nobody is watching while you work. use your tools — read your notes and skills, and write longer findings to a file under files/ so the user can open it later. call report_progress now and then with a short note. if you need something only the user can tell you, call ask_user with one clear question and stop. when you're done, call finish_task with a summary of two or three sentences, written to be spoken to the user, and the files you wrote. don't ask for permission to start; just do the task.
     """
@@ -210,16 +236,22 @@ final class ElfTaskScheduler: ObservableObject {
     private func run(taskIdentifier: UUID) async {
         guard var runningTask = task(withIdentifier: taskIdentifier) else { return }
         guard let workingElf = elfManager.elf(withIdentifier: runningTask.elfIdentifier) else {
+            taskIdentifiersBeingCancelled.remove(taskIdentifier)
             finish(&runningTask, as: .failed, failureReason: "the elf for this task is gone")
             return
         }
         guard let languageModelProvider = languageModelProviderForWorker(workingElf) else {
+            taskIdentifiersBeingCancelled.remove(taskIdentifier)
             finish(&runningTask, as: .failed, failureReason: "background work needs a language model that can use tools. pick one in Settings › Models.")
             return
         }
 
         // Keeps macOS from napping the app while the elf works.
-        let backgroundActivity = ProcessInfo.processInfo.beginActivity(options: .userInitiated, reason: "An elf is working on a task")
+        // App Nap is held off; a closed or idle Mac may still sleep.
+        let backgroundActivity = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiatedAllowingIdleSystemSleep,
+            reason: "An elf is working on a task"
+        )
         defer { ProcessInfo.processInfo.endActivity(backgroundActivity) }
 
         let workerSession = ElfWorkerSession(progressNotes: runningTask.progressNotes)
@@ -266,6 +298,7 @@ final class ElfTaskScheduler: ObservableObject {
                     maximumOutputTokens: remainingOutputTokens,
                     deadline: Date(timeIntervalSinceNow: Self.maximumDurationPerRunInSeconds)
                 ),
+                textOnlyRoundNudge: Self.finishNudge,
                 onReplyTextDelta: { _ in },
                 onModelRoundEnded: {}
             )
@@ -273,6 +306,11 @@ final class ElfTaskScheduler: ObservableObject {
             runningTask.progressNotes = workerSession.progressNotes
             runningTask.budgetUsage.rounds += loopResult.roundsUsed
             runningTask.budgetUsage.outputTokens += loopResult.outputTokensUsed
+            // Stop pressed while the last round's tools ran: it's stopped.
+            if taskIdentifiersBeingCancelled.remove(taskIdentifier) != nil {
+                finish(&runningTask, as: .cancelled, failureReason: nil)
+                return
+            }
             if let pendingQuestion = workerSession.pendingQuestion {
                 try? runningTask.move(to: .needsInput)
                 runningTask.pendingQuestion = pendingQuestion
@@ -280,11 +318,17 @@ final class ElfTaskScheduler: ObservableObject {
                 onTaskNeedsInput?(runningTask)
                 return
             }
-            let writtenFilePaths = turnEffectLedger.recordedFileChanges.map(\.path)
-            runningTask.result = workerSession.result ?? ElfTaskResult(
-                summary: loopResult.replyText.isEmpty ? "done." : loopResult.replyText,
-                filePaths: Array(Set(writtenFilePaths)).sorted()
+            // Only finish_task finishes a task; talking about it doesn't.
+            guard var finishedResult = workerSession.result else {
+                finish(&runningTask, as: .failed, failureReason: "it stopped without finishing")
+                return
+            }
+            finishedResult.filePaths = Self.filePathsTheElfReallyHas(
+                finishedResult.filePaths,
+                writtenFilePaths: Set(turnEffectLedger.recordedFileChanges.map(\.path)),
+                home: workingElf.home
             )
+            runningTask.result = finishedResult
             finish(&runningTask, as: .done, failureReason: nil)
         } catch {
             runningTask = task(withIdentifier: taskIdentifier) ?? runningTask
@@ -295,6 +339,21 @@ final class ElfTaskScheduler: ObservableObject {
                 finish(&runningTask, as: .failed, failureReason: error.localizedDescription)
             }
         }
+    }
+
+    /// The files a finished task lists, kept only when they're real files in
+    /// the elf's own folder (written this run, or already there).
+    static func filePathsTheElfReallyHas(_ claimedFilePaths: [String], writtenFilePaths: Set<String>, home: ElfHome) -> [String] {
+        var keptFilePaths: [String] = []
+        for claimedFilePath in claimedFilePaths {
+            guard let homeRelativePath = try? home.homeRelativePathForElfTool(claimedFilePath, access: .read) else { continue }
+            let isRealFile = writtenFilePaths.contains(homeRelativePath)
+                || ((try? home.resolvedURLInsideHome(homeRelativePath)).map { FileManager.default.fileExists(atPath: $0.path) } ?? false)
+            if isRealFile, !keptFilePaths.contains(homeRelativePath) {
+                keptFilePaths.append(homeRelativePath)
+            }
+        }
+        return keptFilePaths
     }
 
     /// What the worker is told when its run starts (or resumes).
@@ -314,10 +373,14 @@ final class ElfTaskScheduler: ObservableObject {
     }
 
     private func finish(_ finishedTask: inout ElfTask, as finalStatus: ElfTaskStatus, failureReason: String?) {
-        if finishedTask.status != .running {
+        // A deleted elf's task is just dropped.
+        guard !forgottenTaskIdentifiers.contains(finishedTask.id) else { return }
+        // A queued task that can't start (its elf or model is gone) runs
+        // for no time; anything else must be allowed to end this way.
+        if finishedTask.status == .queued {
             try? finishedTask.move(to: .running)
         }
-        try? finishedTask.move(to: finalStatus)
+        guard (try? finishedTask.move(to: finalStatus)) != nil else { return }
         finishedTask.failureReason = failureReason
         store(finishedTask)
         onTaskFinished?(finishedTask)
@@ -327,6 +390,7 @@ final class ElfTaskScheduler: ObservableObject {
 
     /// Saves the task in its elf's folder and updates the published list.
     private func store(_ storedTask: ElfTask) {
+        guard !forgottenTaskIdentifiers.contains(storedTask.id) else { return }
         if let index = tasks.firstIndex(where: { $0.id == storedTask.id }) {
             tasks[index] = storedTask
         } else {
@@ -404,6 +468,7 @@ private struct AskUserTool: WorkerOnlyTool {
 }
 
 private struct FinishTaskTool: WorkerOnlyTool {
+    static let maximumSummaryLength = 500
     let session: ElfWorkerSession
     let group = ElfToolGroup.worker
     let resultFeedsBackToModel = true
@@ -427,7 +492,11 @@ private struct FinishTaskTool: WorkerOnlyTool {
             return .failure("give a short summary.")
         }
         let filePaths = (parsedArguments["files"] as? [String] ?? []).filter { !$0.isEmpty }
-        session.result = ElfTaskResult(summary: summary, filePaths: filePaths)
+        // It's spoken: a few sentences at most.
+        let spokenSummary = summary.count > Self.maximumSummaryLength
+            ? String(summary.prefix(Self.maximumSummaryLength)).trimmingCharacters(in: .whitespaces) + "…"
+            : summary
+        session.result = ElfTaskResult(summary: spokenSummary, filePaths: filePaths)
         return ElfToolOutcome(resultText: "finished.", endsTheRun: true)
     }
 }

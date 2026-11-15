@@ -202,9 +202,10 @@ final class ElfManager: ObservableObject {
     /// The main elf's part of the next prompt, read fresh from disk so edits
     /// made outside the app count straight away. Read off the main actor so
     /// a slow disk or many skills never hold up the interface.
-    func promptContext() async -> ElfPromptContext {
+    func promptContext(canWorkInBackground: (Elf) -> Bool = { _ in true }) async -> ElfPromptContext {
         let mainElfHome = mainElf.home
         let otherElves = elves.filter { $0.id != Self.mainElfIdentifier }
+        let backgroundCapableElfIdentifiers = Set(otherElves.filter(canWorkInBackground).map(\.id))
         return await Task.detached(priority: .userInitiated) {
             var mainElfPromptContext = ElfPromptContext.reading(home: mainElfHome)
             // The main elf is told about its elves, so it can hand them work.
@@ -214,7 +215,7 @@ final class ElfManager: ObservableObject {
                     emoji: otherElf.configuration.identity.emoji,
                     description: otherElf.configuration.identity.description,
                     topSkillNames: Array(otherElf.home.readSkills().prefix(3).map(\.name)),
-                    canWorkInBackground: true
+                    canWorkInBackground: backgroundCapableElfIdentifiers.contains(otherElf.id)
                 )
             }
             return mainElfPromptContext

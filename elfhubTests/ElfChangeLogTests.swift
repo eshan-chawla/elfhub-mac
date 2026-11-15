@@ -168,4 +168,14 @@ struct ElfChangeLogTests {
         #expect(throws: ElfHomeError.self) { try home.resolvedURLForElfTool(".elfhub/changes.jsonl", access: .read) }
         #expect(throws: ElfHomeError.self) { try home.resolvedURLForElfTool(".elfhub/change-backups", access: .read) }
     }
+
+    @Test func aWriteIntoAnElfWhoseFolderIsGoneIsRefused() throws {
+        let (home, changeLog, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        try FileManager.default.removeItem(at: home.directory)
+        #expect(throws: (any Error).self) {
+            try changeLog.recordWrite(path: "files/a.md", newText: "a", origin: .hub, influencedBy: [])
+        }
+        #expect(!FileManager.default.fileExists(atPath: home.directory.path))
+    }
 }

@@ -57,6 +57,8 @@ enum ElfAgentLoop {
         guidanceToolNames: Set<String>,
         maximumRounds: Int,
         budget: ElfAgentLoopBudget? = nil,
+        textOnlyRoundNudge: String? = nil,
+        maximumTextOnlyRoundNudges: Int = 2,
         onReplyTextDelta: @escaping @MainActor @Sendable (String) -> Void,
         onModelRoundEnded: @MainActor () -> Void
     ) async throws -> ElfAgentLoopResult {
@@ -66,6 +68,7 @@ enum ElfAgentLoop {
         var toolOutcomes: [ElfToolOutcome] = []
         var roundsUsed = 0
         var outputTokensUsed = 0
+        var textOnlyRoundNudgesUsed = 0
 
         for roundNumber in 1...max(1, maximumRounds) {
             try Task.checkCancellation()
@@ -99,7 +102,17 @@ enum ElfAgentLoop {
                 roundReplyTexts.append(trimmedRoundText)
             }
             guidanceToolCalls += roundResponse.toolCalls.filter { guidanceToolNames.contains($0.toolName) }
-            guard !roundResponse.toolCalls.isEmpty else { break }
+            guard !roundResponse.toolCalls.isEmpty else {
+                // A worker that only talked hasn't finished: remind it how to
+                // (finish, ask, or keep working) a couple of times.
+                if let textOnlyRoundNudge, textOnlyRoundNudgesUsed < maximumTextOnlyRoundNudges, roundNumber < maximumRounds {
+                    textOnlyRoundNudgesUsed += 1
+                    messages.append(LanguageModelMessage(role: .assistant, content: roundResponse.assistantContent))
+                    messages.append(LanguageModelMessage(role: .user, content: [.text(textOnlyRoundNudge)]))
+                    continue
+                }
+                break
+            }
 
             var toolResultBlocks: [LanguageModelContentBlock] = []
             var needsAnotherRound = trimmedRoundText.isEmpty

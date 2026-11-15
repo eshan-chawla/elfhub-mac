@@ -111,6 +111,18 @@ final class CompanionManager: ObservableObject {
         }
     )
 
+    /// Whether an elf can work in the background: it (or the main elf) has
+    /// a model that can use tools.
+    func canWorkInBackground(_ workingElf: Elf) -> Bool {
+        let elfPreferredConfigurationIdentifier = workingElf.id == ElfManager.mainElfIdentifier
+            ? nil
+            : workingElf.home.readLocalSettings().languageModelConfigurationIdentifier
+        return ElfTaskScheduler.workerConfiguration(
+            elfPreferredConfiguration: providerConfigurationStore.configurationForNextTurn(preferredConfigurationIdentifier: elfPreferredConfigurationIdentifier),
+            mainConfiguration: providerConfigurationStore.configurationForNextTurn()
+        ) != nil
+    }
+
     /// The model an elf works with in the background: its own (when it has
     /// one set up) or the main one — whichever can use tools.
     private func languageModelProviderForBackgroundWork(of workingElf: Elf) -> LanguageModelProvider? {
@@ -129,7 +141,10 @@ final class CompanionManager: ObservableObject {
         providerConfigurationStore: providerConfigurationStore,
         screenActionCoordinator: screenActionCoordinator,
         companionEventBus: companionEventBus,
-        elfPromptContextProvider: { [elfManager] in await elfManager.promptContext() },
+        elfPromptContextProvider: { [weak self] in
+            guard let self else { return .starter }
+            return await self.elfManager.promptContext(canWorkInBackground: { [weak self] elf in self?.canWorkInBackground(elf) ?? false })
+        },
         elfForToolsProvider: { [elfManager] in elfManager.mainElf },
         mainElfManagerToolsProvider: { [weak self] in
             guard let self else { return [] }
@@ -172,7 +187,6 @@ final class CompanionManager: ObservableObject {
         case .failed: CompanionEarcon.failed.play()
         default: CompanionEarcon.needsConfirmation.play()
         }
-        companionEventBus.emit(.hintRequested(reportText))
         textChatViewModel.appendTaskReport(
             reportText,
             elfIdentifier: reportedTask.elfIdentifier,
@@ -180,19 +194,44 @@ final class CompanionManager: ObservableObject {
             conversationIdentifier: reportedTask.originConversationIdentifier
         )
         let reportDelivery = ElfTaskReportPlanner.plan(
-            isVoiceIdle: voiceState == .idle,
+            isVoiceIdle: isUserIdleForTaskReports,
             isRecording: buddyDictationManager.isDictationInProgress,
             isReplyStreaming: textChatViewModel.isResponding,
             areActionsRunning: screenActionCoordinator.isRunningActions,
             speaksReports: speaksTaskReports
         )
-        guard reportDelivery == .speakNow else { return }
-        if let mainElfSpeechProvider = speechProviderForCurrentSettings() {
-            companionEventBus.emit(.responseCaptionAvailable(reportText))
-            streamingSpeechPlayer.speakCompleteText(reportText, using: mainElfSpeechProvider)
-        }
+        // The pill line waits while the user is talking, waiting on a reply
+        // or watching actions, so it never covers that pill.
+        showTaskReportHintWhenIdle(reportText)
+        guard reportDelivery == .speakNow,
+              let mainElfSpeechProvider = speechProviderForCurrentSettings() else { return }
+        companionEventBus.emit(.responseCaptionAvailable(reportText))
+        // After anything already being said, never cutting it off.
+        streamingSpeechPlayer.speakAfterCurrentUtterance(reportText, using: mainElfSpeechProvider)
+        // Told — so the main elf doesn't repeat it. With the voice off it
+        // isn't, and the main elf mentions it in its next reply instead.
         if reportedTask.status == .done || reportedTask.status == .failed {
             elfTaskScheduler.markReported(taskIdentifiers: [reportedTask.id])
+        }
+    }
+
+    /// Idle for reports: no turn under way and nothing being said.
+    private var isUserIdleForTaskReports: Bool {
+        voiceState == .idle && !streamingSpeechPlayer.isSpeaking
+    }
+
+    private func showTaskReportHintWhenIdle(_ reportText: String) {
+        Task { @MainActor [weak self] in
+            // Waits up to a minute for a quiet moment.
+            for _ in 0..<60 {
+                guard let self else { return }
+                if self.isUserIdleForTaskReports, !self.buddyDictationManager.isDictationInProgress,
+                   !self.textChatViewModel.isResponding, !self.screenActionCoordinator.isRunningActions {
+                    self.companionEventBus.emit(.hintRequested(reportText))
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
         }
     }
 
@@ -207,13 +246,18 @@ final class CompanionManager: ObservableObject {
         originConversationIdentifier: UUID?
     ) async -> CompanionTurnPipeline.TurnResult? {
         guard let speakingElf, speakingElf.id != ElfManager.mainElfIdentifier else { return nil }
+        // Without a model that can use tools, the elf answers now instead
+        // of promising work it can't do.
+        guard canWorkInBackground(speakingElf) else { return nil }
+        // What was said to the elf, without its name ("Juniper, research…").
+        let requestText = ElfAddressRouter.route(transcript: userText, elves: elfManager.elves)?.textForElf ?? userText
         let requestKind: ElfTaskKind
-        if let shortcutKind = ElfTaskClassifier.shortcutKind(for: userText) {
+        if let shortcutKind = ElfTaskClassifier.shortcutKind(for: requestText) {
             requestKind = shortcutKind
         } else if let classifierConfiguration = providerConfigurationStore.configurationForNextTurn(
             preferredConfigurationIdentifier: speakingElf.home.readLocalSettings().languageModelConfigurationIdentifier
         ), let classifierProvider = try? providerConfigurationStore.makeProvider(for: classifierConfiguration) {
-            requestKind = await ElfTaskClassifier.classify(requestText: userText, languageModelProvider: classifierProvider)
+            requestKind = await ElfTaskClassifier.classify(requestText: requestText, languageModelProvider: classifierProvider)
         } else {
             requestKind = .quick
         }
@@ -247,7 +291,7 @@ final class CompanionManager: ObservableObject {
     private func mainElfStatusUpdate() -> ElfMainStatusUpdate? {
         let allTasks = elfTaskScheduler.tasks
         let unreportedFinishedTasks = allTasks.filter { ($0.status == .done || $0.status == .failed) && !$0.reportedToUser }
-        guard let statusText = ElfStatusBlock.text(
+        return ElfStatusBlock.update(
             unreportedFinishedTasks: unreportedFinishedTasks,
             runningTasks: allTasks.filter { $0.status == .running || $0.status == .queued },
             tasksWaitingForAnswers: allTasks.filter { $0.status == .needsInput },
@@ -256,8 +300,7 @@ final class CompanionManager: ObservableObject {
                     ? "a background copy of you"
                     : ElfTaskTools.elfName(forIdentifier: elfIdentifier, in: elfManager)
             }
-        ) else { return nil }
-        return ElfMainStatusUpdate(text: statusText, reportedTaskIdentifiers: unreportedFinishedTasks.map(\.id))
+        )
     }
 
     /// The main-window section another surface (e.g. the menu bar panel)
@@ -1204,6 +1247,7 @@ final class CompanionManager: ObservableObject {
                     userInkStrokes: userInkStrokes,
                     isSpokenTurn: true,
                     speakingElf: speakingElf,
+                    conversationIdentifier: recordedVoiceExchange.conversationIdentifier,
                     onReplyTextDelta: { [textChatViewModel, turnLatencyTimeline] replyTextDelta in
                         turnLatencyTimeline.mark(.firstReplyText)
                         streamingReplyPresenter.receive(replyTextDelta: replyTextDelta)
@@ -1295,6 +1339,7 @@ final class CompanionManager: ObservableObject {
     func respondToChatMessage(
         _ userText: String,
         chosenElfIdentifier: String? = nil,
+        conversationIdentifier: UUID? = nil,
         onTextChunk: @escaping @MainActor @Sendable (String) -> Void,
         onElfFileChanged: @escaping @MainActor (_ fileChange: ElfChangeLogEntry, _ elfIdentifier: String) -> Void = { _, _ in },
         onLanguageModelSwitched: @escaping @MainActor (LanguageModelSwitchNotice) -> Void = { _ in }
@@ -1324,7 +1369,7 @@ final class CompanionManager: ObservableObject {
             if let backgroundTaskTurnResult = await turnResultIfHandedToBackgroundTask(
                 speakingElf: speakingElf,
                 userText: userText,
-                originConversationIdentifier: textChatViewModel.activeConversation.id
+                originConversationIdentifier: conversationIdentifier ?? textChatViewModel.activeConversation.id
             ) {
                 streamingReplyPresenter.receive(replyTextDelta: backgroundTaskTurnResult.spokenText)
                 onTextChunk(backgroundTaskTurnResult.spokenText)
@@ -1334,6 +1379,7 @@ final class CompanionManager: ObservableObject {
                 userText: userText,
                 prefetchedScreenCaptures: nil,
                 speakingElf: speakingElf,
+                conversationIdentifier: conversationIdentifier,
                 onReplyTextDelta: { [turnLatencyTimeline] replyTextDelta in
                     turnLatencyTimeline.mark(.firstReplyText)
                     streamingReplyPresenter.receive(replyTextDelta: replyTextDelta)

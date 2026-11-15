@@ -97,6 +97,11 @@ private struct AssignTaskTool: MainElfOnlyTool {
             let knownNamesText = otherElfNames.isEmpty ? "you have no other elves yet; use \"yourself\"." : "your elves are " + otherElfNames.joined(separator: ", ") + ", or \"yourself\"."
             return .failure("there's no elf called \(requestedElfName). " + knownNamesText)
         }
+        // After reading a file, a page or an elf's report, only the user's
+        // own words can start work: text the elf read can't assign it.
+        if !context.influencedBy.isEmpty, !TaskRequest.userAskedForBackgroundWork(userUtterance: context.userUtterance) {
+            return .failure("only the user can ask for that — they didn't ask for background work. if it would help, offer it.")
+        }
         // A turn restarted on the fallback model returns the task it made.
         let assignmentKey = assignedElf.id + "|" + instruction.lowercased()
         if let alreadyAssignedTaskIdentifier = context.turnEffectLedger.assignedTaskIdentifier(forKey: assignmentKey) {
@@ -104,10 +109,15 @@ private struct AssignTaskTool: MainElfOnlyTool {
         }
         try Task.checkCancellation()
         do {
+            var originConversationIdentifier: UUID?
+            if case let .turn(conversationIdentifier) = context.origin {
+                originConversationIdentifier = conversationIdentifier
+            }
             let assignedTask = try scheduler.enqueue(
                 elfIdentifier: assignedElf.id,
                 instruction: instruction,
-                contextFromMain: arguments.string("context") ?? ""
+                contextFromMain: arguments.string("context") ?? "",
+                originConversationIdentifier: originConversationIdentifier
             )
             context.turnEffectLedger.recordAssignedTask(assignedTask.id, forKey: assignmentKey)
             let assigneeName = assignedElf.id == ElfManager.mainElfIdentifier ? "a background copy of you" : assignedElf.configuration.identity.name
@@ -209,6 +219,10 @@ private struct AnswerTaskTool: MainElfOnlyTool {
               let answeredTask = scheduler.task(withShortIdentifier: shortIdentifier) else {
             return .failure("give the task id and the answer.")
         }
+        // An answer is the user's, never one the elf made up.
+        guard TaskRequest.answerComesFromTheUser(answer: answer, userUtterance: context.userUtterance) else {
+            return .failure("that isn't what the user said. ask them, and pass on their words.")
+        }
         do {
             try scheduler.answer(taskIdentifier: answeredTask.id, answer: answer)
             return ElfToolOutcome(resultText: "passed on; the task carries on.")
@@ -238,5 +252,34 @@ private struct SearchChatsTool: MainElfOnlyTool {
         // What the elf reads from old chats may steer what it writes next.
         context.influencedBy.insert(.file)
         return ElfToolOutcome(resultText: resultLines.joined(separator: "\n"))
+    }
+}
+
+// MARK: - The user's words
+
+/// Checks that background work and answers to tasks come from what the user
+/// said, not from text an elf read.
+enum TaskRequest {
+    static let backgroundWorkWords: Set<String> = [
+        "assign", "ask", "have", "get", "tell", "let", "delegate", "hand", "background", "task", "tasks",
+        "research", "look", "find", "dig", "draft", "write", "work", "check", "compile", "gather", "summarise", "summarize",
+    ]
+
+    static let wordsThatCarryNoAnswer: Set<String> = [
+        "the", "a", "an", "it", "is", "to", "and", "or", "of", "in", "on", "for", "please", "that", "this", "with",
+    ]
+
+    /// The user asked for work to be done or handed off.
+    static func userAskedForBackgroundWork(userUtterance: String) -> Bool {
+        UtteranceWords.words(in: userUtterance).contains { backgroundWorkWords.contains($0) }
+    }
+
+    /// The answer passed to a task is in the user's words: one of its
+    /// meaningful words is something the user said.
+    static func answerComesFromTheUser(answer: String, userUtterance: String) -> Bool {
+        let userWords = Set(UtteranceWords.words(in: userUtterance))
+        let answerWords = UtteranceWords.words(in: answer).filter { !wordsThatCarryNoAnswer.contains($0) }
+        guard !answerWords.isEmpty else { return false }
+        return answerWords.contains { userWords.contains($0) }
     }
 }

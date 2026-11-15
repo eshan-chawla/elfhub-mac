@@ -115,6 +115,7 @@ final class TextChatViewModel: ObservableObject {
                 let turnResult = try await self.companionManager.respondToChatMessage(
                     trimmed,
                     chosenElfIdentifier: chosenElfIdentifier,
+                    conversationIdentifier: recordedExchange.conversationIdentifier,
                     onTextChunk: { chunk in
                         rawReplyText += chunk
                         self.showStreamingReply(rawReplyText: rawReplyText, for: recordedExchange)

@@ -25,27 +25,54 @@ nonisolated enum ElfTaskKind: String, Equatable, Sendable {
 enum ElfTaskClassifier {
     nonisolated static let modelAnswerTimeoutInSeconds: Double = 1.2
 
-    private static let longWorkPhrases = [
-        "research", "look into", "write up", "draft", "find out", "in the background", "dig into", "put together", "compile",
+    /// Long work, when the request starts with it ("research …", "can you
+    /// draft …") — not when it's a word in a question ("explain this draft").
+    private static let longWorkLeadingPhrases = [
+        "research", "look into", "write up", "draft", "find out", "dig into", "put together", "compile", "write",
     ]
+    private static let politeOpenings = ["please", "can you", "could you", "would you", "will you", "i need you to", "go"]
     private static let screenWorkPhrases = [
         "do it", "click", "go to", "fill in", "fill out", "on my screen", "open the", "type it", "press",
     ]
     private static let quickQuestionPhrases = [
         "what's this", "what is this", "what's that", "what is that", "explain", "what does", "where is", "where's",
     ]
+    /// Words that point at the screen: a request with them needs the
+    /// screenshot, so it's never sent to the background by a shortcut.
+    private static let screenPointingWords: Set<String> = ["this", "that", "these", "those", "here"]
 
     /// The kind decided by clear phrases alone, or nil when a model should
-    /// decide. Long work wins over screen, screen over quick.
+    /// decide. Quick questions come first; long work only when the request
+    /// starts with it (or says "in the background") and isn't about
+    /// something on screen.
     static func shortcutKind(for requestText: String) -> ElfTaskKind? {
         let requestWords = UtteranceWords.words(in: requestText)
         func containsPhrase(_ phrase: String) -> Bool {
             UtteranceWords.firstIndex(ofPhrase: phrase, in: requestWords) != nil
         }
-        if longWorkPhrases.contains(where: containsPhrase) { return .long }
-        if screenWorkPhrases.contains(where: containsPhrase) { return .screen }
         if quickQuestionPhrases.contains(where: containsPhrase) { return .quick }
+        if containsPhrase("in the background") { return .long }
+        let pointsAtTheScreen = requestWords.contains { screenPointingWords.contains($0) }
+        let isAQuestion = requestText.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("?")
+        if !pointsAtTheScreen, !isAQuestion, startsWithLongWork(requestWords) { return .long }
+        if screenWorkPhrases.contains(where: containsPhrase) { return .screen }
         return nil
+    }
+
+    private static func startsWithLongWork(_ requestWords: [String]) -> Bool {
+        var remainingWords = requestWords[...]
+        var droppedAnOpening = true
+        while droppedAnOpening {
+            droppedAnOpening = false
+            for politeOpening in politeOpenings {
+                let openingWords = UtteranceWords.words(in: politeOpening)
+                if remainingWords.starts(with: openingWords) {
+                    remainingWords = remainingWords.dropFirst(openingWords.count)
+                    droppedAnOpening = true
+                }
+            }
+        }
+        return longWorkLeadingPhrases.contains { remainingWords.starts(with: UtteranceWords.words(in: $0)) }
     }
 
     /// The kind in a model's answer, read leniently; quick when unclear.

@@ -74,6 +74,8 @@ nonisolated enum ElfChangeLogError: LocalizedError, Equatable {
     case alreadyUndone
     case unknownEntry
     case missingBackup(path: String)
+    /// The elf's folder is gone (deleted, or removed in Finder).
+    case elfFolderGone
 
     var errorDescription: String? {
         switch self {
@@ -85,6 +87,8 @@ nonisolated enum ElfChangeLogError: LocalizedError, Equatable {
             return "That change isn't in the list any more."
         case let .missingBackup(path):
             return "The earlier version of \(path) is no longer kept, so this can't be undone."
+        case .elfFolderGone:
+            return "This elf's folder is gone."
         }
     }
 }
@@ -113,6 +117,7 @@ nonisolated struct ElfChangeLog {
         origin: ElfChangeLogEntry.Origin,
         influencedBy: Set<ElfChangeLogEntry.Influence>
     ) throws -> ElfChangeLogEntry {
+        try requireElfFolder()
         let fileURL = try home.resolvedURLInsideHome(path)
         let previousContent = try? Data(contentsOf: fileURL)
         let newContent = Data(newText.utf8)
@@ -141,6 +146,7 @@ nonisolated struct ElfChangeLog {
         origin: ElfChangeLogEntry.Origin,
         influencedBy: Set<ElfChangeLogEntry.Influence>
     ) throws -> ElfChangeLogEntry {
+        try requireElfFolder()
         let fileURL = try home.resolvedURLInsideHome(path)
         let previousContent = try Data(contentsOf: fileURL)
         let previousContentSHA256 = try storeBackup(previousContent)
@@ -167,6 +173,7 @@ nonisolated struct ElfChangeLog {
         origin: ElfChangeLogEntry.Origin,
         influencedBy: Set<ElfChangeLogEntry.Influence>
     ) throws -> ElfChangeLogEntry {
+        try requireElfFolder()
         let originalFileURL = try home.resolvedURLInsideHome(originalPath)
         let newFileURL = try home.resolvedURLInsideHome(newPath)
         let contentSHA256 = Self.sha256(of: try Data(contentsOf: originalFileURL))
@@ -210,6 +217,7 @@ nonisolated struct ElfChangeLog {
     /// `force` is true.
     @discardableResult
     func undo(entryIdentifier: UUID, force: Bool) throws -> ElfChangeLogEntry {
+        try requireElfFolder()
         guard let undoneEntry = entries().first(where: { $0.id == entryIdentifier }) else {
             throw ElfChangeLogError.unknownEntry
         }
@@ -320,6 +328,15 @@ nonisolated struct ElfChangeLog {
     }
 
     // MARK: Storage
+
+    /// A change never recreates an elf whose folder is gone — a worker still
+    /// finishing after its elf was deleted, say.
+    private func requireElfFolder() throws {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: home.directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw ElfChangeLogError.elfFolderGone
+        }
+    }
 
     static func sha256(of content: Data) -> String {
         SHA256.hash(data: content).map { String(format: "%02x", $0) }.joined()

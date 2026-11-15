@@ -387,7 +387,12 @@ struct ElfSettingsContent: View {
         ElfHomeAndExportSection(companionManager: companionManager, elfEditor: elfEditor)
             .mainAppCard()
         if !elfEditor.isMainElf {
-            ElfDeleteSection(elfManager: companionManager.elfManager, elfEditor: elfEditor, onElfDeleted: onElfDeleted)
+            ElfDeleteSection(
+                elfManager: companionManager.elfManager,
+                elfTaskScheduler: companionManager.elfTaskScheduler,
+                elfEditor: elfEditor,
+                onElfDeleted: onElfDeleted
+            )
                 .mainAppCard()
         }
         Color.clear
@@ -860,6 +865,7 @@ enum AVSpeechSynthesisVoiceName {
 /// Deleting a side elf: its folder goes to the Trash, so it can be put back.
 private struct ElfDeleteSection: View {
     @ObservedObject var elfManager: ElfManager
+    let elfTaskScheduler: ElfTaskScheduler
     @ObservedObject var elfEditor: ElfEditor
     let onElfDeleted: () -> Void
 
@@ -883,15 +889,21 @@ private struct ElfDeleteSection: View {
         }
         .confirmationDialog("Delete \(elfName)?", isPresented: $isConfirmingDelete) {
             Button("Delete \(elfName)", role: .destructive) {
-                do {
-                    try elfManager.deleteElf(withIdentifier: elfEditor.elf.id)
-                    onElfDeleted()
-                } catch {
-                    deleteErrorMessage = error.localizedDescription
+                let deletedElfIdentifier = elfEditor.elf.id
+                Task { @MainActor in
+                    // Its background work stops first, so nothing writes into
+                    // the folder as it goes to the Trash.
+                    await elfTaskScheduler.cancelAndForgetTasks(forElfIdentifier: deletedElfIdentifier)
+                    do {
+                        try elfManager.deleteElf(withIdentifier: deletedElfIdentifier)
+                        onElfDeleted()
+                    } catch {
+                        deleteErrorMessage = error.localizedDescription
+                    }
                 }
             }
         } message: {
-            Text("\(elfName) and its folder go to the Trash. You can put the folder back in Elves to restore it.")
+            Text("\(elfName) and its folder go to the Trash, and its background tasks stop. You can put the folder back in Elves to restore it.")
         }
     }
 }
