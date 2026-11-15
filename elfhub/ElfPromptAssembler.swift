@@ -69,7 +69,7 @@ nonisolated enum ElfPromptAssembler {
         case .sideElfForeground:
             return "you're \(displayedName), one of the user's elves. the user called you by name to talk to you directly — " + companionSituation + bracketedNamesRule
         case let .backgroundWorker(taskInstruction):
-            return "you're \(displayedName), one of the user's elves, working in the background on a task the user's main elf gave you. nobody is watching while you work: use your tools, keep notes of what you find, and finish with a short summary for the user. the task:\n" + taskInstruction
+            return "you're \(displayedName), one of the user's elves, working in the background on a task for the user (passed on by the main elf, or asked of you directly). nobody is watching while you work: use your tools, keep notes of what you find, and finish with a short summary for the user. the task:\n" + taskInstruction
         }
     }
 

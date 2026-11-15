@@ -165,6 +165,12 @@ enum ConsentPolicy {
             return .requiresExplicitConfirmation(reason: "that button finishes the form")
         }
 
+        // Option changes what a click or drag does: option-click on a link
+        // downloads it, option-drag copies instead of moving.
+        if case let .withModifierKeys(modifierNames, _) = context.action, modifierNames.contains("opt") {
+            return .requiresExplicitConfirmation(reason: "holding option can download or copy instead")
+        }
+
         // An address the user didn't name could carry what's on screen out
         // in its query, or do something by being opened.
         if case let .openWebsite(url) = context.action, !userUtteranceNamesWebsite(context.userUtterance, websiteURL: url) {

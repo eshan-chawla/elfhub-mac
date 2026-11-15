@@ -105,7 +105,15 @@ final class ElfTaskScheduler: ObservableObject {
                 loadedTaskIdentifiers.insert(storedTask.id)
             }
         }
-        tasks = loadedTasks.sorted { $0.createdAt < $1.createdAt }
+        // Old finished tasks go, so the list and the files don't grow forever.
+        let forgottenFinishedTasks = Self.finishedTasksToForget(among: loadedTasks, now: Date())
+        let forgottenTaskIdentifiers = Set(forgottenFinishedTasks.map(\.id))
+        for forgottenTask in forgottenFinishedTasks {
+            if let taskElf = elfManager.elf(withIdentifier: forgottenTask.elfIdentifier) {
+                ElfTaskStore(home: taskElf.home).delete(taskIdentifier: forgottenTask.id)
+            }
+        }
+        tasks = loadedTasks.filter { !forgottenTaskIdentifiers.contains($0.id) }.sorted { $0.createdAt < $1.createdAt }
         startTasksThatHaveRoom()
     }
 
@@ -140,6 +148,29 @@ final class ElfTaskScheduler: ObservableObject {
 
     nonisolated static func isScreenGrantStillValid(grantedAt: Date, now: Date) -> Bool {
         now.timeIntervalSince(grantedAt) <= screenGrantLifetimeInSeconds
+    }
+
+    /// Finished tasks kept per elf; older ones beyond this are forgotten.
+    static let finishedTasksKeptPerElf = 50
+    /// Finished, reported tasks older than this are forgotten.
+    static let finishedTaskLifetimeInSeconds: TimeInterval = 30 * 86_400
+
+    /// Finished tasks to forget: reported ones older than 30 days, and any
+    /// beyond an elf's newest 50 finished ones. Waiting or unreported tasks stay.
+    nonisolated static func finishedTasksToForget(among elfTasks: [ElfTask], now: Date) -> [ElfTask] {
+        var tasksToForget: [ElfTask] = []
+        let finishedTasksByElf = Dictionary(grouping: elfTasks.filter { $0.status.isFinished }, by: \.elfIdentifier)
+        for (_, finishedTasks) in finishedTasksByElf {
+            let newestFirst = finishedTasks.sorted { $0.createdAt > $1.createdAt }
+            for (position, finishedTask) in newestFirst.enumerated() {
+                let isBeyondTheKeptNumber = position >= finishedTasksKeptPerElf
+                let isOldAndReported = finishedTask.reportedToUser && now.timeIntervalSince(finishedTask.createdAt) > finishedTaskLifetimeInSeconds
+                if isBeyondTheKeptNumber || isOldAndReported {
+                    tasksToForget.append(finishedTask)
+                }
+            }
+        }
+        return tasksToForget.sorted { $0.createdAt < $1.createdAt }
     }
 
     /// The user's answer to a task's question: it goes back in the queue.
@@ -356,6 +387,10 @@ final class ElfTaskScheduler: ObservableObject {
             turnEffectLedger: turnEffectLedger
         )
         toolContext.usedResources = runningTask.usedResources
+        // What it saw on the screen can steer what it writes afterwards.
+        if screenAccess != nil {
+            toolContext.influencedBy.insert(.screen)
+        }
         // Whatever happens, the next run (and the hub) know what this one used.
         defer {
             if var endedTask = task(withIdentifier: taskIdentifier) {
@@ -431,7 +466,8 @@ final class ElfTaskScheduler: ObservableObject {
             // The user stopped it (or it reached their step) on the screen:
             // it asks how to go on rather than failing.
             if workerSession.result == nil, case let .stopNow(spokenReason) = screenAccess?.session.ending {
-                parkForAnswer(&runningTask, question: spokenReason ?? Self.stoppedOnTheScreenQuestion, isAskingForTheScreen: false)
+                let question = spokenReason.map { $0 + " should i carry on another way, or leave it there?" } ?? Self.stoppedOnTheScreenQuestion
+                parkForAnswer(&runningTask, question: question, isAskingForTheScreen: false)
                 return
             }
             // Only finish_task finishes a task; talking about it doesn't.
@@ -485,7 +521,8 @@ final class ElfTaskScheduler: ObservableObject {
 
     /// What the worker is told when its run starts (or resumes).
     static func workerUserText(for elfTask: ElfTask) -> String {
-        var userTextParts = ["your task: " + elfTask.instruction]
+        // The task itself is in the system prompt (the worker's identity).
+        var userTextParts = ["work on your task now."]
         let trimmedContext = elfTask.contextFromMain.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedContext.isEmpty {
             userTextParts.append("what the main elf passed along: " + trimmedContext)

@@ -211,7 +211,8 @@ private struct WriteFileTool: OwnFolderTool {
         }
         let characterLimit = homeRelativePath == "profile.md" ? ElfHome.profileCharacterLimit : ElfHome.fileByteLimit
         guard newText.utf8.count <= characterLimit else {
-            return .failure("that's too long for \(homeRelativePath) (the limit is \(characterLimit) characters). shorten it or split it into several files.")
+            let limitDescription = homeRelativePath == "profile.md" ? "\(characterLimit) bytes" : "\(characterLimit / 1_000) KB"
+            return .failure("that's too long for \(homeRelativePath) (the limit is \(limitDescription); accented letters and emoji take more than one byte). shorten it or split it into several files.")
         }
         let newContentSHA256 = ElfChangeLog.sha256(of: Data(newText.utf8))
         if ElfFileTools.alreadyWroteThisTurn(path: homeRelativePath, contentSHA256: newContentSHA256, context: context) {

@@ -50,8 +50,11 @@ struct ElfAgentLoopResult {
 
 @MainActor
 enum ElfAgentLoop {
-    /// Added to the system prompt of the last allowed round.
+    /// Added to the newest message of the last allowed round.
     static let answerNowInstruction = "you've used all your tool rounds for this reply. answer now with what you have."
+
+    /// Said when the last round asked for screen steps that can't run.
+    static let skippedFinalStepsNote = "(i ran out of steps before doing the last part.)"
 
     /// What a guidance call "returns" to the model.
     static let guidanceToolResultText = "shown to the user on their screen"
@@ -127,15 +130,22 @@ enum ElfAgentLoop {
             // conversation with tool calls but no tools); the model is told
             // to answer instead.
             let isLastAllowedRound = roundNumber == maximumRounds && roundNumber > 1
-            var roundSystemPrompt = initialRequest.systemPrompt
-            if isComputerUseSummaryRound {
-                roundSystemPrompt += "\n\n" + ComputerUseSession.runEndedInstruction
-            } else if isLastAllowedRound {
-                roundSystemPrompt += "\n\n" + answerNowInstruction
+            // Told in the newest message rather than the system prompt, so
+            // the system prompt (and Claude's prompt cache behind it) stays
+            // the same every round.
+            var roundMessages = messages
+            let finalRoundInstruction = isComputerUseSummaryRound
+                ? ComputerUseSession.runEndedInstruction
+                : (isLastAllowedRound ? answerNowInstruction : nil)
+            if let finalRoundInstruction, let lastMessage = roundMessages.last, lastMessage.role == .user {
+                roundMessages[roundMessages.count - 1] = LanguageModelMessage(
+                    role: .user,
+                    content: lastMessage.content + [.text(finalRoundInstruction)]
+                )
             }
             var roundRequest = LanguageModelRequest(
-                systemPrompt: roundSystemPrompt,
-                messages: messages,
+                systemPrompt: initialRequest.systemPrompt,
+                messages: roundMessages,
                 // The model's own search replaces the stand-in web_search
                 // (the same name can't be two tools).
                 tools: providerWebSearch == nil ? initialRequest.tools : initialRequest.tools.filter { $0.name != "web_search" },
@@ -230,6 +240,11 @@ enum ElfAgentLoop {
             }
             // The round's steps on the screen, in order, each answered (with
             // a fresh screenshot after acting).
+            // Say so rather than let "i clicked it" stand.
+            if computerUseExecutor != nil, !computerUseToolCalls.isEmpty, isFinalRound {
+                onReplyTextDelta((roundReplyTexts.isEmpty ? "" : " ") + skippedFinalStepsNote)
+                roundReplyTexts.append(skippedFinalStepsNote)
+            }
             if let computerUseExecutor, !computerUseToolCalls.isEmpty, !isFinalRound {
                 try Task.checkCancellation()
                 let wasAlreadyOver = computerUseExecutor.hasEnded

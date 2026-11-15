@@ -148,7 +148,11 @@ nonisolated enum ElfNameRules {
         let variationSelectorForEmoji: Unicode.Scalar = "\u{FE0F}"
         let zeroWidthJoiner: Unicode.Scalar = "\u{200D}"
         let startsWithEmojiPresentation = unicodeScalars.first?.properties.isEmojiPresentation ?? false
-        let asksForEmojiPresentation = unicodeScalars.contains(variationSelectorForEmoji) || unicodeScalars.contains(zeroWidthJoiner)
+        // A selector or joiner only makes an emoji of something that can be
+        // one ("☺️"), never of a letter ("A️").
+        let firstScalarCanBeEmoji = unicodeScalars.first?.properties.isEmoji ?? false
+        let asksForEmojiPresentation = firstScalarCanBeEmoji
+            && (unicodeScalars.contains(variationSelectorForEmoji) || unicodeScalars.contains(zeroWidthJoiner))
         return startsWithEmojiPresentation || asksForEmojiPresentation ? String(firstCharacter) : ""
     }
 

@@ -114,8 +114,15 @@ struct ElfAgentLoopTests {
         let loopResult = try await runLoop(provider: provider, toolContext: toolContext, maximumRounds: 3)
         #expect(loopResult.roundsUsed == 3)
         #expect(provider.receivedRequests.count == 3)
-        #expect(provider.receivedRequests.last?.systemPrompt.hasSuffix(ElfAgentLoop.answerNowInstruction) == true)
-        #expect(provider.receivedRequests.first?.systemPrompt.hasSuffix(ElfAgentLoop.answerNowInstruction) == false)
+        // Told in the newest message, so the system prompt — and the prompt
+        // cache behind it — stays the same every round.
+        let lastRoundMessageText = provider.receivedRequests.last?.messages.last?.content.compactMap { block -> String? in
+            if case let .text(text) = block { return text }
+            return nil
+        }.joined() ?? ""
+        #expect(lastRoundMessageText.contains(ElfAgentLoop.answerNowInstruction))
+        let everyRoundHasTheSameSystemPrompt = Set(provider.receivedRequests.map(\.systemPrompt)).count == 1
+        #expect(everyRoundHasTheSameSystemPrompt)
         #expect(loopResult.replyText == "here's what I have.")
     }
 

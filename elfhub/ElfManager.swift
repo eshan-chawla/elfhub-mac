@@ -152,7 +152,11 @@ final class ElfManager: ObservableObject {
         let otherElfNames = ElfNameRules.namesInUse(byElves: elves, excludingElfWithIdentifier: elfIdentifier)
         try validateName(newName, otherElfNames: otherElfNames)
         var renamedConfiguration = renamedElf.home.readConfiguration()
-        renamedConfiguration.identity.name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNewName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        renamedConfiguration.identity.name = trimmedNewName
+        // An alias that is now the name itself isn't another name any more.
+        let foldedNewName = ElfNameRules.foldedForComparison(trimmedNewName)
+        renamedConfiguration.identity.aliases.removeAll { ElfNameRules.foldedForComparison($0) == foldedNewName }
         try renamedElf.home.writeConfiguration(renamedConfiguration)
         reloadRoster()
     }

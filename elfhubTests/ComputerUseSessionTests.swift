@@ -283,7 +283,7 @@ struct ComputerUseSessionTests {
             ScriptedLanguageModelProvider.toolCalls([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)]),
             ScriptedLanguageModelProvider.toolCalls([toolsetCall("b", "left_click", #"{"coordinate":[300,200]}"#)], text: "one more click."),
         ])
-        _ = try await ElfAgentLoop.run(
+        let loopResult = try await ElfAgentLoop.run(
             initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "click twice"),
             languageModelProvider: languageModelProvider,
             toolRegistry: ElfToolRegistry(tools: []),
@@ -296,6 +296,7 @@ struct ComputerUseSessionTests {
         )
         // The model would never see what the second click did.
         #expect(screen.performedActions.count == 1)
+        #expect(loopResult.replyText.hasSuffix(ElfAgentLoop.skippedFinalStepsNote))
     }
 
     // MARK: - When a turn acts in steps
@@ -403,7 +404,11 @@ struct ComputerUseSessionTests {
             onModelRoundEnded: {}
         )
         #expect(languageModelProvider.receivedRequests.count == ComputerUseLoopGuard.maximumSteps + 1)
-        #expect(languageModelProvider.receivedRequests.last?.systemPrompt.contains(ComputerUseSession.runEndedInstruction) == true)
+        let summaryRoundText = languageModelProvider.receivedRequests.last?.messages.last?.content.compactMap { block -> String? in
+            if case let .text(text) = block { return text }
+            return nil
+        }.joined() ?? ""
+        #expect(summaryRoundText.contains(ComputerUseSession.runEndedInstruction))
         #expect(screen.performedActions.count == ComputerUseLoopGuard.maximumSteps)
         #expect(loopResult.replyText == "i got most of the way.")
     }
