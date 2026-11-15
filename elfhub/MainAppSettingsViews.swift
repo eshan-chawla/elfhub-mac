@@ -56,7 +56,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         case .permissions:
             return "What macOS needs to allow so elfhub can hear you, see your screen and act."
         case .privacy:
-            return "Chat history, saved screenshots, and apps that are never captured."
+            return "Chat history, saved screenshots, apps that are never captured, and what your elves may reach."
         case .general:
             return "Startup, sounds and the tutorial."
         }
@@ -92,6 +92,8 @@ struct SettingsCategoryPage: View {
                 ScreenCaptureBlocklistEditor(screenCapturePrivacyBlocklist: ScreenCapturePrivacyBlocklist.shared)
                     .mainAppCard()
                 ComputerUseAuditLogSettingsSection(computerUseAuditLog: ComputerUseAuditLog.shared)
+                    .mainAppCard()
+                ElvesReachSettingsSection()
                     .mainAppCard()
             case .general:
                 GeneralSettingsContent(companionManager: companionManager)
@@ -447,5 +449,25 @@ private struct WebSearchSettingsCard: View {
         guard !trimmedKey.isEmpty else { return }
         hasSavedKey = KeychainSecretStore.setSecret(trimmedKey, for: .webSearch)
         apiKeyDraft = ""
+    }
+}
+
+// MARK: - What elves reach
+
+/// What leaves this Mac when elves work: plain words, so nobody is
+/// surprised that an elf on a web task contacts the web.
+private struct ElvesReachSettingsSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LayerFieldLabel(text: "What your elves reach")
+            Text("Elves with the web switched on (your other elves by default; your main elf only if you turn it on) send their search words to the web search service you picked in Settings › Models, and open web pages they were led to — search results and their links, or addresses you give them. Pages are fetched by this app straight from those sites, never through an elfhub server, and never from your own Mac or home network.")
+                .font(.system(size: 12))
+                .foregroundColor(DS.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Elves read and change only folders you grant them on their page (read only unless you allow changes), and every change they make is kept so you can undo it. What they read goes to your language model like the rest of the conversation.")
+                .font(.system(size: 12))
+                .foregroundColor(DS.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
