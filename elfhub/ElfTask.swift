@@ -81,6 +81,9 @@ nonisolated struct ElfTask: Codable, Equatable, Identifiable, Sendable {
     var pendingQuestion: String?
     /// True when the question is the elf asking for the screen.
     var isWaitingForTheScreen: Bool
+    /// The user said yes to the elf using their screen: its next run works
+    /// on the screen (once — another run asks again).
+    var screenGrantedForNextRun: Bool
     /// The user's answers to its questions, in order.
     var answers: [String]
     var result: ElfTaskResult?
@@ -115,6 +118,7 @@ nonisolated struct ElfTask: Codable, Equatable, Identifiable, Sendable {
         self.progressNotes = []
         self.pendingQuestion = nil
         self.isWaitingForTheScreen = false
+        self.screenGrantedForNextRun = false
         self.answers = []
         self.result = nil
         self.failureReason = nil
@@ -135,7 +139,7 @@ nonisolated struct ElfTask: Codable, Equatable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, elfIdentifier, instruction, contextFromMain, conversationExcerpt, originConversationIdentifier, status
-        case progressNotes, pendingQuestion, isWaitingForTheScreen, answers, result, failureReason, budgetUsage
+        case progressNotes, pendingQuestion, isWaitingForTheScreen, screenGrantedForNextRun, answers, result, failureReason, budgetUsage
         case reportedToUser, createdAt, usedResources, influencedBy
     }
 
@@ -152,6 +156,7 @@ nonisolated struct ElfTask: Codable, Equatable, Identifiable, Sendable {
         progressNotes = try container.decodeIfPresent([String].self, forKey: .progressNotes) ?? []
         pendingQuestion = try container.decodeIfPresent(String.self, forKey: .pendingQuestion)
         isWaitingForTheScreen = try container.decodeIfPresent(Bool.self, forKey: .isWaitingForTheScreen) ?? false
+        screenGrantedForNextRun = try container.decodeIfPresent(Bool.self, forKey: .screenGrantedForNextRun) ?? false
         answers = try container.decodeIfPresent([String].self, forKey: .answers) ?? []
         result = try container.decodeIfPresent(ElfTaskResult.self, forKey: .result)
         failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)

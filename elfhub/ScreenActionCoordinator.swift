@@ -735,6 +735,15 @@ final class ScreenActionCoordinator: ObservableObject {
         pointerLocationBeforeComputerUseRun = nil
     }
 
+    /// Esc: every run on the screen stops before its next step (a waiting
+    /// card is dropped). Later turns get a new token from beginTurn.
+    func stopComputerUseRuns() {
+        guard isComputerUseRunActive || pendingRunApprovalContinuation != nil else { return }
+        cancelPendingActions(speakDenial: false)
+        stopRunningActions(spokenReason: nil)
+        currentTurnToken = nil
+    }
+
     /// Whether the user used the mouse or keyboard after the run's last
     /// step ended. Events in the first moment after a step are elfhub's
     /// own still arriving, so they don't count.

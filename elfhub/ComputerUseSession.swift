@@ -72,6 +72,8 @@ final class ComputerUseSession: ComputerUseStepExecutor {
     private var loopGuard: ComputerUseLoopGuard
     private(set) var latestCapture: CompanionScreenCapture
     private(set) var hasEnded = false
+    /// How the run ended early, when it did.
+    private(set) var ending: ComputerUseRunEnding?
     /// Whether any step tried to act on the screen (so the end of the run
     /// tidies up: the pointer goes back, the pill stops saying it's acting).
     private(set) var didTryToAct = false
@@ -229,6 +231,7 @@ final class ComputerUseSession: ComputerUseStepExecutor {
             }
         }
         hasEnded = ending != nil
+        self.ending = self.ending ?? ending
 
         return ComputerUseStepResult(
             resultBlocks: results.map { Self.resultBlock(for: $0.toolCall, text: $0.text, image: $0.image, isError: $0.isError) },

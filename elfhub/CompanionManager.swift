@@ -109,7 +109,15 @@ final class CompanionManager: ObservableObject {
         languageModelProviderForWorker: { [weak self] workingElf in
             self?.languageModelProviderForBackgroundWork(of: workingElf)
         },
-        outsideToolsForElf: { [weak self] workingElf in self?.outsideTools(for: workingElf) ?? [] }
+        outsideToolsForElf: { [weak self] workingElf in self?.outsideTools(for: workingElf) ?? [] },
+        screenAccessForWorker: { [weak self] workingElf, elfTask, languageModelProvider in
+            guard let self else { return .unavailable(reason: "elfhub is closing.") }
+            return await self.screenAccessForBackgroundTask(
+                workingElf: workingElf,
+                elfTask: elfTask,
+                languageModelProvider: languageModelProvider
+            )
+        }
     )
 
     /// Fetches web pages for elves (one shared ephemeral session).
@@ -814,6 +822,82 @@ final class CompanionManager: ObservableObject {
 
     /// A turn starts: the elf answering it holds the screen, and the pill
     /// names it while it acts (nil: the main elf).
+    /// Sets up one run on the user's screen for a background task the user
+    /// said yes to: the same step-by-step session as a foreground turn, on
+    /// the display the pointer is on, with the elf holding the screen (the
+    /// pill names it). Only the user's own "yes" counts as their words, so
+    /// anything consequential still asks. Starting it stops whatever was on
+    /// screen before; a new turn, Esc, or the user touching the mouse or
+    /// keyboard stops it.
+    private func screenAccessForBackgroundTask(
+        workingElf: Elf,
+        elfTask: ElfTask,
+        languageModelProvider: LanguageModelProvider
+    ) async -> ElfWorkerScreenAccessOutcome {
+        guard screenActionCoordinator.isActionModeEnabled else {
+            return .unavailable(reason: "acting on the screen is switched off (the user can turn it on in elfhub's menu bar panel).")
+        }
+        guard hasAccessibilityPermission else {
+            return .unavailable(reason: "elfhub doesn't have Accessibility permission, which acting on the screen needs.")
+        }
+        let capabilities = languageModelProvider.capabilities
+        guard capabilities.supportsVision, capabilities.supportsToolCalling else {
+            return .unavailable(reason: "the model you work with can't see the screen.")
+        }
+        guard voiceState == .idle, !textChatViewModel.isResponding, !screenActionCoordinator.isComputerUseRunActive else {
+            return .unavailable(reason: "the user is busy with elfhub right now. ask for the screen again a bit later.")
+        }
+        let screenCapture: CompanionScreenCapture
+        do {
+            guard let cursorScreenCapture = try await CompanionScreenCaptureUtility.captureCursorScreenAsJPEG(
+                visionProfile: capabilities.visionProfile
+            ).first else {
+                return .unavailable(reason: "the screen couldn't be captured.")
+            }
+            screenCapture = cursorScreenCapture
+        } catch {
+            return .unavailable(reason: "the screen couldn't be captured (\(error.localizedDescription)).")
+        }
+
+        let screenActionTurnToken = screenActionCoordinator.beginTurn()
+        let coordinateConvention = capabilities.visionProfile.coordinateConvention
+        let computerUseSession = ComputerUseSession(
+            screen: ComputerUseLiveScreen(
+                screenActionCoordinator: screenActionCoordinator,
+                visionProfile: capabilities.visionProfile,
+                displayID: screenCapture.displayID,
+                userUtterance: elfTask.answers.last ?? "",
+                turnToken: screenActionTurnToken
+            ),
+            firstCapture: screenCapture,
+            coordinateConvention: coordinateConvention
+        )
+        let computerUseRunIdentifier = screenActionCoordinator.beginComputerUseRun()
+        handOverScreen(to: workingElf)
+        let usesAnthropicComputerToolset = languageModelProvider.supportsAnthropicComputerToolset
+        return .granted(ElfWorkerScreenAccess(
+            session: computerUseSession,
+            firstScreenshot: LanguageModelImage(
+                data: screenCapture.imageData,
+                label: screenCapture.label + coordinateConvention.screenshotLabelSuffix(
+                    sentImageWidthInPixels: screenCapture.screenshotWidthInPixels,
+                    sentImageHeightInPixels: screenCapture.screenshotHeightInPixels
+                )
+            ),
+            usesAnthropicComputerToolset: usesAnthropicComputerToolset,
+            extraToolDefinitions: usesAnthropicComputerToolset ? [] : [GuidanceToolDefinitions.computerUseStepToolDefinition],
+            systemPromptAddition: "coordinates:\n" + coordinateConvention.systemPromptCoordinateDescription
+                + "\n\n" + CompanionPromptBuilder.stepByStepActionInstructions,
+            finish: { [weak self] in
+                guard let self else { return }
+                self.screenActionCoordinator.finishComputerUseRun(computerUseRunIdentifier, didTryToAct: computerUseSession.didTryToAct)
+                if self.elfScreenHolder.returnToMainElf() {
+                    self.companionEventBus.emit(.screenHolderChanged(elfName: nil))
+                }
+            }
+        ))
+    }
+
     private func handOverScreen(to speakingElf: Elf?) {
         guard elfScreenHolder.beginTurn(answeredBy: speakingElf?.id) else { return }
         companionEventBus.emit(.screenHolderChanged(elfName: speakingElf?.configuration.identity.name))
@@ -993,6 +1077,10 @@ final class CompanionManager: ObservableObject {
         if buddyDictationManager.isDictationInProgress {
             buddyDictationManager.cancelCurrentDictation(preserveDraftText: false)
         }
+
+        // A run on the screen (a background task's too) stops before its
+        // next step; the task itself carries on without the screen.
+        screenActionCoordinator.stopComputerUseRuns()
 
         // Replies: cancelling saves what streamed so far as an interrupted reply.
         currentResponseTask?.cancel()

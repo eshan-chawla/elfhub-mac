@@ -17,6 +17,26 @@
 import Combine
 import Foundation
 
+/// What a background task gets for one run on the user's screen, after the
+/// user said yes to its request_screen: the step-by-step session, the
+/// screen as it is now, how to offer the steps to its model, and the
+/// clean-up for when the run ends (the pointer back, the pill, the screen
+/// back to the main elf).
+struct ElfWorkerScreenAccess {
+    let session: ComputerUseSession
+    let firstScreenshot: LanguageModelImage
+    let usesAnthropicComputerToolset: Bool
+    let extraToolDefinitions: [LanguageModelToolDefinition]
+    let systemPromptAddition: String
+    let finish: @MainActor () -> Void
+}
+
+enum ElfWorkerScreenAccessOutcome {
+    case granted(ElfWorkerScreenAccess)
+    /// The screen can't be used now; the reason is told to the elf.
+    case unavailable(reason: String)
+}
+
 @MainActor
 final class ElfTaskScheduler: ObservableObject {
     static let maximumConcurrentTasks = 3
@@ -41,6 +61,11 @@ final class ElfTaskScheduler: ObservableObject {
     private var taskIdentifiersBeingCancelled: Set<UUID> = []
     /// Tasks of a deleted elf: stopped, never saved or reported again.
     private var forgottenTaskIdentifiers: Set<UUID> = []
+    /// Sets up a run on the user's screen for a task the user let use it.
+    private let screenAccessForWorker: (Elf, ElfTask, LanguageModelProvider) async -> ElfWorkerScreenAccessOutcome
+
+    /// What a task asks after the user stopped it on the screen.
+    static let stoppedOnTheScreenQuestion = "you stopped me while i was using your screen. should i carry on another way, or leave it there?"
 
     /// `languageModelProviderForWorker` gives the model an elf works with in
     /// the background (one that can use tools), or nil when there's none.
@@ -48,8 +73,12 @@ final class ElfTaskScheduler: ObservableObject {
         elfManager: ElfManager,
         languageModelProviderForWorker: @escaping (Elf) -> LanguageModelProvider?,
         maximumOutputTokensPerTask: Int = ElfTaskScheduler.maximumOutputTokensPerTask,
-        outsideToolsForElf: @escaping (Elf) -> [ElfTool] = { _ in [] }
+        outsideToolsForElf: @escaping (Elf) -> [ElfTool] = { _ in [] },
+        screenAccessForWorker: @escaping (Elf, ElfTask, LanguageModelProvider) async -> ElfWorkerScreenAccessOutcome = { _, _, _ in
+            .unavailable(reason: "the screen isn't available to background work here.")
+        }
     ) {
+        self.screenAccessForWorker = screenAccessForWorker
         self.outsideToolsForElf = outsideToolsForElf
         self.elfManager = elfManager
         self.languageModelProviderForWorker = languageModelProviderForWorker
@@ -111,6 +140,10 @@ final class ElfTaskScheduler: ObservableObject {
             answeredTask.answers.append("\(pendingQuestion) → \(answer)")
         } else {
             answeredTask.answers.append(answer)
+        }
+        // A yes to "may i use your screen?" lets the next run use it.
+        if answeredTask.isWaitingForTheScreen {
+            answeredTask.screenGrantedForNextRun = SpokenConfirmationParser.interpret(answer, requiredVerbKeywords: []) == .confirmed
         }
         answeredTask.pendingQuestion = nil
         answeredTask.isWaitingForTheScreen = false
@@ -226,15 +259,15 @@ final class ElfTaskScheduler: ObservableObject {
 
     /// A worker's tools: its own folder and skills, plus progress, asking
     /// and finishing. No screen tools and no task tools.
-    static func workerToolRegistry(session: ElfWorkerSession, outsideTools: [ElfTool] = []) -> ElfToolRegistry {
-        ElfToolRegistry(tools: ElfFileTools.allTools + ElfWorkerTools.tools(session: session) + outsideTools)
+    static func workerToolRegistry(session: ElfWorkerSession, outsideTools: [ElfTool] = [], mayRequestScreen: Bool = true) -> ElfToolRegistry {
+        ElfToolRegistry(tools: ElfFileTools.allTools + ElfWorkerTools.tools(session: session, mayRequestScreen: mayRequestScreen) + outsideTools)
     }
 
     /// Said to a worker that answered with words only.
     static let finishNudge = "you haven't finished the task yet. keep working with your tools, call ask_user if you need the user, or call finish_task with a short summary when you're done."
 
     static let workerInstructions = """
-    how to work on this task: nobody is watching while you work. use your tools — read your notes and skills, and write longer findings to a file under files/ so the user can open it later. call report_progress now and then with a short note. if you need something only the user can tell you, call ask_user with one clear question and stop. when you're done, call finish_task with a summary of two or three sentences, written to be spoken to the user, and the files you wrote. don't ask for permission to start; just do the task.
+    how to work on this task: nobody is watching while you work. use your tools — read your notes and skills, and write longer findings to a file under files/ so the user can open it later. call report_progress now and then with a short note. if you need something only the user can tell you, call ask_user with one clear question and stop. if part of the task can only be done in the user's apps on their screen, call request_screen saying what for, and stop. when you're done, call finish_task with a summary of two or three sentences, written to be spoken to the user, and the files you wrote. don't ask for permission to start; just do the task.
     """
 
     private func run(taskIdentifier: UUID) async {
@@ -269,8 +302,31 @@ final class ElfTaskScheduler: ObservableObject {
         let elfPromptContext = await Task.detached(priority: .utility) {
             ElfPromptContext.reading(home: workingElfHome, role: .backgroundWorker(taskInstruction: taskInstruction))
         }.value
-        let systemPrompt = (elfPromptContext.promptSections + [Self.workerInstructions]).joined(separator: "\n\n")
-        let workerToolRegistry = Self.workerToolRegistry(session: workerSession, outsideTools: outsideToolsForElf(workingElf))
+        // The user said yes to this task using their screen: this run gets it.
+        var screenAccess: ElfWorkerScreenAccess?
+        var screenUnavailableReason: String?
+        if runningTask.screenGrantedForNextRun {
+            runningTask.screenGrantedForNextRun = false
+            store(runningTask)
+            switch await screenAccessForWorker(workingElf, runningTask, languageModelProvider) {
+            case let .granted(grantedScreenAccess):
+                screenAccess = grantedScreenAccess
+            case let .unavailable(reason):
+                screenUnavailableReason = reason
+            }
+        }
+        defer { screenAccess?.finish() }
+
+        var systemPromptSections = elfPromptContext.promptSections + [Self.workerInstructions]
+        if let screenAccess {
+            systemPromptSections.append(screenAccess.systemPromptAddition)
+        }
+        let systemPrompt = systemPromptSections.joined(separator: "\n\n")
+        let workerToolRegistry = Self.workerToolRegistry(
+            session: workerSession,
+            outsideTools: outsideToolsForElf(workingElf),
+            mayRequestScreen: screenAccess == nil
+        )
         let turnEffectLedger = ElfTurnEffectLedger()
         let toolContext = ElfToolContext(
             elf: workingElf,
@@ -293,15 +349,23 @@ final class ElfTaskScheduler: ObservableObject {
                 try? ElfChangeLog(home: workingElf.home).prune(now: Date())
             }
         }
-        let initialRequest = LanguageModelRequest(
+        var workerUserText = Self.workerUserText(for: runningTask)
+        if screenAccess != nil {
+            workerUserText += "\n\n" + Self.screenGrantedNote
+        } else if let screenUnavailableReason {
+            workerUserText += "\n\nthe user said you may use their screen, but it can't be used right now: \(screenUnavailableReason) carry on another way, or finish and say what's left."
+        }
+        var initialRequest = LanguageModelRequest(
             systemPrompt: systemPrompt,
             history: runningTask.conversationExcerpt.map { LanguageModelHistoryTurn(userText: $0.userText, assistantText: $0.assistantText) },
-            userText: Self.workerUserText(for: runningTask),
+            userText: workerUserText,
+            images: screenAccess.map { [$0.firstScreenshot] } ?? [],
             tools: workerToolRegistry.toolDefinitions(
                 for: .backgroundWorker(taskInstruction: taskInstruction),
                 configuration: workingElf.configuration
-            )
+            ) + (screenAccess?.extraToolDefinitions ?? [])
         )
+        initialRequest.usesAnthropicComputerToolset = screenAccess?.usesAnthropicComputerToolset ?? false
         let remainingOutputTokens = max(0, maximumOutputTokensPerTask - runningTask.budgetUsage.outputTokens)
 
         do {
@@ -317,6 +381,7 @@ final class ElfTaskScheduler: ObservableObject {
                     deadline: Date(timeIntervalSinceNow: Self.maximumDurationPerRunInSeconds)
                 ),
                 textOnlyRoundNudge: Self.finishNudge,
+                computerUseExecutor: screenAccess?.session,
                 onReplyTextDelta: { _ in },
                 onModelRoundEnded: {}
             )
@@ -330,10 +395,22 @@ final class ElfTaskScheduler: ObservableObject {
                 return
             }
             if let pendingQuestion = workerSession.pendingQuestion {
-                try? runningTask.move(to: .needsInput)
-                runningTask.pendingQuestion = pendingQuestion
-                store(runningTask)
-                onTaskNeedsInput?(runningTask)
+                parkForAnswer(&runningTask, question: pendingQuestion, isAskingForTheScreen: false)
+                return
+            }
+            if let screenRequestReason = workerSession.pendingScreenRequestReason {
+                let elfName = workingElf.configuration.identity.name
+                parkForAnswer(
+                    &runningTask,
+                    question: "\(elfName) needs your screen for a moment, to \(screenRequestReason). okay to go ahead?",
+                    isAskingForTheScreen: true
+                )
+                return
+            }
+            // The user stopped it (or it reached their step) on the screen:
+            // it asks how to go on rather than failing.
+            if workerSession.result == nil, case let .stopNow(spokenReason) = screenAccess?.session.ending {
+                parkForAnswer(&runningTask, question: spokenReason ?? Self.stoppedOnTheScreenQuestion, isAskingForTheScreen: false)
                 return
             }
             // Only finish_task finishes a task; talking about it doesn't.
@@ -357,6 +434,17 @@ final class ElfTaskScheduler: ObservableObject {
                 finish(&runningTask, as: .failed, failureReason: error.localizedDescription)
             }
         }
+    }
+
+    /// What a worker is told when the user let it use the screen.
+    static let screenGrantedNote = "the user said yes: you may use their screen now. here it is. work on it step by step with the screen tools, then call finish_task. you only have it for this run."
+
+    private func parkForAnswer(_ parkedTask: inout ElfTask, question: String, isAskingForTheScreen: Bool) {
+        try? parkedTask.move(to: .needsInput)
+        parkedTask.pendingQuestion = question
+        parkedTask.isWaitingForTheScreen = isAskingForTheScreen
+        store(parkedTask)
+        onTaskNeedsInput?(parkedTask)
     }
 
     /// The files a finished task lists, kept only when they're real files in
@@ -426,6 +514,8 @@ final class ElfTaskScheduler: ObservableObject {
 final class ElfWorkerSession {
     var progressNotes: [String]
     var pendingQuestion: String?
+    /// Why it asked to use the screen (request_screen).
+    var pendingScreenRequestReason: String?
     var result: ElfTaskResult?
     var onProgressNoted: (([String]) -> Void)?
 
@@ -435,8 +525,12 @@ final class ElfWorkerSession {
 }
 
 enum ElfWorkerTools {
-    static func tools(session: ElfWorkerSession) -> [ElfTool] {
-        [ReportProgressTool(session: session), AskUserTool(session: session), FinishTaskTool(session: session)]
+    static func tools(session: ElfWorkerSession, mayRequestScreen: Bool = true) -> [ElfTool] {
+        var workerTools: [ElfTool] = [ReportProgressTool(session: session), AskUserTool(session: session), FinishTaskTool(session: session)]
+        if mayRequestScreen {
+            workerTools.append(RequestScreenTool(session: session))
+        }
+        return workerTools
     }
 }
 
@@ -481,6 +575,27 @@ private struct AskUserTool: WorkerOnlyTool {
         guard let question = ElfToolArguments(argumentsJSON: argumentsJSON).string("question")?.trimmingCharacters(in: .whitespacesAndNewlines),
               !question.isEmpty else { return .failure("give the question.") }
         session.pendingQuestion = question
+        return ElfToolOutcome(resultText: "the user will be asked. stop now; you'll pick this up with their answer.", endsTheRun: true)
+    }
+}
+
+/// Asks the user to let the elf use their screen for a while (click, type,
+/// scroll in their apps). The task waits for the answer; a yes gives the
+/// next run the screen, step by step, with the user watching.
+private struct RequestScreenTool: WorkerOnlyTool {
+    let session: ElfWorkerSession
+    let group = ElfToolGroup.worker
+    let resultFeedsBackToModel = true
+    let definition = LanguageModelToolDefinition(
+        name: "request_screen",
+        description: "Ask to use the user's screen (click, type and scroll in their apps) for part of the task that can only be done there. Say what for, in a few words (\"export the sheet from Numbers\"). The task waits for the user's answer, so stop after asking.",
+        inputSchema: ["type": "object", "properties": ["reason": ["type": "string"]], "required": ["reason"]]
+    )
+
+    func run(argumentsJSON: String, context: ElfToolContext) async throws -> ElfToolOutcome {
+        guard let reason = ElfToolArguments(argumentsJSON: argumentsJSON).string("reason")?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !reason.isEmpty else { return .failure("say what you need the screen for.") }
+        session.pendingScreenRequestReason = reason
         return ElfToolOutcome(resultText: "the user will be asked. stop now; you'll pick this up with their answer.", endsTheRun: true)
     }
 }
