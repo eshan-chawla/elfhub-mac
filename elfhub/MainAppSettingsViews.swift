@@ -101,6 +101,8 @@ struct SettingsCategoryPage: View {
                     .mainAppCard()
                 PrivateWebsiteListEditor(privateWebsiteList: PrivateWebsiteList.shared)
                     .mainAppCard()
+                PersonalNumberMaskingSettingsSection()
+                    .mainAppCard()
                 ComputerUseAuditLogSettingsSection(computerUseAuditLog: ComputerUseAuditLog.shared)
                     .mainAppCard()
                 ElvesReachSettingsSection()
@@ -517,5 +519,19 @@ private struct ElvesReachSettingsSection: View {
                 .foregroundColor(DS.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// Settings › Privacy: black out personal numbers in screenshots (on by default).
+struct PersonalNumberMaskingSettingsSection: View {
+    @AppStorage(ScreenshotSensitiveContentMasker.isEnabledKey) private var hidesPersonalNumbersInScreenshots = true
+
+    var body: some View {
+        SettingsToggleRow(
+            iconName: "rectangle.fill.badge.minus",
+            title: "Hide personal numbers in screenshots",
+            detail: "Before a screenshot leaves your Mac, card numbers, social security and social insurance numbers, health card numbers and anything labelled as a patient ID, medical record number or date of birth are blacked out. The text is read on this Mac.",
+            isOn: $hidesPersonalNumbersInScreenshots
+        )
     }
 }

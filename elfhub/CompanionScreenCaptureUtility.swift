@@ -241,17 +241,28 @@ enum CompanionScreenCaptureUtility {
             configuration: configuration
         )
 
-        guard let jpegData = NSBitmapImageRep(cgImage: cgImage)
+        guard var jpegData = NSBitmapImageRep(cgImage: cgImage)
                 .representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
             throw NSError(domain: "CompanionScreenCapture", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "Failed to capture any screen"])
         }
 
+        var captureLabel = privateBrowserBundleIdentifier == nil
+            ? "user's screen (the one their mouse is on)"
+            : "user's screen (the one their mouse is on; the browser is left out because it's showing a private website, like a bank or a patient portal)"
+        // Card, social insurance and health numbers are blacked out before
+        // the screenshot goes anywhere.
+        if ScreenshotSensitiveContentMasker.isEnabled {
+            let maskingResult = await ScreenshotSensitiveContentMasker.masking(jpegData)
+            jpegData = maskingResult.jpegData
+            if maskingResult.maskedItemCount > 0 {
+                captureLabel += ". black boxes hide personal numbers (cards, health or insurance numbers) — don't try to read or type them"
+            }
+        }
+
         return CompanionScreenCapture(
             imageData: jpegData,
-            label: privateBrowserBundleIdentifier == nil
-                ? "user's screen (the one their mouse is on)"
-                : "user's screen (the one their mouse is on; the browser is left out because it's showing a private website, like a bank or a patient portal)",
+            label: captureLabel,
             isCursorScreen: true,
             displayWidthInPoints: Int(displayFrame.width),
             displayHeightInPoints: Int(displayFrame.height),
@@ -316,7 +327,9 @@ enum CompanionScreenCaptureUtility {
             throw NSError(domain: "CompanionScreenCapture", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "Failed to capture the zoomed region"])
         }
-        return jpegData
+        // A zoom makes small numbers readable, so it's checked too.
+        guard ScreenshotSensitiveContentMasker.isEnabled else { return jpegData }
+        return await ScreenshotSensitiveContentMasker.masking(jpegData).jpegData
     }
 
     /// Core Graphics display ID of the screen the cursor is on right now.
