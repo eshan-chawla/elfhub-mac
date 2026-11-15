@@ -28,6 +28,8 @@ struct ElfWorkerScreenAccess {
     let usesAnthropicComputerToolset: Bool
     let extraToolDefinitions: [LanguageModelToolDefinition]
     let systemPromptAddition: String
+    /// The window in front's controls, sent with the first screenshot.
+    var firstInterfaceDescription: String? = nil
     let finish: @MainActor () -> Void
 }
 
@@ -350,8 +352,11 @@ final class ElfTaskScheduler: ObservableObject {
             }
         }
         var workerUserText = Self.workerUserText(for: runningTask)
-        if screenAccess != nil {
+        if let screenAccess {
             workerUserText += "\n\n" + Self.screenGrantedNote
+            if let firstInterfaceDescription = screenAccess.firstInterfaceDescription {
+                workerUserText += "\n\n" + firstInterfaceDescription
+            }
         } else if let screenUnavailableReason {
             workerUserText += "\n\nthe user said you may use their screen, but it can't be used right now: \(screenUnavailableReason) carry on another way, or finish and say what's left."
         }

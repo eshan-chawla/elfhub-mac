@@ -82,6 +82,9 @@ final class FakeComputerUseScreen: ComputerUseScreen {
     func pointerLocationInScreenshotPixels(on capture: CompanionScreenCapture) -> CGPoint? { CGPoint(x: 12, y: 34) }
 
     func wait(seconds: Double) async throws { waitedSeconds.append(seconds) }
+
+    var interfaceDescriptionToReturn: String?
+    func describeInterface(on capture: CompanionScreenCapture) async -> String? { interfaceDescriptionToReturn }
 }
 
 @MainActor
@@ -123,6 +126,14 @@ struct ComputerUseSessionTests {
         #expect(results.last?.resultText.contains("the screen changed") == true)
         #expect(stepResult.ending == nil)
         #expect(screen.captureCount == 1)
+    }
+
+    @Test func theWindowsControlsGoBesideEachFreshScreenshot() async {
+        let screen = FakeComputerUseScreen()
+        screen.interfaceDescriptionToReturn = "- button “Export” at (124, 98)"
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)])
+        #expect(computerResults(stepResult).last?.resultText.hasSuffix("- button “Export” at (124, 98)") == true)
     }
 
     @Test func theRoundStopsAtTheFirstFailure() async {

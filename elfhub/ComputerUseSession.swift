@@ -56,6 +56,9 @@ protocol ComputerUseScreen: AnyObject {
     func perform(_ action: CompanionScreenAction, on capture: CompanionScreenCapture, stepDescription: String) async -> ComputerUseActionOutcome
     func pointerLocationInScreenshotPixels(on capture: CompanionScreenCapture) -> CGPoint?
     func wait(seconds: Double) async throws
+    /// The window in front's controls, as text to send beside this
+    /// screenshot (AccessibilitySnapshotFormatter), or nil.
+    func describeInterface(on capture: CompanionScreenCapture) async -> String?
 }
 
 @MainActor
@@ -130,7 +133,8 @@ final class ComputerUseSession: ComputerUseStepExecutor {
             case .screenshot:
                 do {
                     latestCapture = try await screen.captureScreen()
-                    results.append((toolCall, "the screen now.", screenshotImage(of: latestCapture), false))
+                    let interfaceDescription = await screen.describeInterface(on: latestCapture)
+                    results.append((toolCall, "the screen now." + (interfaceDescription.map { "\n\n" + $0 } ?? ""), screenshotImage(of: latestCapture), false))
                     needsFreshScreenshot = false
                 } catch {
                     aStepFailed = true
@@ -212,6 +216,9 @@ final class ComputerUseSession: ComputerUseStepExecutor {
                 let changeNote = screenChanged.map { $0 ? " the screen changed." : " nothing visible changed on the screen." } ?? ""
                 results[lastIndex].text += changeNote + " here's the screen now."
                 results[lastIndex].image = screenshotImage(of: latestCapture)
+                if let interfaceDescription = await screen.describeInterface(on: latestCapture) {
+                    results[lastIndex].text += "\n\n" + interfaceDescription
+                }
             } catch {
                 results[results.count - 1].text += " (couldn't take a screenshot afterwards: \(error.localizedDescription))"
             }
@@ -273,6 +280,7 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
 
     private let screenActionCoordinator: ScreenActionCoordinator
     private let visionProfile: ModelVisionProfile
+    private var coordinateConvention: ModelCoordinateConvention { visionProfile.coordinateConvention }
     private let displayID: CGDirectDisplayID
     private let userUtterance: String
     private let turnToken: ScreenActionTurnToken
@@ -334,5 +342,22 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
 
     func wait(seconds: Double) async throws {
         try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+
+    func describeInterface(on capture: CompanionScreenCapture) async -> String? {
+        await Self.interfaceDescription(on: capture, convention: coordinateConvention)
+    }
+
+    /// The window in front's controls as text for the model, or nil when
+    /// they can't be read (or none are on this screen).
+    static func interfaceDescription(on capture: CompanionScreenCapture, convention: ModelCoordinateConvention) async -> String? {
+        guard let snapshot = await AccessibilitySnapshotter.snapshotOfFrontmostWindow() else { return nil }
+        let promptText = AccessibilitySnapshotFormatter.promptText(
+            for: snapshot,
+            screenCapture: capture,
+            convention: convention,
+            fenceMarker: AccessibilitySnapshotFormatter.makeFenceMarker()
+        )
+        return promptText.isEmpty ? nil : promptText
     }
 }

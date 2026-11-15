@@ -888,6 +888,7 @@ final class CompanionManager: ObservableObject {
             extraToolDefinitions: usesAnthropicComputerToolset ? [] : [GuidanceToolDefinitions.computerUseStepToolDefinition],
             systemPromptAddition: "coordinates:\n" + coordinateConvention.systemPromptCoordinateDescription
                 + "\n\n" + CompanionPromptBuilder.stepByStepActionInstructions,
+            firstInterfaceDescription: await ComputerUseLiveScreen.interfaceDescription(on: screenCapture, convention: coordinateConvention),
             finish: { [weak self] in
                 guard let self else { return }
                 self.screenActionCoordinator.finishComputerUseRun(computerUseRunIdentifier, didTryToAct: computerUseSession.didTryToAct)
