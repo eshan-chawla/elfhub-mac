@@ -358,6 +358,10 @@ struct ElfTests {
         }
     }
 
+    @Test func bothStarterElvesStartCheckedInOnboarding() {
+        #expect(ElfStarterTemplate.chosenByDefaultInOnboarding == [.researcher, .writer])
+    }
+
     @Test func starterNamesPassTheNameRules() {
         for starterTemplate in ElfStarterTemplate.allCases {
             #expect(ElfNameRules.problems(forName: starterTemplate.identity.name, otherElfNames: []).isEmpty)

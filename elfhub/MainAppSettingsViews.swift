@@ -15,6 +15,7 @@ import SwiftUI
 
 enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     case models
+    case tools
     case modes
     case shortcuts
     case permissions
@@ -26,6 +27,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     var displayTitle: String {
         switch self {
         case .models: return "Models"
+        case .tools: return "Tools"
         case .modes: return "Modes"
         case .shortcuts: return "Shortcuts"
         case .permissions: return "Permissions"
@@ -37,6 +39,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     var systemImageName: String {
         switch self {
         case .models: return "cpu"
+        case .tools: return "wrench.and.screwdriver"
         case .modes: return "slider.horizontal.3"
         case .shortcuts: return "keyboard"
         case .permissions: return "lock.shield"
@@ -49,6 +52,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .models:
             return "Speech-to-text, the language model and the voice. Requests go straight from this app to the services you pick — or stay on this Mac with local models. Keys are kept in your Keychain."
+        case .tools:
+            return "What your elves use beyond the model: how they search the web. Whatever you pick, the pages they open are fetched by this Mac."
         case .modes:
             return "How you talk to elfhub, and whether it may act on your screen."
         case .shortcuts:
@@ -75,6 +80,9 @@ struct SettingsCategoryPage: View {
             switch settingsCategory {
             case .models:
                 ModelsSettingsContent(companionManager: companionManager)
+            case .tools:
+                WebSearchSettingsCard()
+                    .mainAppCard()
             case .modes:
                 ModesSettingsContent(companionManager: companionManager)
             case .shortcuts:
@@ -150,9 +158,6 @@ private struct ModelsSettingsContent: View {
         ) {
             TextToSpeechLayerSection(companionManager: companionManager)
         }
-
-        WebSearchSettingsCard()
-            .mainAppCard()
 
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -382,23 +387,30 @@ struct ComputerUseAuditLogSettingsSection: View {
 
 // MARK: - Web search
 
-/// The optional search service elves use for web_search: off, or Brave,
-/// Tavily or Exa with the user's key, or their own SearXNG server.
+/// How elves search the web (Settings › Tools): DuckDuckGo with no key by
+/// default, the model's own search, Firecrawl, Brave, Tavily or Exa with
+/// the user's key, their own SearXNG or Firecrawl server — or off.
 private struct WebSearchSettingsCard: View {
     @State private var selectedPreset = WebSearchSettings.selectedPreset
     @State private var apiKeyDraft = ""
     @State private var savedKeyRevision = 0
     @State private var searxngBaseURLDraft = WebSearchSettings.searxngBaseURL
+    @State private var firecrawlBaseURLDraft = WebSearchSettings.firecrawlBaseURL
+
+    private var isReady: Bool {
+        _ = savedKeyRevision
+        return WebSearchSettings.currentSetup().provider != nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            LayerFieldLabel(text: "Web search (optional)")
-            Text("Lets your elves search the web for their tasks. The service you pick gets only the search words. Without one, elves on Claude with your key use Claude's own web search (Anthropic charges your key about a cent a search); on other models they can only open addresses you give them.")
+            LayerFieldLabel(text: "Web search")
+            Text("How elves with the web on find pages. The service gets only the search words.")
                 .font(.system(size: 11))
                 .foregroundColor(DS.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
-                Text("Service")
+                Text("Search with")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(DS.Colors.textSecondary)
                 Spacer()
@@ -410,46 +422,69 @@ private struct WebSearchSettingsCard: View {
                         apiKeyDraft = ""
                     }
                 )) {
-                    Text("Off").tag(WebSearchServicePreset?.none)
                     ForEach(WebSearchServicePreset.allCases) { preset in
                         Text(preset.displayName).tag(WebSearchServicePreset?.some(preset))
                     }
+                    Divider()
+                    Text("Off").tag(WebSearchServicePreset?.none)
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .fixedSize()
                 .pointerCursor()
             }
-            if let selectedPreset, selectedPreset.needsKey {
-                let hasSavedKey = savedKeyRevision >= 0 && WebSearchSettings.savedKey(for: selectedPreset)?.isEmpty == false
-                HStack(spacing: 8) {
-                    SecureField(hasSavedKey ? "\(selectedPreset.displayName) key saved — paste a new one to replace it" : "\(selectedPreset.displayName) key", text: $apiKeyDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { saveKey(for: selectedPreset) }
-                    Button("Save") { saveKey(for: selectedPreset) }
-                        .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .pointerCursor(isEnabled: !apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
-                    if hasSavedKey {
-                        Button("Remove key") {
-                            _ = KeychainSecretStore.deleteSecret(forAccount: WebSearchSettings.keychainAccountName(for: selectedPreset))
-                            savedKeyRevision += 1
-                        }
-                        .pointerCursor()
+            Text(selectedPreset?.explanation ?? "Elves can't search. They can still open addresses you give them.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if selectedPreset == .firecrawl {
+                TextField("Firecrawl address", text: $firecrawlBaseURLDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: firecrawlBaseURLDraft) { _, newAddress in
+                        WebSearchSettings.firecrawlBaseURL = newAddress
+                        savedKeyRevision += 1
                     }
-                    if let keyPageURL = selectedPreset.keyPageURL {
-                        Button("Get a key") { NSWorkspace.shared.open(keyPageURL) }
-                            .pointerCursor()
-                    }
-                }
+            }
+            if let selectedPreset, selectedPreset == .firecrawl || selectedPreset.needsKey(firecrawlBaseURL: URL(string: firecrawlBaseURLDraft)) {
+                keyRow(for: selectedPreset)
             }
             if selectedPreset == .searxng {
                 TextField("SearXNG address", text: $searxngBaseURLDraft)
                     .textFieldStyle(.roundedBorder)
-                    .onSubmit { WebSearchSettings.searxngBaseURL = searxngBaseURLDraft }
                     .onChange(of: searxngBaseURLDraft) { _, newAddress in WebSearchSettings.searxngBaseURL = newAddress }
                 Text("Its JSON output must be switched on (search.formats: json in its settings).")
                     .font(.system(size: 11))
                     .foregroundColor(DS.Colors.textTertiary)
+            }
+            if selectedPreset != nil, selectedPreset != .modelsOwnSearch, !isReady {
+                Label("Add a key to use this service.", systemImage: "exclamationmark.circle")
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func keyRow(for preset: WebSearchServicePreset) -> some View {
+        let hasSavedKey = savedKeyRevision >= 0 && WebSearchSettings.savedKey(for: preset)?.isEmpty == false
+        HStack(spacing: 8) {
+            SecureField(hasSavedKey ? "\(preset.displayName) key saved — paste a new one to replace it" : "\(preset.displayName) key", text: $apiKeyDraft)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { saveKey(for: preset) }
+            Button("Save") { saveKey(for: preset) }
+                .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                .pointerCursor(isEnabled: !apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+            if hasSavedKey {
+                Button("Remove key") {
+                    _ = KeychainSecretStore.deleteSecret(forAccount: WebSearchSettings.keychainAccountName(for: preset))
+                    savedKeyRevision += 1
+                }
+                .pointerCursor()
+            }
+            if let keyPageURL = preset.keyPageURL {
+                Button("Get a key") { NSWorkspace.shared.open(keyPageURL) }
+                    .pointerCursor()
             }
         }
     }
@@ -471,7 +506,7 @@ private struct ElvesReachSettingsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             LayerFieldLabel(text: "What your elves reach")
-            Text("Elves with the web switched on (your other elves by default; your main elf only if you turn it on) send their search words to the web search service you picked in Settings › Models, and open web pages they were led to — search results and their links, or addresses you give them. Pages are fetched by this app straight from those sites over https, never through an elfhub server, and addresses on your own Mac or home network are refused.")
+            Text("Elves with the web switched on (your other elves by default; your main elf only if you turn it on) send their search words to the web search you picked in Settings › Tools (DuckDuckGo unless you change it; with “the model's own search”, to your model's company inside the model call), and open web pages they were led to — search results and their links, or addresses you give them. Pages are fetched by this app straight from those sites over https, never through an elfhub server, and addresses on your own Mac or home network are refused.")
                 .font(.system(size: 12))
                 .foregroundColor(DS.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)

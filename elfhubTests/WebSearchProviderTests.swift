@@ -66,6 +66,100 @@ struct WebSearchProviderTests {
         #expect(ConfiguredWebSearchProvider.makeIfReady(preset: nil, apiKey: "key", searxngBaseURL: nil) == nil)
     }
 
+    // MARK: - DuckDuckGo (no key)
+
+    @Test func duckDuckGoNeedsNoKeyAndPostsTheQuery() throws {
+        let duckDuckGo = try #require(ConfiguredWebSearchProvider.makeIfReady(preset: .duckDuckGo, apiKey: nil, searxngBaseURL: nil))
+        let request = try duckDuckGo.makeRequest(query: "flights to Lisbon & Porto")
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString == "https://html.duckduckgo.com/html/")
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/x-www-form-urlencoded")
+        #expect(String(decoding: try #require(request.httpBody), as: UTF8.self) == "q=flights%20to%20Lisbon%20%26%20Porto")
+    }
+
+    @Test func duckDuckGoResultsAreReadFromItsPage() throws {
+        let resultsPage = """
+        <div class="result results_links web-result">
+          <h2 class="result__title"><a rel="nofollow" class="result__a" href="https://www.swift.org/">Swift &amp; you</a></h2>
+          <a class="result__snippet" href="https://www.swift.org/">Swift is a <b>general-purpose</b> language.</a>
+        </div>
+        <div class="result results_links web-result">
+          <h2 class="result__title"><a rel="nofollow" class="result__a" href="https://www.swift.org/">Swift again</a></h2>
+        </div>
+        <div class="result result--ad">
+          <h2 class="result__title"><a rel="nofollow" class="result__a" href="https://duckduckgo.com/y.js?ad_domain=ads.example">An ad</a></h2>
+        </div>
+        <div class="result results_links web-result">
+          <h2 class="result__title"><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FSwift&amp;rut=abc">Swift - Wikipedia</a></h2>
+          <a class="result__snippet" href="x">An encyclopedia entry.</a>
+        </div>
+        <div class="result"><a class="result__a" href="javascript:alert(1)">bad</a></div>
+        """
+        let results = try ConfiguredWebSearchProvider.results(fromResponseData: Data(resultsPage.utf8), preset: .duckDuckGo)
+        #expect(results == [
+            WebSearchResult(title: "Swift & you", url: URL(string: "https://www.swift.org/")!, snippet: "Swift is a general-purpose language."),
+            WebSearchResult(title: "Swift - Wikipedia", url: URL(string: "https://en.wikipedia.org/wiki/Swift")!, snippet: "An encyclopedia entry."),
+        ])
+    }
+
+    @Test func aDuckDuckGoPageWithoutResultsIsEmpty() throws {
+        #expect(try ConfiguredWebSearchProvider.results(fromResponseData: Data("<html>please wait</html>".utf8), preset: .duckDuckGo).isEmpty)
+    }
+
+    // MARK: - Firecrawl
+
+    @Test func firecrawlGetsItsSearchRequestAndItsAnswerIsRead() throws {
+        let firecrawl = try #require(ConfiguredWebSearchProvider.makeIfReady(preset: .firecrawl, apiKey: "fc-key", searxngBaseURL: nil))
+        let request = try firecrawl.makeRequest(query: "flights")
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString == "https://api.firecrawl.dev/v2/search")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer fc-key")
+        let bodyData = try #require(request.httpBody)
+        let body = try #require(try JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+        #expect(body["query"] as? String == "flights")
+        #expect(body["limit"] as? Int == ConfiguredWebSearchProvider.resultCount)
+
+        let answer = #"{"success":true,"data":{"web":[{"title":"TAP","url":"https://flytap.com","description":"Direct flights"}],"news":[]}}"#
+        #expect(try ConfiguredWebSearchProvider.results(fromResponseData: Data(answer.utf8), preset: .firecrawl) == [
+            WebSearchResult(title: "TAP", url: URL(string: "https://flytap.com")!, snippet: "Direct flights"),
+        ])
+    }
+
+    @Test func firecrawlNeedsAKeyOnlyOnItsOwnService() throws {
+        #expect(ConfiguredWebSearchProvider.makeIfReady(preset: .firecrawl, apiKey: nil, searxngBaseURL: nil) == nil)
+        let selfHosted = try #require(ConfiguredWebSearchProvider.makeIfReady(
+            preset: .firecrawl, apiKey: nil, searxngBaseURL: nil, firecrawlBaseURL: URL(string: "http://localhost:3002")
+        ))
+        let request = try selfHosted.makeRequest(query: "flights")
+        #expect(request.url?.absoluteString == "http://localhost:3002/v2/search")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+    }
+
+    // MARK: - The choice in Settings › Tools
+
+    @Test func duckDuckGoIsTheDefaultAndOffCanBeChosen() throws {
+        let userDefaultsSuiteName = "web-search-settings-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: userDefaultsSuiteName))
+        defer { userDefaults.removePersistentDomain(forName: userDefaultsSuiteName) }
+        #expect(WebSearchSettings.selectedPreset(in: userDefaults) == .duckDuckGo)
+        WebSearchSettings.setSelectedPreset(nil, in: userDefaults)
+        #expect(WebSearchSettings.selectedPreset(in: userDefaults) == nil)
+        WebSearchSettings.setSelectedPreset(.firecrawl, in: userDefaults)
+        #expect(WebSearchSettings.selectedPreset(in: userDefaults) == .firecrawl)
+    }
+
+    @Test func theModelsOwnSearchFallsBackToDuckDuckGoForOtherModels() {
+        #expect(ConfiguredWebSearchProvider.makeIfReady(preset: .modelsOwnSearch, apiKey: nil, searxngBaseURL: nil) == nil)
+        let modelsOwnSetup = WebSearchSettings.setup(for: .modelsOwnSearch, apiKey: nil, searxngBaseURL: nil, firecrawlBaseURL: nil)
+        #expect(modelsOwnSetup.prefersModelsOwnSearch)
+        #expect(modelsOwnSetup.provider?.preset == .duckDuckGo)
+        let braveSetup = WebSearchSettings.setup(for: .brave, apiKey: "key", searxngBaseURL: nil, firecrawlBaseURL: nil)
+        #expect(!braveSetup.prefersModelsOwnSearch)
+        #expect(braveSetup.provider?.preset == .brave)
+        let offSetup = WebSearchSettings.setup(for: nil, apiKey: nil, searxngBaseURL: nil, firecrawlBaseURL: nil)
+        #expect(offSetup.provider == nil && !offSetup.prefersModelsOwnSearch)
+    }
+
     @Test func eachServiceKeepsItsOwnKey() {
         let accountNames = Set(WebSearchServicePreset.allCases.map(WebSearchSettings.keychainAccountName(for:)))
         #expect(accountNames.count == WebSearchServicePreset.allCases.count)

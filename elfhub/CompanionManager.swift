@@ -120,7 +120,12 @@ final class CompanionManager: ObservableObject {
     func outsideTools(for elf: Elf) -> [ElfTool] {
         var outsideTools = ElfFolderTools.tools(grants: elf.home.readFolderGrants())
         if elf.configuration.capabilities.isWebEnabled(isMainElf: elf.id == ElfManager.mainElfIdentifier) {
-            outsideTools += ElfWebTools.tools(pageFetcher: webPageFetcher, webSearchProvider: WebSearchSettings.currentProvider())
+            let webSearchSetup = WebSearchSettings.currentSetup()
+            outsideTools += ElfWebTools.tools(
+                pageFetcher: webPageFetcher,
+                webSearchProvider: webSearchSetup.provider,
+                prefersModelsOwnSearch: webSearchSetup.prefersModelsOwnSearch
+            )
         }
         return outsideTools
     }

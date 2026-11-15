@@ -16,6 +16,10 @@ nonisolated enum ElfStarterTemplate: String, CaseIterable, Identifiable, Sendabl
 
     var id: String { rawValue }
 
+    /// Offered checked in onboarding: new users start with a researcher
+    /// and a writer next to their main elf, and can uncheck either.
+    static let chosenByDefaultInOnboarding: Set<ElfStarterTemplate> = [.researcher, .writer]
+
     var identity: ElfConfiguration.Identity {
         switch self {
         case .researcher:

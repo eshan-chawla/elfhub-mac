@@ -11,9 +11,10 @@
 //  text goes to the same reply; cancellation (Esc) is checked before every
 //  round and every tool.
 //
-//  An elf with the web on and no search service of the user's own searches
-//  with its model's built-in search (Claude's web search tool, run by
-//  Anthropic) when the model has one. That's decided once per run so every
+//  When the user picked "the model's own search" in Settings › Tools, an
+//  elf with the web on searches inside the model call (Claude's web search
+//  tool, run by Anthropic) when its model has one, instead of the stand-in
+//  web_search. That's decided once per run so every
 //  round sends the same tools; a search it ran counts as using the web, and
 //  a turn the server paused during its searches is sent back to continue.
 //
@@ -58,12 +59,12 @@ enum ElfAgentLoop {
     /// Searches the model may run itself within one request.
     static let providerWebSearchesPerRequest = 5
 
-    /// The model's own web search for this run, or nil. Only when the elf
-    /// has the web on (its web tools are in the registry and the switch is
-    /// still on), the user hasn't set up a search service of their own
-    /// (their `web_search` tool comes first), the model can search, and the
-    /// run can't also reach the user's folders — unless the elf allows both:
-    /// what the server searches can't be stopped halfway like our own tools.
+    /// The model's own web search for this run, or nil. Only when the user
+    /// picked it in Settings › Tools, the elf has the web on (its web tools
+    /// are in the registry and the switch is still on), the model can
+    /// search, and the run can't also reach the user's folders — unless the
+    /// elf allows both: what the server searches can't be stopped halfway
+    /// like our own tools.
     static func providerWebSearch(
         toolRegistry: ElfToolRegistry,
         toolContext: ElfToolContext?,
@@ -71,8 +72,7 @@ enum ElfAgentLoop {
     ) -> LanguageModelProviderWebSearch? {
         guard let toolContext,
               languageModelProvider.supportsProviderWebSearch,
-              toolRegistry.containsTool(inGroup: .web),
-              toolRegistry.tool(named: "web_search") == nil,
+              toolRegistry.prefersModelsOwnWebSearch,
               ElfWebTools.isWebStillOn(for: toolContext) else { return nil }
         let allowsWebAndUserFoldersTogether = toolContext.elf.configuration.capabilities.allowsWebAndUserFoldersTogether
         let mayReachUserFolders = toolRegistry.containsTool(inGroup: .userFolders) || toolContext.usedResources.contains(.userFolders)
@@ -128,7 +128,9 @@ enum ElfAgentLoop {
                     ? initialRequest.systemPrompt + "\n\n" + answerNowInstruction
                     : initialRequest.systemPrompt,
                 messages: messages,
-                tools: initialRequest.tools,
+                // The model's own search replaces the stand-in web_search
+                // (the same name can't be two tools).
+                tools: providerWebSearch == nil ? initialRequest.tools : initialRequest.tools.filter { $0.name != "web_search" },
                 maxOutputTokens: initialRequest.maxOutputTokens,
                 reasoningEffort: initialRequest.reasoningEffort
             )

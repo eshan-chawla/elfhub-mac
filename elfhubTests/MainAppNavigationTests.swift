@@ -50,6 +50,8 @@ struct MainAppNavigationTests {
         #expect(Set(categoryTitles).count == categoryTitles.count)
         #expect(Set(categoryIcons).count == categoryIcons.count)
         #expect(SettingsCategory.allCases.allSatisfy { !$0.subtitle.isEmpty })
+        // Web search and the like have their own page.
+        #expect(SettingsCategory.allCases.contains(.tools))
     }
 
     @Test func settingsBackReturnsToTheElfPage() {

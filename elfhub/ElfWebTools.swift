@@ -3,8 +3,8 @@
 //  elfhub
 //
 //  The web for elves that have it (side elves by default; the main elf
-//  only when switched on): web_search through the user's search key (or,
-//  without one, the model's own search — see ElfAgentLoop), and
+//  only when switched on): web_search through the service picked in
+//  Settings › Tools (or the model's own search — see ElfAgentLoop), and
 //  fetch_page, which opens only pages the elf was led to (FetchPageURLPolicy)
 //  and reads them as plain text. Opening a page marks the turn or task as
 //  web-influenced, so files it then writes carry a warning, and it can't
@@ -33,13 +33,25 @@ enum ElfWebTools {
         context.elf.home.readConfiguration().capabilities.isWebEnabled(isMainElf: context.elf.id == ElfManager.mainElfIdentifier)
     }
 
-    static func tools(pageFetcher: ElfWebPageFetcher, webSearchProvider: WebSearchProvider?) -> [ElfTool] {
+    /// `prefersModelsOwnSearch`: the user picked "the model's own search",
+    /// so this web_search only stands in for models without one.
+    static func tools(
+        pageFetcher: ElfWebPageFetcher,
+        webSearchProvider: WebSearchProvider?,
+        prefersModelsOwnSearch: Bool = false
+    ) -> [ElfTool] {
         var webTools: [ElfTool] = [FetchPageTool(pageFetcher: pageFetcher)]
         if let webSearchProvider {
-            webTools.append(WebSearchTool(webSearchProvider: webSearchProvider))
+            webTools.append(WebSearchTool(webSearchProvider: webSearchProvider, standsInForModelsOwnSearch: prefersModelsOwnSearch))
         }
         return webTools
     }
+}
+
+/// A web_search that gives way to the model's own search when the elf's
+/// model has one.
+protocol ModelsOwnSearchStandIn {
+    var standsInForModelsOwnSearch: Bool { get }
 }
 
 private struct FetchPageTool: ElfTool {
@@ -121,8 +133,9 @@ private struct FetchPageTool: ElfTool {
     }
 }
 
-private struct WebSearchTool: ElfTool {
+private struct WebSearchTool: ElfTool, ModelsOwnSearchStandIn {
     let webSearchProvider: WebSearchProvider
+    let standsInForModelsOwnSearch: Bool
     let group = ElfToolGroup.web
     let resultFeedsBackToModel = true
     let definition = LanguageModelToolDefinition(

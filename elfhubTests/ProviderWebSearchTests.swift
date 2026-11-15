@@ -3,8 +3,8 @@
 //  elfhubTests
 //
 //  Searching the web with the model's own search (Claude's web search tool,
-//  run by Anthropic) when an elf has the web on and the user hasn't set up a
-//  search service: asked for in the request, read from the stream and kept
+//  run by Anthropic) when the user picked it in Settings › Tools and the
+//  elf's model has it: asked for in the request, read from the stream and kept
 //  verbatim for the next round, paused turns sent back to continue, and a
 //  search counting as using the web (so the user's folders stay off and its
 //  results may be opened with fetch_page).
@@ -129,8 +129,10 @@ struct ProviderWebSearchTests {
         return (toolContext, { try? FileManager.default.removeItem(at: homeDirectory) })
     }
 
-    private func webToolsWithoutASearchService() -> [ElfTool] {
-        ElfWebTools.tools(pageFetcher: UnusedWebPageFetcher(), webSearchProvider: nil)
+    /// The user picked "the model's own search" in Settings › Tools:
+    /// DuckDuckGo stands in for models without one.
+    private func webToolsPreferringTheModelsOwnSearch() -> [ElfTool] {
+        ElfWebTools.tools(pageFetcher: UnusedWebPageFetcher(), webSearchProvider: UnusedSearchService(), prefersModelsOwnSearch: true)
     }
 
     private func runLoop(
@@ -156,17 +158,17 @@ struct ProviderWebSearchTests {
         )
     }
 
-    @Test func anElfWithTheWebAndNoSearchServiceSearchesWithItsModel() async throws {
+    @Test func whenTheUserPicksTheModelsOwnSearchAnElfOnClaudeUsesIt() async throws {
         let (toolContext, cleanUp) = try makeToolContext()
         defer { cleanUp() }
         let provider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply("$1999.")], supportsProviderWebSearch: true)
-        _ = try await runLoop(provider: provider, tools: webToolsWithoutASearchService(), toolContext: toolContext)
+        _ = try await runLoop(provider: provider, tools: webToolsPreferringTheModelsOwnSearch(), toolContext: toolContext)
         let sentRequest = try #require(provider.receivedRequests.first)
         #expect(sentRequest.providerWebSearch != nil)
         #expect(!sentRequest.tools.contains { $0.name == "web_search" })
     }
 
-    @Test func theUsersOwnSearchServiceIsUsedInsteadOfTheModels() async throws {
+    @Test func anotherServicePickedMeansTheModelsOwnSearchIsNotUsed() async throws {
         let (toolContext, cleanUp) = try makeToolContext()
         defer { cleanUp() }
         let provider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply("ok")], supportsProviderWebSearch: true)
@@ -182,22 +184,24 @@ struct ProviderWebSearchTests {
         _ = try await runLoop(provider: webOffProvider, tools: ElfFileTools.allTools, toolContext: toolContext)
         #expect(webOffProvider.receivedRequests.first?.providerWebSearch == nil)
 
+        // A model without its own search keeps the stand-in search tool.
         let modelWithoutSearch = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply("ok")])
-        _ = try await runLoop(provider: modelWithoutSearch, tools: webToolsWithoutASearchService(), toolContext: toolContext)
+        _ = try await runLoop(provider: modelWithoutSearch, tools: webToolsPreferringTheModelsOwnSearch(), toolContext: toolContext)
         #expect(modelWithoutSearch.receivedRequests.first?.providerWebSearch == nil)
+        #expect(modelWithoutSearch.receivedRequests.first?.tools.contains { $0.name == "web_search" } == true)
     }
 
     @Test func noModelSearchWhenTheUsersFoldersMayBeUsedUnlessTheElfAllowsBoth() async throws {
         let (toolContext, cleanUp) = try makeToolContext()
         defer { cleanUp() }
         let provider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply("ok")], supportsProviderWebSearch: true)
-        _ = try await runLoop(provider: provider, tools: webToolsWithoutASearchService() + [StandInUserFolderTool()], toolContext: toolContext)
+        _ = try await runLoop(provider: provider, tools: webToolsPreferringTheModelsOwnSearch() + [StandInUserFolderTool()], toolContext: toolContext)
         #expect(provider.receivedRequests.first?.providerWebSearch == nil)
 
         let (bothContext, cleanUpBoth) = try makeToolContext(capabilities: ElfConfiguration.Capabilities(allowsWebAndUserFoldersTogether: true))
         defer { cleanUpBoth() }
         let bothProvider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply("ok")], supportsProviderWebSearch: true)
-        _ = try await runLoop(provider: bothProvider, tools: webToolsWithoutASearchService() + [StandInUserFolderTool()], toolContext: bothContext)
+        _ = try await runLoop(provider: bothProvider, tools: webToolsPreferringTheModelsOwnSearch() + [StandInUserFolderTool()], toolContext: bothContext)
         #expect(bothProvider.receivedRequests.first?.providerWebSearch != nil)
     }
 
@@ -206,7 +210,7 @@ struct ProviderWebSearchTests {
         defer { cleanUp() }
         toolContext.usedResources.insert(.userFolders)
         let provider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply("ok")], supportsProviderWebSearch: true)
-        _ = try await runLoop(provider: provider, tools: webToolsWithoutASearchService(), toolContext: toolContext)
+        _ = try await runLoop(provider: provider, tools: webToolsPreferringTheModelsOwnSearch(), toolContext: toolContext)
         #expect(provider.receivedRequests.first?.providerWebSearch == nil)
     }
 
@@ -218,7 +222,7 @@ struct ProviderWebSearchTests {
         searchedReply.providerWebSearchCount = 1
         searchedReply.providerWebSearchResultURLs = [resultURL]
         let provider = ScriptedLanguageModelProvider(scriptedResponses: [searchedReply], supportsProviderWebSearch: true)
-        _ = try await runLoop(provider: provider, tools: webToolsWithoutASearchService(), toolContext: toolContext)
+        _ = try await runLoop(provider: provider, tools: webToolsPreferringTheModelsOwnSearch(), toolContext: toolContext)
         #expect(toolContext.usedResources.contains(.web))
         #expect(toolContext.influencedBy.contains(.web))
         #expect(toolContext.fetchPageURLPolicy.allows(resultURL))
@@ -233,7 +237,7 @@ struct ProviderWebSearchTests {
             scriptedResponses: [pausedReply, ScriptedLanguageModelProvider.reply("it starts at $1999.")],
             supportsProviderWebSearch: true
         )
-        let loopResult = try await runLoop(provider: provider, tools: webToolsWithoutASearchService(), toolContext: toolContext)
+        let loopResult = try await runLoop(provider: provider, tools: webToolsPreferringTheModelsOwnSearch(), toolContext: toolContext)
         #expect(provider.receivedRequests.count == 2)
         let continuedMessages = try #require(provider.receivedRequests.last?.messages)
         #expect(continuedMessages.last?.role == .assistant)

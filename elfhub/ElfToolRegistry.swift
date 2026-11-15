@@ -181,6 +181,12 @@ final class ElfToolRegistry {
     func containsTool(inGroup toolGroup: ElfToolGroup) -> Bool {
         tools.contains { $0.group == toolGroup }
     }
+
+    /// Whether the user picked "the model's own search" (the web_search
+    /// here only stands in for models without one).
+    var prefersModelsOwnWebSearch: Bool {
+        (tool(named: "web_search") as? ModelsOwnSearchStandIn)?.standsInForModelsOwnSearch == true
+    }
 }
 
 /// A tool call's JSON arguments.

@@ -43,7 +43,7 @@ struct OnboardingPane: View {
     @State private var mainElfStepErrorMessage: String?
     /// Starter elves to add at Finish (none by default), so going Back
     /// never leaves stray elves behind.
-    @State private var chosenStarterTemplates: Set<ElfStarterTemplate> = []
+    @State private var chosenStarterTemplates: Set<ElfStarterTemplate> = ElfStarterTemplate.chosenByDefaultInOnboarding
     /// "Start tutorial" — checked by default, never forced.
     @State private var shouldStartTutorial = true
 
@@ -162,7 +162,7 @@ struct OnboardingPane: View {
             if !availableStarterTemplates.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     LayerFieldLabel(text: "Starter elves (optional)")
-                    Text("They're ready to shape now and to talk to when side elves arrive. You can add them later from the Elves list too.")
+                    Text("Helpers your main elf can hand work to, or you can talk to by name. Uncheck any you don't want — you can add them later from the Elves list.")
                         .font(.system(size: 11))
                         .foregroundColor(DS.Colors.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
