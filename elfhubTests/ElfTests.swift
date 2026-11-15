@@ -706,23 +706,52 @@ struct ElfTests {
 
     // MARK: - Export
 
-    @Test func exportsCarryOnlyWhatWasChosen() throws {
+    @Test func exportsCarryTheWholeFolderAndOnlyWhatWasChosen() throws {
         let (home, cleanUp) = try makeTemporaryHome()
         defer { cleanUp() }
         try home.writeSkill(ElfSkill(name: "Deploying", description: "", body: "steps"))
         try home.writeProfile("# profile\n\n- likes tea")
         try Data("notes".utf8).write(to: home.filesDirectory.appendingPathComponent("notes.md"))
-        try Data(#"{"allowedFolders":["/Users/me/Work"]}"#.utf8).write(to: home.accessURL)
+        try home.writeFolderGrants([ElfFolderGrant(path: "/Users/me/Work", allowsWriting: true)])
+        try ElfChangeLog(home: home).recordWrite(path: "files/changed.md", newText: "x", origin: .hub, influencedBy: [])
+        try ElfTaskStore(home: home).save(ElfTask(elfIdentifier: "main", instruction: "x"))
+        try home.writeLocalSettings(ElfLocalSettings(languageModelConfigurationIdentifier: UUID()))
 
-        func stagedItemNames(_ exportOptions: ElfExporter.Options) throws -> Set<String> {
-            let stagedDirectory = try ElfExporter.stageExport(home: home, configuration: home.readConfiguration(), options: exportOptions)
-            defer { try? FileManager.default.removeItem(at: stagedDirectory.deletingLastPathComponent()) }
-            return Set(try FileManager.default.contentsOfDirectory(atPath: stagedDirectory.path))
+        func packagedPaths(_ exportOptions: ElfExporter.Options) throws -> Set<String> {
+            Set(try ElfExporter.packageFiles(home: home, configuration: home.readConfiguration(), options: exportOptions, chats: []).map(\.path))
         }
+        let withProfile = try packagedPaths(ElfExporter.Options())
+        #expect(withProfile.isSuperset(of: ["elf/elf.json", "elf/soul.md", "elf/skills/deploying/SKILL.md", "elf/profile.md", "elf/files/notes.md", "elf/files/changed.md"]))
+        #expect(withProfile.allSatisfy { $0.hasPrefix("elf/") })
+        #expect(!withProfile.contains { $0.contains(".elfhub") || $0.contains("access.json") })
+        #expect(!(try packagedPaths(ElfExporter.Options(includesProfile: false))).contains("elf/profile.md"))
+    }
 
-        #expect(try stagedItemNames(.init()) == ["elf.json", "soul.md", "skills"])
-        #expect(try stagedItemNames(.init(includesProfile: true)) == ["elf.json", "soul.md", "skills", "profile.md"])
-        #expect(try stagedItemNames(.init(includesProfile: true, includesFiles: true)) == ["elf.json", "soul.md", "skills", "profile.md", "files"])
+    @Test func profileIsIncludedByDefaultAndChatsAreNot() {
+        #expect(ElfExporter.Options().includesProfile)
+        #expect(!ElfExporter.Options().includesChats)
+    }
+
+    @Test func chatsHoldOnlyThatElfsExchangesWithoutScreenshots() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        var conversation = ChatConversation(title: "Trip")
+        let juniperExchange = conversation.appendExchange(userText: "Juniper, flights?", inputSource: .typed, speakingElfIdentifier: "juniper")
+        conversation.setText("TAP.", ofMessageWithIdentifier: juniperExchange.assistantMessageIdentifier)
+        conversation.messages[conversation.messages.count - 2].screenshotFileName = "shot.jpg"
+        let mainExchange = conversation.appendExchange(userText: "thanks", inputSource: .typed)
+        conversation.setText("sure.", ofMessageWithIdentifier: mainExchange.assistantMessageIdentifier)
+        let packagedFiles = try ElfExporter.packageFiles(
+            home: home,
+            configuration: home.readConfiguration(),
+            options: ElfExporter.Options(includesChats: true),
+            chats: [conversation],
+            exportedElfIdentifier: "juniper"
+        )
+        let chatFile = try #require(packagedFiles.first { $0.path.hasPrefix("chats/") })
+        let exportedConversation = try ChatConversationStore.makeJSONDecoder().decode(ChatConversation.self, from: chatFile.data)
+        #expect(exportedConversation.messages.map(\.text) == ["Juniper, flights?", "TAP."])
+        #expect(exportedConversation.messages.allSatisfy { $0.screenshotFileName == nil })
     }
 
     @Test func anExportIsAZipNamedAfterTheElf() throws {
@@ -732,9 +761,11 @@ struct ElfTests {
         defer { try? FileManager.default.removeItem(at: exportURL) }
         var configuration = home.readConfiguration()
         configuration.identity.name = "Pip's Helper"
-        try ElfExporter.export(home: home, configuration: configuration, options: .init(), to: exportURL)
+        try ElfExporter.export(home: home, configuration: configuration, options: .init(), chats: [], to: exportURL)
         let exportedBytes = try Data(contentsOf: exportURL)
         #expect(exportedBytes.prefix(2) == Data("PK".utf8))
+        // What it writes passes the import checks.
+        #expect(try ElfImportValidator.validate(packageData: exportedBytes).manifest.elf.name == "Pip's Helper")
         #expect(ElfExporter.packageBaseName(forElfName: "Pip's Helper") == "Pip-s-Helper")
     }
 }

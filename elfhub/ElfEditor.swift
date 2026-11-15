@@ -219,12 +219,20 @@ final class ElfEditor: ObservableObject {
     func export(
         to destinationURL: URL,
         options: ElfExporter.Options,
-        preferredModels: ElfConfiguration.PreferredModels
+        preferredModels: ElfConfiguration.PreferredModels,
+        chats: [ChatConversation]
     ) throws {
         try requireElfFolder()
         var exportedConfiguration = home.readConfiguration()
         exportedConfiguration.preferredModels = preferredModels
-        try ElfExporter.export(home: home, configuration: exportedConfiguration, options: options, to: destinationURL)
+        try ElfExporter.export(
+            home: home,
+            configuration: exportedConfiguration,
+            options: options,
+            chats: chats,
+            exportedElfIdentifier: elf.id,
+            to: destinationURL
+        )
     }
 
     func revealHomeInFinder() {

@@ -1493,7 +1493,7 @@ private struct ElfHomeAndExportSection: View {
             Divider().background(DS.Colors.borderSubtle)
 
             LayerFieldLabel(text: "Export")
-            Text("Save this elf as a .elf file to keep or share. It always has its config, soul.md and skills. Your notes (profile.md) and its files are left out unless you include them. API keys are never exported.")
+            Text("Save this elf as a .elf file to keep or share. It always has its config, soul.md, skills and files; its notes about you (profile.md) unless you leave them out; chats with it only if you include them. Keys, its folder grants, changes and tasks are never exported.")
                 .font(.system(size: 11))
                 .foregroundColor(DS.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1516,7 +1516,10 @@ private struct ElfHomeAndExportSection: View {
         savePanel.nameFieldStringValue = ElfExporter.packageBaseName(forElfName: elfEditor.elf.configuration.identity.name) + ".elf"
         savePanel.allowedContentTypes = [UTType(filenameExtension: "elf") ?? .zip]
         savePanel.canCreateDirectories = true
-        let accessoryHostingView = NSHostingView(rootView: ElfExportOptionsView(exportOptionsModel: exportOptionsModel))
+        let accessoryHostingView = NSHostingView(rootView: ElfExportOptionsView(
+            exportOptionsModel: exportOptionsModel,
+            elfName: elfEditor.elf.configuration.identity.name
+        ))
         accessoryHostingView.frame.size = accessoryHostingView.fittingSize
         savePanel.accessoryView = accessoryHostingView
 
@@ -1525,7 +1528,8 @@ private struct ElfHomeAndExportSection: View {
             try elfEditor.export(
                 to: destinationURL,
                 options: exportOptionsModel.options,
-                preferredModels: companionManager.preferredModelsForElfExport()
+                preferredModels: companionManager.preferredModelsForElfExport(),
+                chats: companionManager.chatConversationStore.conversations
             )
             exportMessage = "Exported to \(destinationURL.lastPathComponent)."
             NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
@@ -1535,22 +1539,23 @@ private struct ElfHomeAndExportSection: View {
     }
 }
 
-/// The save panel's two switches, both off by default.
+/// The save panel's two switches: notes about you (on), chats (off).
 private final class ElfExportOptionsModel: ObservableObject {
     @Published var options = ElfExporter.Options()
 }
 
 private struct ElfExportOptionsView: View {
     @ObservedObject var exportOptionsModel: ElfExportOptionsModel
+    let elfName: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Always included: elf.json, soul.md, skills/")
+            Text("Always included: its config, soul.md, skills and files")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
-            Toggle("Include profile.md (notes about you)", isOn: $exportOptionsModel.options.includesProfile)
+            Toggle("Include its notes about you (profile.md)", isOn: $exportOptionsModel.options.includesProfile)
                 .toggleStyle(.checkbox)
-            Toggle("Include the elf's files (files/)", isOn: $exportOptionsModel.options.includesFiles)
+            Toggle("Include chats with \(elfName)", isOn: $exportOptionsModel.options.includesChats)
                 .toggleStyle(.checkbox)
         }
         .padding(12)

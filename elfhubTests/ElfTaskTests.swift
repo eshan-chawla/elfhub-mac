@@ -77,13 +77,14 @@ struct ElfTaskTests {
         #expect(elfTaskStore.tasks().count == 2)
     }
 
+    @MainActor
     @Test func tasksAreNeverExported() throws {
         let (home, cleanUp) = try makeTemporaryHome()
         defer { cleanUp() }
         try ElfTaskStore(home: home).save(makeTask())
         let exportURL = FileManager.default.temporaryDirectory.appendingPathComponent("export-\(UUID().uuidString).elf")
         defer { try? FileManager.default.removeItem(at: exportURL) }
-        try ElfExporter.export(home: home, configuration: home.readConfiguration(), options: ElfExporter.Options(includesProfile: true, includesFiles: true), to: exportURL)
+        try ElfExporter.export(home: home, configuration: home.readConfiguration(), options: ElfExporter.Options(), chats: [], to: exportURL)
         let exportedText = String(decoding: try Data(contentsOf: exportURL), as: UTF8.self)
         #expect(!exportedText.contains("tasks/"))
         #expect(!exportedText.contains(".elfhub"))

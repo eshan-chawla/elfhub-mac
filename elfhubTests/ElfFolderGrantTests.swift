@@ -110,7 +110,8 @@ struct ElfFolderGrantTests {
     @Test func grantsAreNeverExported() throws {
         let fixture = try makeFixture(allowsWriting: true)
         defer { try? FileManager.default.removeItem(at: fixture.rootDirectory) }
-        #expect(!ElfExporter.exportedItemNames(options: ElfExporter.Options(includesProfile: true, includesFiles: true)).contains("access.json"))
+        let packagedPaths = try ElfExporter.packageFiles(home: fixture.home, configuration: fixture.home.readConfiguration(), options: ElfExporter.Options(), chats: []).map(\.path)
+        #expect(!packagedPaths.contains { $0.contains("access.json") })
         #expect(throws: ElfHomeError.self) { try fixture.home.resolvedURLForElfTool("access.json", access: .read) }
     }
 
