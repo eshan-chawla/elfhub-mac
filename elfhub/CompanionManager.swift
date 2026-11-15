@@ -62,6 +62,9 @@ final class CompanionManager: ObservableObject {
     /// action) into the local unified log.
     private let turnLatencyTimeline = CompanionTurnLatencyTimeline()
     private var escapeStopActivationCancellable: AnyCancellable?
+    /// "Stop" said out loud while a run acts (Settings › Modes, off by default).
+    private let spokenStopListener = SpokenStopListener()
+    private var spokenStopListeningCancellable: AnyCancellable?
 
     let buddyDictationManager = BuddyDictationManager()
     let globalPushToTalkShortcutMonitor = GlobalPushToTalkShortcutMonitor()
@@ -1043,6 +1046,24 @@ final class CompanionManager: ObservableObject {
         escapeStopMonitor.onEscapePressed = { [weak self] in
             self?.stopEverythingOnEscape()
         }
+        // Saying "stop" during a run does what Esc does. The microphone is
+        // on only while a run is on the screen (and only if switched on).
+        spokenStopListener.onStopHeard = { [weak self] in
+            guard let self else { return }
+            self.stopEverythingOnEscape()
+            self.speakResponse("stopped.")
+        }
+        spokenStopListeningCancellable = screenActionCoordinator.$isComputerUseRunActive
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isComputerUseRunActive in
+                guard let self else { return }
+                if isComputerUseRunActive && self.interactionInputMode.isVoiceInputEnabled && !self.buddyDictationManager.isDictationInProgress {
+                    self.spokenStopListener.startListening()
+                } else {
+                    self.spokenStopListener.stopListening()
+                }
+            }
         userScreenInkRecorder.onStrokesChanged = { [weak self] userInkStrokes in
             self?.companionEventBus.emit(.userInkChanged(userInkStrokes))
         }
@@ -1376,6 +1397,8 @@ final class CompanionManager: ObservableObject {
 
             // Dismiss the menu bar panel so it doesn't cover the screen
             NotificationCenter.default.post(name: .dismissCompanionPanel, object: nil)
+            // Push-to-talk needs the microphone for itself.
+            spokenStopListener.stopListening()
 
             // Cancel any in-progress response, speech and running actions from
             // a previous utterance, and clear its pointer and annotations —

@@ -199,6 +199,9 @@ private struct ModesSettingsContent: View {
         }
         .mainAppCard()
 
+        SpokenStopSettingsRow()
+            .mainAppCard()
+
         SettingsToggleRow(
             iconName: "checklist",
             title: "Say when background work is done",
@@ -532,6 +535,20 @@ struct PersonalNumberMaskingSettingsSection: View {
             title: "Hide personal numbers in screenshots",
             detail: "Before a screenshot leaves your Mac, card numbers, social security and social insurance numbers, health card numbers and anything labelled as a patient ID, medical record number or date of birth are blacked out. The text is read on this Mac.",
             isOn: $hidesPersonalNumbersInScreenshots
+        )
+    }
+}
+
+/// Settings › Modes: saying "stop" while elfhub acts, without push-to-talk.
+struct SpokenStopSettingsRow: View {
+    @AppStorage(SpokenStopListener.isEnabledKey) private var listensForSpokenStopWhileActing = false
+
+    var body: some View {
+        SettingsToggleRow(
+            iconName: "hand.raised",
+            title: "Listen for “stop” while acting",
+            detail: "While elfhub works on your screen step by step, you can say “stop”, “cancel”, “wait” or “hold on” instead of pressing Esc. The microphone is on only during those runs, and what it hears is recognized on this Mac and never sent anywhere.",
+            isOn: $listensForSpokenStopWhileActing
         )
     }
 }
