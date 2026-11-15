@@ -64,6 +64,9 @@ struct ScreenActionConsentContext {
     /// True while macOS Secure Event Input is on — some password field (or
     /// Terminal's "Secure Keyboard Entry") currently owns the keyboard.
     var isSecureEventInputActive: Bool = false
+    /// For a drag: the element it would drop onto (the Trash makes a drag a
+    /// delete), when known.
+    var dragDropTargetElementFacts: AccessibilityElementFacts? = nil
 }
 
 enum ConsentPolicy {
@@ -151,7 +154,7 @@ enum ConsentPolicy {
             return .requiresExplicitConfirmation(reason: "this would \(effect.spokenVerb) something")
         }
 
-        if case .click = context.action, let facts = context.targetElementFacts, facts.isDefaultButton,
+        if Self.isClickOnTarget(context.action), let facts = context.targetElementFacts, facts.isDefaultButton,
            !userUtteranceNamesTarget(context.userUtterance, targetTitle: facts.title),
            !authorizedEffects.contains(.submit) {
             return .requiresExplicitConfirmation(reason: "that button finishes the form")
@@ -193,10 +196,11 @@ enum ConsentPolicy {
                 return .send
             }
             return nil
-        // A drag picks up what's under its start (judged there by title);
-        // moving the pointer changes nothing.
+        // A drag is judged where it drops (onto the Trash is a delete) and
+        // by what it picks up; moving the pointer changes nothing.
         case .drag:
-            return sensitiveEffect(forTargetText: context.targetElementFacts?.title)
+            return sensitiveEffect(forTargetText: context.dragDropTargetElementFacts?.title)
+                ?? sensitiveEffect(forTargetText: context.targetElementFacts?.title)
         case .scroll, .moveMouse:
             return nil
         }
@@ -229,6 +233,15 @@ enum ConsentPolicy {
     }
 
     /// The effect a button/menu title implies, if any.
+    /// Clicks of any count press what's under them (a double-click on a
+    /// default button submits just like a click).
+    static func isClickOnTarget(_ action: CompanionScreenAction) -> Bool {
+        switch action {
+        case .click, .doubleClick, .tripleClick: return true
+        default: return false
+        }
+    }
+
     static func sensitiveEffect(forTargetText targetText: String?) -> ConsentSensitiveEffect? {
         guard let targetText, !targetText.isEmpty else { return nil }
         // Fixed order so overlapping words resolve deterministically.

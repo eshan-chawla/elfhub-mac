@@ -923,9 +923,10 @@ final class CompanionManager: ObservableObject {
     static func shouldListenForEscape(
         hasVisibleGuidance: Bool,
         voiceState: CompanionVoiceState,
-        isChatReplyStreaming: Bool
+        isChatReplyStreaming: Bool,
+        isComputerUseRunActive: Bool = false
     ) -> Bool {
-        hasVisibleGuidance || voiceState != .idle || isChatReplyStreaming
+        hasVisibleGuidance || voiceState != .idle || isChatReplyStreaming || isComputerUseRunActive
     }
 
     /// While elfhub is busy or showing guidance, Esc stops everything (see
@@ -944,13 +945,16 @@ final class CompanionManager: ObservableObject {
             .map { activePointer, activeAnnotations, activeUserInkStrokes in
                 activePointer != nil || !activeAnnotations.isEmpty || !activeUserInkStrokes.isEmpty
             }
+        // A multi-step run keeps Esc watched between steps too, while the
+        // model thinks and nothing is speaking or pointing.
         escapeStopActivationCancellable = hasVisibleGuidancePublisher
-            .combineLatest($voiceState, textChatViewModel.$isResponding)
-            .map { hasVisibleGuidance, voiceState, isChatReplyStreaming in
+            .combineLatest($voiceState, textChatViewModel.$isResponding, screenActionCoordinator.$isComputerUseRunActive)
+            .map { hasVisibleGuidance, voiceState, isChatReplyStreaming, isComputerUseRunActive in
                 Self.shouldListenForEscape(
                     hasVisibleGuidance: hasVisibleGuidance,
                     voiceState: voiceState,
-                    isChatReplyStreaming: isChatReplyStreaming
+                    isChatReplyStreaming: isChatReplyStreaming,
+                    isComputerUseRunActive: isComputerUseRunActive
                 )
             }
             .removeDuplicates()
@@ -1229,6 +1233,26 @@ final class CompanionManager: ObservableObject {
         }
 
         sendTranscriptToClaudeWithScreenshot(transcript: finalTranscript)
+    }
+
+    /// A typed message while an action waits for a yes or no (a typed run
+    /// can't be answered by voice in text-only mode). Returns true when the
+    /// message was the answer; anything else is left for a new turn.
+    func answerPendingScreenActionConfirmation(typedText: String) -> Bool {
+        guard let pendingConsent = screenActionCoordinator.pendingConsent else { return false }
+        switch SpokenConfirmationParser.interpret(typedText, requiredVerbKeywords: pendingConsent.requiredConfirmationVerbKeywords) {
+        case .confirmed:
+            screenActionCoordinator.confirmPendingActions(approvalProvenance: .userTypedYes)
+            return true
+        case .declined:
+            screenActionCoordinator.cancelPendingActions()
+            return true
+        case .needsVerbRestatement:
+            screenActionCoordinator.askToRestateConsequentialVerb()
+            return true
+        case .unrelated:
+            return false
+        }
     }
 
     private func handleShortcutTransition(_ transition: BuddyPushToTalkShortcut.ShortcutTransition) {

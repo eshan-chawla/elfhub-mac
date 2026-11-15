@@ -270,7 +270,10 @@ final class CompanionTurnPipeline {
             return turnResult
         } catch {
             let fallbackConfiguration = providerConfigurationStore.fallbackConfiguration
-            guard let fallbackConfigurationForThisTurn = Self.fallbackConfiguration(
+            // Steps already taken on the screen aren't taken again by
+            // another model from the first screenshot.
+            guard Self.mayRestartTurnOnFallbackModel(didActOnScreen: turnEffectLedger.didActOnScreen),
+                  let fallbackConfigurationForThisTurn = Self.fallbackConfiguration(
                 afterFailure: error,
                 of: turnConfiguration,
                 fallbackConfiguration: fallbackConfiguration,
@@ -529,12 +532,13 @@ final class CompanionTurnPipeline {
                 )
             }
             : nil
-        if computerUseSession != nil {
-            screenActionCoordinator.beginComputerUseRun()
-        }
+        let computerUseRunIdentifier = computerUseSession == nil ? nil : screenActionCoordinator.beginComputerUseRun()
         defer {
-            if computerUseSession?.didTryToAct == true {
-                screenActionCoordinator.finishComputerUseRun()
+            if let computerUseSession, let computerUseRunIdentifier {
+                if computerUseSession.didTryToAct {
+                    turnEffectLedger.didActOnScreen = true
+                }
+                screenActionCoordinator.finishComputerUseRun(computerUseRunIdentifier, didTryToAct: computerUseSession.didTryToAct)
             }
         }
         let agentLoopResult = try await ElfAgentLoop.run(
@@ -683,6 +687,13 @@ final class CompanionTurnPipeline {
     /// question wants a quick answer, so it thinks less. When the reply may
     /// act on the screen, the balanced default is asked for explicitly so it
     /// never drops below it. Typed chat keeps the model's own default.
+    /// Whether a turn whose model failed may start over on the fallback
+    /// model: not once it acted on the screen — replaying from the first
+    /// screenshot would redo steps (type again, flip a switch back).
+    nonisolated static func mayRestartTurnOnFallbackModel(didActOnScreen: Bool) -> Bool {
+        !didActOnScreen
+    }
+
     /// Whether this turn acts on the screen step by step (seeing each
     /// result) rather than in one blind batch: action mode on, and a model
     /// that can call tools and see screenshots.

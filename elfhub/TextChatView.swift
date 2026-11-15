@@ -24,6 +24,13 @@ final class TextChatViewModel: ObservableObject {
     /// The conversation on screen. Starts empty; it's saved once it has a message.
     @Published private(set) var activeConversation = ChatConversation()
     @Published private(set) var isResponding = false
+    /// An action on screen is waiting for a yes or no, which can be typed —
+    /// even while a run is responding.
+    @Published private(set) var isScreenActionWaitingForAnswer = false
+    private var pendingScreenActionConsentCancellable: AnyCancellable?
+
+    /// The composer can send while idle, or to answer a waiting action.
+    var canSendDraft: Bool { !isResponding || isScreenActionWaitingForAnswer }
     @Published var draft: String = ""
     /// The elf picked for the next message, if any (else: by name, or main).
     @Published var composerElfSelection = ChatComposerElfSelection()
@@ -56,6 +63,10 @@ final class TextChatViewModel: ObservableObject {
     init(companionManager: CompanionManager, chatConversationStore: ChatConversationStore) {
         self.companionManager = companionManager
         self.chatConversationStore = chatConversationStore
+        pendingScreenActionConsentCancellable = companionManager.screenActionCoordinator.$pendingConsent
+            .map { $0 != nil }
+            .removeDuplicates()
+            .sink { [weak self] isWaiting in self?.isScreenActionWaitingForAnswer = isWaiting }
     }
 
     var messages: [StoredChatMessage] {
@@ -173,7 +184,13 @@ final class TextChatViewModel: ObservableObject {
 
     func sendDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isResponding else { return }
+        guard !trimmed.isEmpty else { return }
+        // "yes", "no" or "yes, send it" answers an action that's waiting.
+        if isScreenActionWaitingForAnswer, companionManager.answerPendingScreenActionConfirmation(typedText: trimmed) {
+            draft = ""
+            return
+        }
+        guard !isResponding else { return }
         draft = ""
 
         // Who answers is decided now, so the reply is theirs from the start.
@@ -738,11 +755,11 @@ struct TextChatView: View {
             Button(action: { viewModel.sendDraft() }) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(viewModel.isResponding ? DS.Colors.textTertiary : DS.Colors.accent)
+                    .foregroundColor(viewModel.canSendDraft ? DS.Colors.accent : DS.Colors.textTertiary)
             }
             .buttonStyle(.plain)
             .pointerCursor()
-            .disabled(viewModel.isResponding || viewModel.draft.trimmingCharacters(in: .whitespaces).isEmpty)
+            .disabled(!viewModel.canSendDraft || viewModel.draft.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(12)
     }

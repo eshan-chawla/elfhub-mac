@@ -54,6 +54,7 @@ enum ScreenActionExecutionMode: String {
 enum ScreenActionApprovalProvenance: String, Codable {
     case userClickedConfirm
     case userSaidYes
+    case userTypedYes
     case autoFireMode
 }
 
@@ -127,6 +128,8 @@ struct ResolvedScreenAction {
     let consequentialEffect: ConsentSensitiveEffect?
     /// Where a drag lets go (Core Graphics global); nil for everything else.
     var coreGraphicsDragEndPoint: CGPoint? = nil
+    /// What a drag would drop onto, when known.
+    var dragDropTargetElementFacts: AccessibilityElementFacts? = nil
 
     /// Plain-English description for the consent card and narration. Prefers
     /// the real element's title over the model's label.
@@ -259,7 +262,15 @@ final class ScreenActionCoordinator: ObservableObject {
     /// there at the end if the user hasn't moved it.
     private var pointerLocationBeforeComputerUseRun: CGPoint?
     private var isFiringComputerUseRunStep = false
+    /// The run in progress; an older run finishing late can't end it.
+    private var currentComputerUseRunIdentifier: UUID?
+    /// When the run's last step ended (or the user last okayed one): input
+    /// from the user after this means they've taken over.
+    private var computerUseRunLastStepEndedAt: Date?
 
+    /// True from the start of a multi-step run to its end, including while
+    /// the model thinks between steps — so Esc is watched the whole time.
+    @Published private(set) var isComputerUseRunActive = false
     /// True while a multi-step run is paused for the user's yes or no — a
     /// push-to-talk then answers it rather than cancelling the run.
     var isComputerUseRunAwaitingApproval: Bool { pendingRunApprovalContinuation != nil }
@@ -685,18 +696,52 @@ final class ScreenActionCoordinator: ObservableObject {
     // MARK: - Multi-step runs (computer use)
 
     /// Called when a multi-step run starts: remembers where the pointer is.
-    func beginComputerUseRun() {
+    /// Returns the run's identifier, which `finishComputerUseRun` needs.
+    @discardableResult
+    func beginComputerUseRun() -> UUID {
+        let runIdentifier = UUID()
+        currentComputerUseRunIdentifier = runIdentifier
         pointerLocationBeforeComputerUseRun = ScreenActionSynthesizer.currentPointerLocation()
+        // Moving the mouse after asking, before elfhub has acted, is normal;
+        // only input after a step counts as taking over.
+        computerUseRunLastStepEndedAt = nil
+        isComputerUseRunActive = true
+        return runIdentifier
     }
 
     /// Called when the run ends however it ends: the pointer goes back if
     /// the user hasn't touched it, and the pill stops saying it's acting.
-    func finishComputerUseRun() {
-        if let pointerLocationBeforeComputerUseRun {
-            ScreenActionSynthesizer.restorePointerIfUntouched(to: pointerLocationBeforeComputerUseRun)
+    /// Does nothing for a run a newer one replaced.
+    func finishComputerUseRun(_ runIdentifier: UUID, didTryToAct: Bool = true) {
+        guard runIdentifier == currentComputerUseRunIdentifier else { return }
+        currentComputerUseRunIdentifier = nil
+        computerUseRunLastStepEndedAt = nil
+        isComputerUseRunActive = false
+        if didTryToAct {
+            if let pointerLocationBeforeComputerUseRun {
+                ScreenActionSynthesizer.restorePointerIfUntouched(to: pointerLocationBeforeComputerUseRun)
+            }
+            emitCompanionEvent?(.actionsFinished)
         }
         pointerLocationBeforeComputerUseRun = nil
-        emitCompanionEvent?(.actionsFinished)
+    }
+
+    /// Whether the user used the mouse or keyboard after the run's last
+    /// step ended. Events in the first moment after a step are elfhub's
+    /// own still arriving, so they don't count.
+    nonisolated static func userTookOverBetweenSteps(secondsSinceLastPhysicalInput: Double, secondsSinceLastStep: Double) -> Bool {
+        let ownEventsSettlingSeconds = 0.25
+        return secondsSinceLastPhysicalInput < secondsSinceLastStep - ownEventsSettlingSeconds
+    }
+
+    /// The same, read from the system now.
+    private func userTookOverSinceLastComputerUseStep() -> Bool {
+        guard let computerUseRunLastStepEndedAt, let anyInputEventType = CGEventType(rawValue: ~0) else { return false }
+        let secondsSinceLastPhysicalInput = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: anyInputEventType)
+        return Self.userTookOverBetweenSteps(
+            secondsSinceLastPhysicalInput: secondsSinceLastPhysicalInput,
+            secondsSinceLastStep: Date().timeIntervalSince(computerUseRunLastStepEndedAt)
+        )
     }
 
     /// One action of a multi-step run, resolved against the screen as it is
@@ -720,6 +765,12 @@ final class ScreenActionCoordinator: ObservableObject {
         guard hasAccessibilityPermission?() == true else {
             return .handedToUser(reason: "i'd need accessibility permission to actually do that. you can turn it on from my menu bar panel.")
         }
+        // The user moving the mouse or typing while the model was thinking
+        // means they've taken over, just like during a step.
+        if userTookOverSinceLastComputerUseStep() {
+            speak?("okay, you've got it.")
+            return .stoppedByUser
+        }
 
         let screenCaptures = [screenCapture]
         var resolvedAction = await resolveSingleAction(action, screenCaptures: screenCaptures, userUtterance: userUtterance)
@@ -733,7 +784,10 @@ final class ScreenActionCoordinator: ObservableObject {
 
         let targetApplicationBundleIdentifier = resolvedAction.targetElementFacts?.owningApplicationBundleIdentifier
             ?? resolvedAction.frontmostApplicationBundleIdentifier
-        let stepLeavesApprovedApplications = runApproval.isApproved && !runApproval.coversApplication(targetApplicationBundleIdentifier)
+        // A drag into another app (onto the Dock's Trash, say) leaves too.
+        let dropApplicationBundleIdentifier = resolvedAction.dragDropTargetElementFacts?.owningApplicationBundleIdentifier
+        let stepLeavesApprovedApplications = runApproval.isApproved
+            && (!runApproval.coversApplication(targetApplicationBundleIdentifier) || !runApproval.coversApplication(dropApplicationBundleIdentifier))
         let needsApproval = resolvedAction.requiresExplicitConfirmation
             || (executionMode == .confirmEachAction && (!runApproval.isApproved || stepLeavesApprovedApplications))
 
@@ -747,6 +801,11 @@ final class ScreenActionCoordinator: ObservableObject {
             guard let approvalProvenance else { return .declinedByUser }
             guard turnToken == currentTurnToken, !Task.isCancelled else { return .stoppedByUser }
             runApproval.recordApproval(approvalProvenance, applicationBundleIdentifier: targetApplicationBundleIdentifier)
+            runApproval.recordApproval(approvalProvenance, applicationBundleIdentifier: dropApplicationBundleIdentifier)
+            // Clicking Confirm or holding push-to-talk to answer isn't taking over.
+            if computerUseRunLastStepEndedAt != nil {
+                computerUseRunLastStepEndedAt = Date()
+            }
 
             // Approval is bound to what was shown: the target is checked
             // again now, since waiting for an answer takes time.
@@ -770,7 +829,8 @@ final class ScreenActionCoordinator: ObservableObject {
         return await fireActionInComputerUseRun(
             resolvedAction,
             approvalProvenance: runApproval.approvalProvenance ?? .autoFireMode,
-            stepDescription: stepDescription
+            stepDescription: stepDescription,
+            turnToken: turnToken
         )
     }
 
@@ -807,8 +867,11 @@ final class ScreenActionCoordinator: ObservableObject {
     private func fireActionInComputerUseRun(
         _ resolvedAction: ResolvedScreenAction,
         approvalProvenance: ScreenActionApprovalProvenance,
-        stepDescription: String
+        stepDescription: String,
+        turnToken: ScreenActionTurnToken
     ) async -> ComputerUseActionOutcome {
+        // A newer turn may have started during the Accessibility lookups.
+        guard turnToken == currentTurnToken, !Task.isCancelled else { return .stoppedByUser }
         isStopRequested = false
         isRunningActions = true
         isFiringComputerUseRunStep = true
@@ -824,13 +887,14 @@ final class ScreenActionCoordinator: ObservableObject {
             userInterruptionMonitor.stop()
             isRunningActions = false
             isFiringComputerUseRunStep = false
+            computerUseRunLastStepEndedAt = Date()
         }
 
         if resolvedAction.appKitTargetPoint != nil {
             previewTarget(of: resolvedAction)
             try? await Task.sleep(nanoseconds: Self.previewBeforeFiringNanoseconds)
         }
-        if isStopRequested || Task.isCancelled {
+        if isStopRequested || Task.isCancelled || turnToken != currentTurnToken {
             recordAuditEntry(for: resolvedAction, approvalProvenance: approvalProvenance, outcome: .stoppedByUser)
             return .stoppedByUser
         }
@@ -878,9 +942,12 @@ final class ScreenActionCoordinator: ObservableObject {
         var displayFrame: CGRect?
         var targetElementFacts: AccessibilityElementFacts?
         var coreGraphicsDragEndPoint: CGPoint?
+        var dragDropTargetElementFacts: AccessibilityElementFacts?
         if case let .drag(_, toScreenshotPixel, screenNumber) = action,
            let dragEndCapture = CompanionScreenCapture.targetCapture(screenNumber: screenNumber, in: screenCaptures) {
-            coreGraphicsDragEndPoint = dragEndCapture.coreGraphicsGlobalPoint(fromScreenshotPixel: toScreenshotPixel)
+            let dragEndPoint = dragEndCapture.coreGraphicsGlobalPoint(fromScreenshotPixel: toScreenshotPixel)
+            coreGraphicsDragEndPoint = dragEndPoint
+            dragDropTargetElementFacts = await AccessibilityElementLocator.elementFacts(atCoreGraphicsGlobalPoint: dragEndPoint)
         }
 
         if let actionTarget = Self.targetScreenshotPixel(of: action),
@@ -913,7 +980,8 @@ final class ScreenActionCoordinator: ObservableObject {
             frontmostApplicationBundleIdentifier: frontmostApplicationBundleIdentifier,
             isTargetApplicationPrivacyBlocked: isTargetApplicationPrivacyBlocked,
             userUtterance: userUtterance,
-            isSecureEventInputActive: IsSecureEventInputEnabled()
+            isSecureEventInputActive: IsSecureEventInputEnabled(),
+            dragDropTargetElementFacts: dragDropTargetElementFacts
         )
 
         return ResolvedScreenAction(
@@ -925,7 +993,8 @@ final class ScreenActionCoordinator: ObservableObject {
             frontmostApplicationBundleIdentifier: frontmostApplicationBundleIdentifier,
             consentDecision: ConsentPolicy.evaluate(consentContext),
             consequentialEffect: ConsentPolicy.consequentialEffect(of: consentContext),
-            coreGraphicsDragEndPoint: coreGraphicsDragEndPoint
+            coreGraphicsDragEndPoint: coreGraphicsDragEndPoint,
+            dragDropTargetElementFacts: dragDropTargetElementFacts
         )
     }
 

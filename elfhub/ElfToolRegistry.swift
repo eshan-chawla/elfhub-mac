@@ -123,6 +123,9 @@ final class ElfTurnEffectLedger {
     private var assignedTaskIdentifierByKey: [String: UUID] = [:]
     /// Every file change this turn made, across a fallback restart, in order.
     private(set) var recordedFileChanges: [ElfChangeLogEntry] = []
+    /// Whether this turn already acted on the screen (a multi-step run), so
+    /// a fallback restart mustn't run the steps again.
+    var didActOnScreen = false
     private let onFileChanged: (ElfChangeLogEntry) -> Void
 
     /// `onFileChanged` hears each change as it's made, so a reply stopped
