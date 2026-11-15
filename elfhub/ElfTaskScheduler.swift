@@ -173,6 +173,35 @@ final class ElfTaskScheduler: ObservableObject {
         return tasksToForget.sorted { $0.createdAt < $1.createdAt }
     }
 
+    /// Why a task failed, in words that can be spoken — never an API's raw
+    /// error body.
+    nonisolated static func spokenFailureReason(for error: Error) -> String {
+        if let providerError = error as? LanguageModelProviderError {
+            switch providerError {
+            case let .httpError(statusCode, _):
+                switch statusCode {
+                case 401, 403: return "the model's service didn't accept the key"
+                case 429: return "the model's service said it's had too many requests for now"
+                case 500...599: return "the model's service is busy right now"
+                default: return "the model's service answered with an error (\(statusCode))"
+                }
+            case .streamFailed: return "the model's reply was cut off partway"
+            case .invalidResponse: return "the model's service sent back something unreadable"
+            case let .missingConfiguration(detail): return detail
+            }
+        }
+        if error is URLError {
+            return "the internet connection dropped"
+        }
+        if let elfAgentLoopError = error as? ElfAgentLoopError {
+            return elfAgentLoopError.localizedDescription
+        }
+        if let chatGPTPlanUsageError = error as? ChatGPTPlanUsageError {
+            return chatGPTPlanUsageError.localizedDescription
+        }
+        return "something went wrong while it worked"
+    }
+
     /// The user's answer to a task's question: it goes back in the queue.
     /// `usersOwnWords` is what the user actually said when someone else
     /// (the main elf) passes the answer on — a screen request is granted
@@ -488,7 +517,7 @@ final class ElfTaskScheduler: ObservableObject {
             if taskIdentifiersBeingCancelled.remove(taskIdentifier) != nil {
                 finish(&runningTask, as: .cancelled, failureReason: nil)
             } else {
-                finish(&runningTask, as: .failed, failureReason: error.localizedDescription)
+                finish(&runningTask, as: .failed, failureReason: Self.spokenFailureReason(for: error))
             }
         }
     }

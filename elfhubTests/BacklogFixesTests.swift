@@ -115,3 +115,36 @@ struct BacklogFixesTests {
         #expect(hiddenParts("Call 416-555-0199 about order 123456789").isEmpty)
     }
 }
+
+@MainActor
+struct BacklogFixesSecondBatchTests {
+
+    @Test func aSideElfOnAChatGPTPlanThatCantBeUsedGetsTheFallbackNotMainsModel() throws {
+        let chatGPTPlanConfiguration = ProviderConfiguration.chatGPTPlan(model: "gpt-test")
+        let mainConfiguration = ProviderConfiguration(kind: .anthropic, displayName: "Main", baseURL: "https://api.anthropic.com", model: "claude-opus-5-5", supportsVision: true)
+        let elfActiveConfiguration = LanguageModelTurnRouting.activeConfiguration(
+            mainActiveConfiguration: mainConfiguration,
+            elfPreferredConfiguration: chatGPTPlanConfiguration,
+            isElfPreferredConfigurationReady: false
+        )
+        // The plan stays the elf's model, so the plan's fallback rules apply.
+        #expect(elfActiveConfiguration?.id == chatGPTPlanConfiguration.id)
+    }
+
+    @Test func aVoiceRemovedFromTheMacFallsBackToMainsVoice() {
+        var localSettings = ElfLocalSettings()
+        localSettings.voice = ElfVoiceSelection(speechOutputModeRawValue: SpeechOutputMode.system.rawValue, voiceIdentifier: "com.apple.voice.premium.en-US.Zoe")
+        #expect(ElfSpeechChoice.choice(for: localSettings, isMainElf: false, isSystemVoiceInstalled: { _ in false }) == .sameAsMain)
+        #expect(ElfSpeechChoice.choice(for: localSettings, isMainElf: false, isSystemVoiceInstalled: { _ in true })
+            == .system(voiceIdentifier: "com.apple.voice.premium.en-US.Zoe"))
+    }
+
+    @Test func aFailedTaskSaysWhyInPlainWords() {
+        #expect(ElfTaskScheduler.spokenFailureReason(for: LanguageModelProviderError.httpError(statusCode: 529, body: #"{"type":"error","error":{"type":"overloaded_error"}}"#))
+            == "the model's service is busy right now")
+        #expect(ElfTaskScheduler.spokenFailureReason(for: LanguageModelProviderError.httpError(statusCode: 401, body: "{}"))
+            == "the model's service didn't accept the key")
+        #expect(ElfTaskScheduler.spokenFailureReason(for: URLError(.notConnectedToInternet)) == "the internet connection dropped")
+        #expect(ElfTaskScheduler.spokenFailureReason(for: ElfAgentLoopError.budgetExceeded) == ElfAgentLoopError.budgetExceeded.localizedDescription)
+    }
+}

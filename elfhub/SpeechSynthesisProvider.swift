@@ -333,7 +333,14 @@ enum ElfSpeechChoice: Equatable {
     case elevenLabs(voiceIdentifier: String?)
     case openAICompatible(voiceName: String?)
 
-    static func choice(for localSettings: ElfLocalSettings, isMainElf: Bool) -> ElfSpeechChoice {
+    /// `isSystemVoiceInstalled` tells whether an Apple voice is still on this
+    /// Mac; one that was removed falls back to the main elf's voice rather
+    /// than the system default.
+    static func choice(
+        for localSettings: ElfLocalSettings,
+        isMainElf: Bool,
+        isSystemVoiceInstalled: (String) -> Bool = { AVSpeechSynthesisVoice(identifier: $0) != nil }
+    ) -> ElfSpeechChoice {
         guard !isMainElf,
               let voice = localSettings.voice,
               let speechOutputMode = SpeechOutputMode(rawValue: voice.speechOutputModeRawValue) else { return .sameAsMain }
@@ -341,7 +348,9 @@ enum ElfSpeechChoice: Equatable {
         let voiceIdentifier = trimmedVoiceIdentifier?.isEmpty == false ? trimmedVoiceIdentifier : nil
         switch speechOutputMode {
         case .off: return .off
-        case .system: return .system(voiceIdentifier: voiceIdentifier)
+        case .system:
+            if let voiceIdentifier, !isSystemVoiceInstalled(voiceIdentifier) { return .sameAsMain }
+            return .system(voiceIdentifier: voiceIdentifier)
         case .elevenLabs: return .elevenLabs(voiceIdentifier: voiceIdentifier)
         case .openAICompatibleSpeech: return .openAICompatible(voiceName: voiceIdentifier)
         }

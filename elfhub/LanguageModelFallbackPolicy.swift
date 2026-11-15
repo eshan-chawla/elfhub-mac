@@ -27,7 +27,12 @@ enum LanguageModelTurnRouting {
         elfPreferredConfiguration: ProviderConfiguration?,
         isElfPreferredConfigurationReady: Bool
     ) -> ProviderConfiguration? {
-        guard let elfPreferredConfiguration, isElfPreferredConfigurationReady else { return mainActiveConfiguration }
+        guard let elfPreferredConfiguration else { return mainActiveConfiguration }
+        // An elf on the ChatGPT plan stays on it even when it can't be used
+        // right now: the plan's own fallback (the user's choice) answers then,
+        // not the main elf's model.
+        if elfPreferredConfiguration.kind == .chatGPTPlan { return elfPreferredConfiguration }
+        guard isElfPreferredConfigurationReady else { return mainActiveConfiguration }
         return elfPreferredConfiguration
     }
 

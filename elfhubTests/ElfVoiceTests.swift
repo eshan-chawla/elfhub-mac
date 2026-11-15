@@ -24,7 +24,7 @@ struct ElfVoiceTests {
 
     @Test func aSideElfsOwnVoiceIsUsed() {
         let systemVoice = ElfVoiceSelection(speechOutputModeRawValue: SpeechOutputMode.system.rawValue, voiceIdentifier: "com.apple.voice.Ava")
-        #expect(ElfSpeechChoice.choice(for: ElfLocalSettings(voice: systemVoice), isMainElf: false) == .system(voiceIdentifier: "com.apple.voice.Ava"))
+        #expect(ElfSpeechChoice.choice(for: ElfLocalSettings(voice: systemVoice), isMainElf: false, isSystemVoiceInstalled: { _ in true }) == .system(voiceIdentifier: "com.apple.voice.Ava"))
         let elevenLabsVoice = ElfVoiceSelection(speechOutputModeRawValue: SpeechOutputMode.elevenLabs.rawValue, voiceIdentifier: "voice-42")
         #expect(ElfSpeechChoice.choice(for: ElfLocalSettings(voice: elevenLabsVoice), isMainElf: false) == .elevenLabs(voiceIdentifier: "voice-42"))
         let silentVoice = ElfVoiceSelection(speechOutputModeRawValue: SpeechOutputMode.off.rawValue, voiceIdentifier: nil)
