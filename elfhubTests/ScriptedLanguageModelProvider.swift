@@ -20,8 +20,13 @@ final class ScriptedLanguageModelProvider: LanguageModelProvider {
     /// How long each answer takes (to test time limits).
     var responseDelayInSeconds: Double = 0
 
-    init(scriptedResponses: [LanguageModelResponse], supportsToolCalling: Bool = true) {
+    /// Whether it can search the web itself (like Claude with its web
+    /// search tool).
+    let supportsProviderWebSearch: Bool
+
+    init(scriptedResponses: [LanguageModelResponse], supportsToolCalling: Bool = true, supportsProviderWebSearch: Bool = false) {
         self.scriptedResponses = scriptedResponses
+        self.supportsProviderWebSearch = supportsProviderWebSearch
         self.capabilities = LanguageModelCapabilities(
             supportsVision: false,
             supportsToolCalling: supportsToolCalling,

@@ -5,8 +5,10 @@
 //  Web search for elves through a search service the user picks and pays
 //  for themselves — Brave, Tavily or Exa with their key (kept in the
 //  Keychain), or a SearXNG server they run — set in Settings › Models.
-//  Without one, elves have no web_search, only fetch_page for addresses the
-//  user gives. The service gets the elf's search query and nothing else.
+//  Without one, an elf whose model can search itself (Claude with the
+//  user's key) uses that (ElfAgentLoop.providerWebSearch); others have only
+//  fetch_page for addresses the user gives. The service gets the elf's
+//  search query and nothing else.
 //
 
 import Foundation

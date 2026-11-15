@@ -20,6 +20,10 @@ final class AnthropicLanguageModelProvider: LanguageModelProvider {
         self.capabilities = capabilities
     }
 
+    /// Claude's web search tool runs on Anthropic's servers, so only when
+    /// talking to the Claude API itself with the user's key.
+    var supportsProviderWebSearch: Bool { claudeAPI.isDirectToAnthropic }
+
     func streamResponse(
         _ request: LanguageModelRequest,
         onStreamEvent: @MainActor @Sendable (LanguageModelStreamEvent) -> Void

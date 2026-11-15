@@ -3,7 +3,8 @@
 //  elfhub
 //
 //  The web for elves that have it (side elves by default; the main elf
-//  only when switched on): web_search through the user's search key, and
+//  only when switched on): web_search through the user's search key (or,
+//  without one, the model's own search — see ElfAgentLoop), and
 //  fetch_page, which opens only pages the elf was led to (FetchPageURLPolicy)
 //  and reads them as plain text. Opening a page marks the turn or task as
 //  web-influenced, so files it then writes carry a warning, and it can't

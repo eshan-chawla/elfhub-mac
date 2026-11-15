@@ -11,6 +11,12 @@
 //  text goes to the same reply; cancellation (Esc) is checked before every
 //  round and every tool.
 //
+//  An elf with the web on and no search service of the user's own searches
+//  with its model's built-in search (Claude's web search tool, run by
+//  Anthropic) when the model has one. That's decided once per run so every
+//  round sends the same tools; a search it ran counts as using the web, and
+//  a turn the server paused during its searches is sent back to continue.
+//
 
 import Foundation
 
@@ -49,6 +55,41 @@ enum ElfAgentLoop {
     /// What a guidance call "returns" to the model.
     static let guidanceToolResultText = "shown to the user on their screen"
 
+    /// Searches the model may run itself within one request.
+    static let providerWebSearchesPerRequest = 5
+
+    /// The model's own web search for this run, or nil. Only when the elf
+    /// has the web on (its web tools are in the registry and the switch is
+    /// still on), the user hasn't set up a search service of their own
+    /// (their `web_search` tool comes first), the model can search, and the
+    /// run can't also reach the user's folders — unless the elf allows both:
+    /// what the server searches can't be stopped halfway like our own tools.
+    static func providerWebSearch(
+        toolRegistry: ElfToolRegistry,
+        toolContext: ElfToolContext?,
+        languageModelProvider: LanguageModelProvider
+    ) -> LanguageModelProviderWebSearch? {
+        guard let toolContext,
+              languageModelProvider.supportsProviderWebSearch,
+              toolRegistry.containsTool(inGroup: .web),
+              toolRegistry.tool(named: "web_search") == nil,
+              ElfWebTools.isWebStillOn(for: toolContext) else { return nil }
+        let allowsWebAndUserFoldersTogether = toolContext.elf.configuration.capabilities.allowsWebAndUserFoldersTogether
+        let mayReachUserFolders = toolRegistry.containsTool(inGroup: .userFolders) || toolContext.usedResources.contains(.userFolders)
+        if mayReachUserFolders && !allowsWebAndUserFoldersTogether { return nil }
+        return LanguageModelProviderWebSearch(maximumSearchesPerRequest: providerWebSearchesPerRequest)
+    }
+
+    /// Adds the assistant's turn, continuing the previous assistant message
+    /// when the server paused it (one turn, not two in a row).
+    private static func appendAssistantContent(_ assistantContent: [LanguageModelContentBlock], to messages: inout [LanguageModelMessage]) {
+        if let lastMessage = messages.last, lastMessage.role == .assistant {
+            messages[messages.count - 1] = LanguageModelMessage(role: .assistant, content: lastMessage.content + assistantContent)
+        } else {
+            messages.append(LanguageModelMessage(role: .assistant, content: assistantContent))
+        }
+    }
+
     static func run(
         initialRequest: LanguageModelRequest,
         languageModelProvider: LanguageModelProvider,
@@ -69,6 +110,11 @@ enum ElfAgentLoop {
         var roundsUsed = 0
         var outputTokensUsed = 0
         var textOnlyRoundNudgesUsed = 0
+        let providerWebSearch = providerWebSearch(
+            toolRegistry: toolRegistry,
+            toolContext: toolContext,
+            languageModelProvider: languageModelProvider
+        )
 
         for roundNumber in 1...max(1, maximumRounds) {
             try Task.checkCancellation()
@@ -77,7 +123,7 @@ enum ElfAgentLoop {
             // conversation with tool calls but no tools); the model is told
             // to answer instead.
             let isLastAllowedRound = roundNumber == maximumRounds && roundNumber > 1
-            let roundRequest = LanguageModelRequest(
+            var roundRequest = LanguageModelRequest(
                 systemPrompt: isLastAllowedRound
                     ? initialRequest.systemPrompt + "\n\n" + answerNowInstruction
                     : initialRequest.systemPrompt,
@@ -86,6 +132,7 @@ enum ElfAgentLoop {
                 maxOutputTokens: initialRequest.maxOutputTokens,
                 reasoningEffort: initialRequest.reasoningEffort
             )
+            roundRequest.providerWebSearch = providerWebSearch
             let roundResponse = try await languageModelProvider.streamResponse(roundRequest) { streamEvent in
                 if case let .textDelta(textDelta) = streamEvent {
                     onReplyTextDelta(textDelta)
@@ -97,17 +144,32 @@ enum ElfAgentLoop {
             if let budget, outputTokensUsed > budget.maximumOutputTokens { throw ElfAgentLoopError.budgetExceeded }
             onModelRoundEnded()
 
+            // A search the model ran itself is using the web: its results
+            // may be opened with fetch_page, what it writes next carries the
+            // web warning, and the user's folders stay off.
+            if roundResponse.providerWebSearchCount > 0, let toolContext {
+                toolContext.usedResources.insert(.web)
+                toolContext.influencedBy.insert(.web)
+                toolContext.fetchPageURLPolicy.recordSearchResults(roundResponse.providerWebSearchResultURLs)
+            }
+
             let trimmedRoundText = roundResponse.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedRoundText.isEmpty {
                 roundReplyTexts.append(trimmedRoundText)
             }
             guidanceToolCalls += roundResponse.toolCalls.filter { guidanceToolNames.contains($0.toolName) }
+            // The server paused a long turn (its own searches): sending the
+            // turn back as it is lets it carry on.
+            if roundResponse.stopReason == .pausedByServer, roundResponse.toolCalls.isEmpty, roundNumber < maximumRounds {
+                appendAssistantContent(roundResponse.assistantContent, to: &messages)
+                continue
+            }
             guard !roundResponse.toolCalls.isEmpty else {
                 // A worker that only talked hasn't finished: remind it how to
                 // (finish, ask, or keep working) a couple of times.
                 if let textOnlyRoundNudge, textOnlyRoundNudgesUsed < maximumTextOnlyRoundNudges, roundNumber < maximumRounds {
                     textOnlyRoundNudgesUsed += 1
-                    messages.append(LanguageModelMessage(role: .assistant, content: roundResponse.assistantContent))
+                    appendAssistantContent(roundResponse.assistantContent, to: &messages)
                     messages.append(LanguageModelMessage(role: .user, content: [.text(textOnlyRoundNudge)]))
                     continue
                 }
@@ -149,7 +211,7 @@ enum ElfAgentLoop {
             // saved is saved); there's just no round after it. A tool that
             // ends the run (finishing a task, asking the user) ends it here.
             guard needsAnotherRound, roundNumber < maximumRounds, !aToolEndedTheRun else { break }
-            messages.append(LanguageModelMessage(role: .assistant, content: roundResponse.assistantContent))
+            appendAssistantContent(roundResponse.assistantContent, to: &messages)
             messages.append(LanguageModelMessage(role: .user, content: toolResultBlocks))
         }
 

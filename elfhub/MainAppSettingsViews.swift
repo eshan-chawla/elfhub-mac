@@ -393,7 +393,7 @@ private struct WebSearchSettingsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             LayerFieldLabel(text: "Web search (optional)")
-            Text("Lets your elves search the web for their tasks. The service you pick gets only the search words. Without one, elves can still open addresses you give them.")
+            Text("Lets your elves search the web for their tasks. The service you pick gets only the search words. Without one, elves on Claude with your key use Claude's own web search (Anthropic charges your key about a cent a search); on other models they can only open addresses you give them.")
                 .font(.system(size: 11))
                 .foregroundColor(DS.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)

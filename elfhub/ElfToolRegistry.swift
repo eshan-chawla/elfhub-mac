@@ -177,6 +177,10 @@ final class ElfToolRegistry {
     func tool(named toolName: String) -> ElfTool? {
         tools.first { $0.definition.name == toolName }
     }
+
+    func containsTool(inGroup toolGroup: ElfToolGroup) -> Bool {
+        tools.contains { $0.group == toolGroup }
+    }
 }
 
 /// A tool call's JSON arguments.

@@ -82,7 +82,7 @@ final class ClaudeAPI {
         return fallbackCapableModelPrefixes.contains { lowercasedModel.hasPrefix($0) }
     }
 
-    private var isDirectToAnthropic: Bool {
+    var isDirectToAnthropic: Bool {
         apiKey != nil && (messagesEndpointURL.host?.hasSuffix("anthropic.com") ?? false)
     }
 
@@ -95,6 +95,18 @@ final class ClaudeAPI {
             "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6"
         ]
         return effortCapableModelPrefixes.contains { lowercasedModel.hasPrefix($0) }
+    }
+
+    /// The web search tool version for this model: the one that filters
+    /// results with code before reading them where the model has it, else
+    /// the basic one.
+    static func webSearchToolType(model: String) -> String {
+        let lowercasedModel = model.lowercased()
+        let dynamicFilteringModelPrefixes = [
+            "claude-opus-5", "claude-sonnet-5", "claude-fable-5", "claude-mythos-5",
+            "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6"
+        ]
+        return dynamicFilteringModelPrefixes.contains { lowercasedModel.hasPrefix($0) } ? "web_search_20260209" : "web_search_20250305"
     }
 
     /// The `anthropic-beta` header value: every beta this request needs,
@@ -224,7 +236,9 @@ final class ClaudeAPI {
             assistantContent: streamAccumulator.assistantContentBlocks,
             duration: Date().timeIntervalSince(startTime),
             stopReason: normalizedStopReason,
-            usage: usage
+            usage: usage,
+            providerWebSearchCount: streamAccumulator.providerWebSearchCount,
+            providerWebSearchResultURLs: streamAccumulator.providerWebSearchResultURLs
         )
     }
 
@@ -281,14 +295,24 @@ final class ClaudeAPI {
         }
         body["messages"] = messagesJSON
 
-        if !request.tools.isEmpty {
-            body["tools"] = request.tools.map { toolDefinition in
-                [
-                    "name": toolDefinition.name,
-                    "description": toolDefinition.description,
-                    "input_schema": toolDefinition.inputSchema,
-                ] as [String: Any]
-            }
+        var toolsJSON: [[String: Any]] = request.tools.map { toolDefinition in
+            [
+                "name": toolDefinition.name,
+                "description": toolDefinition.description,
+                "input_schema": toolDefinition.inputSchema,
+            ] as [String: Any]
+        }
+        // Claude's own web search runs on Anthropic's servers; other
+        // Anthropic-compatible endpoints may not have it.
+        if isDirectToAnthropic, let providerWebSearch = request.providerWebSearch {
+            toolsJSON.append([
+                "type": webSearchToolType(model: model),
+                "name": "web_search",
+                "max_uses": providerWebSearch.maximumSearchesPerRequest,
+            ])
+        }
+        if !toolsJSON.isEmpty {
+            body["tools"] = toolsJSON
         }
         return body
     }
@@ -406,7 +430,9 @@ struct AnthropicStreamAccumulator {
                 resetForFallback()
                 return .none
             }
-            if contentBlock["type"] as? String == "tool_use" {
+            // Its own tool calls and the searches it runs on the server both
+            // stream their input as JSON pieces.
+            if ["tool_use", "server_tool_use"].contains(contentBlock["type"] as? String) {
                 contentBlock["input"] = [String: Any]()
                 partialToolInputJSONByIndex[blockIndex] = ""
             }
@@ -430,6 +456,12 @@ struct AnthropicStreamAccumulator {
             case "thinking_delta":
                 let previousThinking = contentBlocksByIndex[blockIndex]?["thinking"] as? String ?? ""
                 contentBlocksByIndex[blockIndex]?["thinking"] = previousThinking + (delta["thinking"] as? String ?? "")
+            case "citations_delta":
+                // Where a sentence came from (a search result), kept so the
+                // turn is replayed exactly as Claude wrote it.
+                guard let citation = delta["citation"] else { return .none }
+                let previousCitations = contentBlocksByIndex[blockIndex]?["citations"] as? [Any] ?? []
+                contentBlocksByIndex[blockIndex]?["citations"] = previousCitations + [citation]
             case "signature_delta":
                 let previousSignature = contentBlocksByIndex[blockIndex]?["signature"] as? String ?? ""
                 contentBlocksByIndex[blockIndex]?["signature"] = previousSignature + (delta["signature"] as? String ?? "")
@@ -502,6 +534,24 @@ struct AnthropicStreamAccumulator {
                 toolName: toolName,
                 argumentsJSON: String(decoding: argumentsData, as: UTF8.self)
             )
+        }
+    }
+
+    /// Web searches Claude ran on Anthropic's servers this reply.
+    var providerWebSearchCount: Int {
+        contentBlockOrder.filter { blockIndex in
+            let contentBlock = contentBlocksByIndex[blockIndex]
+            return contentBlock?["type"] as? String == "server_tool_use" && contentBlock?["name"] as? String == "web_search"
+        }.count
+    }
+
+    /// The addresses those searches found (a failed search has none).
+    var providerWebSearchResultURLs: [URL] {
+        contentBlockOrder.flatMap { blockIndex -> [URL] in
+            guard let contentBlock = contentBlocksByIndex[blockIndex],
+                  contentBlock["type"] as? String == "web_search_tool_result",
+                  let searchResults = contentBlock["content"] as? [[String: Any]] else { return [] }
+            return searchResults.compactMap { searchResult in (searchResult["url"] as? String).flatMap(URL.init(string:)) }
         }
     }
 

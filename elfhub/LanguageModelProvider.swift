@@ -126,6 +126,10 @@ struct LanguageModelRequest {
     /// Optional speed/depth trade-off for models that support it (Claude's
     /// `output_config.effort`). Nil leaves the model's default.
     var reasoningEffort: LanguageModelReasoningEffort?
+    /// Lets the model search the web itself (Claude's web search tool, run
+    /// by the provider) — only asked of providers that support it. Nil: no
+    /// built-in search.
+    var providerWebSearch: LanguageModelProviderWebSearch?
 
     init(
         systemPrompt: String,
@@ -177,6 +181,12 @@ enum LanguageModelStreamEvent: Equatable {
 }
 
 /// Why the model stopped, normalized across providers.
+/// The model's own web search, for one request.
+struct LanguageModelProviderWebSearch: Equatable {
+    /// How many searches the model may run within one request.
+    var maximumSearchesPerRequest: Int
+}
+
 enum LanguageModelStopReason: Equatable {
     /// Finished its reply.
     case endOfTurn
@@ -213,6 +223,10 @@ struct LanguageModelResponse {
     /// Why the model stopped; nil when the provider didn't say.
     var stopReason: LanguageModelStopReason? = nil
     var usage: LanguageModelUsage? = nil
+    /// Searches the model ran itself (its built-in web search), and the
+    /// addresses they found.
+    var providerWebSearchCount = 0
+    var providerWebSearchResultURLs: [URL] = []
 
     /// True when the reply hit the output limit and may be cut off.
     var wasCutOffByOutputLimit: Bool { stopReason == .outputTokenLimit }
@@ -232,9 +246,14 @@ protocol LanguageModelProvider {
         _ request: LanguageModelRequest,
         onStreamEvent: @MainActor @Sendable (LanguageModelStreamEvent) -> Void
     ) async throws -> LanguageModelResponse
+
+    /// Whether the model can search the web itself when a request asks
+    /// (`LanguageModelRequest.providerWebSearch`).
+    var supportsProviderWebSearch: Bool { get }
 }
 
 extension LanguageModelProvider {
+    var supportsProviderWebSearch: Bool { false }
     var supportsVision: Bool { capabilities.supportsVision }
 }
 
