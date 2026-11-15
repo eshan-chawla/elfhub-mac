@@ -181,10 +181,14 @@ enum CompanionScreenCaptureUtility {
         // their contents never leave the machine.
         let ownBundleIdentifier = Bundle.main.bundleIdentifier
         let screenCapturePrivacyBlocklist = ScreenCapturePrivacyBlocklist.shared
+        // A browser in front showing a private website (a bank, a patient
+        // portal) is left out too.
+        let privateBrowserBundleIdentifier = await PrivateWebsiteList.frontmostBrowserShowingPrivateWebsite()
         let excludedWindows = content.windows.filter { window in
             let owningBundleIdentifier = window.owningApplication?.bundleIdentifier
             return owningBundleIdentifier == ownBundleIdentifier
                 || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: owningBundleIdentifier)
+                || (privateBrowserBundleIdentifier != nil && owningBundleIdentifier == privateBrowserBundleIdentifier)
         }
 
         // Build a lookup from display ID to NSScreen so we can use AppKit-coordinate
@@ -245,7 +249,9 @@ enum CompanionScreenCaptureUtility {
 
         return CompanionScreenCapture(
             imageData: jpegData,
-            label: "user's screen (the one their mouse is on)",
+            label: privateBrowserBundleIdentifier == nil
+                ? "user's screen (the one their mouse is on)"
+                : "user's screen (the one their mouse is on; the browser is left out because it's showing a private website, like a bank or a patient portal)",
             isCursorScreen: true,
             displayWidthInPoints: Int(displayFrame.width),
             displayHeightInPoints: Int(displayFrame.height),
@@ -271,10 +277,12 @@ enum CompanionScreenCaptureUtility {
         }
         let ownBundleIdentifier = Bundle.main.bundleIdentifier
         let screenCapturePrivacyBlocklist = ScreenCapturePrivacyBlocklist.shared
+        let privateBrowserBundleIdentifier = await PrivateWebsiteList.frontmostBrowserShowingPrivateWebsite()
         let excludedWindows = content.windows.filter { window in
             let owningBundleIdentifier = window.owningApplication?.bundleIdentifier
             return owningBundleIdentifier == ownBundleIdentifier
                 || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: owningBundleIdentifier)
+                || (privateBrowserBundleIdentifier != nil && owningBundleIdentifier == privateBrowserBundleIdentifier)
         }
         let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
 

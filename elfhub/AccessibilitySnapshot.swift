@@ -63,6 +63,10 @@ enum AccessibilitySnapshotter {
               !ScreenCapturePrivacyBlocklist.shared.isBlocked(bundleIdentifier: frontmostApplication.bundleIdentifier) else { return nil }
         let processIdentifier = frontmostApplication.processIdentifier
         let applicationName = frontmostApplication.localizedName
+        // A private website's page is never read.
+        if await PrivateWebsiteList.frontmostBrowserShowingPrivateWebsite() != nil {
+            return nil
+        }
         return await Task.detached(priority: .userInitiated) {
             snapshotSynchronously(processIdentifier: processIdentifier, applicationName: applicationName)
         }.value

@@ -99,6 +99,8 @@ struct SettingsCategoryPage: View {
                     .mainAppCard()
                 ScreenCaptureBlocklistEditor(screenCapturePrivacyBlocklist: ScreenCapturePrivacyBlocklist.shared)
                     .mainAppCard()
+                PrivateWebsiteListEditor(privateWebsiteList: PrivateWebsiteList.shared)
+                    .mainAppCard()
                 ComputerUseAuditLogSettingsSection(computerUseAuditLog: ComputerUseAuditLog.shared)
                     .mainAppCard()
                 ElvesReachSettingsSection()

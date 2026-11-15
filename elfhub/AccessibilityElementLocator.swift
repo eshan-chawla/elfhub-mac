@@ -165,6 +165,43 @@ enum AccessibilityElementLocator {
         return browserBundleIdentifierPrefixes.contains { loweredBundleIdentifier.hasPrefix($0) }
     }
 
+    /// The host of the page shown in an app's focused window (its first web
+    /// area, looked for breadth-first), or nil. Bounded so a huge page
+    /// costs at most about 0.15 s.
+    static func frontmostWindowPageHost(processIdentifier: pid_t) async -> String? {
+        await Task.detached(priority: .userInitiated) {
+            frontmostWindowPageHostSynchronously(processIdentifier: processIdentifier)
+        }.value
+    }
+
+    nonisolated private static func frontmostWindowPageHostSynchronously(processIdentifier: pid_t) -> String? {
+        guard AXIsProcessTrusted() else { return nil }
+        let applicationElement = AXUIElementCreateApplication(processIdentifier)
+        AXUIElementSetMessagingTimeout(applicationElement, messagingTimeoutInSeconds)
+        var windowValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(applicationElement, kAXFocusedWindowAttribute as CFString, &windowValue) == .success,
+              let windowValue, CFGetTypeID(windowValue) == AXUIElementGetTypeID() else { return nil }
+
+        let deadline = Date().addingTimeInterval(0.15)
+        var elementsToVisit: [(element: AXUIElement, depth: Int)] = [(windowValue as! AXUIElement, 0)]
+        var visitedElementCount = 0
+        while !elementsToVisit.isEmpty, visitedElementCount < 400, Date() < deadline {
+            let (element, depth) = elementsToVisit.removeFirst()
+            visitedElementCount += 1
+            AXUIElementSetMessagingTimeout(element, messagingTimeoutInSeconds)
+            if stringAttribute(kAXRoleAttribute, of: element) == "AXWebArea" {
+                return webPageHost(ofWebArea: element)
+            }
+            guard depth < 14 else { continue }
+            var childrenValue: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenValue) == .success,
+               let children = childrenValue as? [AXUIElement] {
+                elementsToVisit += children.map { ($0, depth + 1) }
+            }
+        }
+        return nil
+    }
+
     /// The AXWebArea the element is inside (itself included), if any.
     nonisolated private static func enclosingWebAreaElement(of element: AXUIElement) -> AXUIElement? {
         var currentElement = element

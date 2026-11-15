@@ -67,6 +67,8 @@ struct ScreenActionConsentContext {
     /// For a drag: the element it would drop onto (the Trash makes a drag a
     /// delete), when known.
     var dragDropTargetElementFacts: AccessibilityElementFacts? = nil
+    /// True when the target is on a private website (PrivateWebsiteList).
+    var isTargetWebsitePrivate: Bool = false
 }
 
 enum ConsentPolicy {
@@ -137,6 +139,9 @@ enum ConsentPolicy {
     static func evaluate(_ context: ScreenActionConsentContext) -> ScreenActionConsentDecision {
         if context.isTargetApplicationPrivacyBlocked {
             return .usersStep(reason: "that's in an app i keep private, so you'll need to do that part yourself.")
+        }
+        if context.isTargetWebsitePrivate {
+            return .usersStep(reason: "that's a website i keep private, like a bank or a patient portal, so you'll need to do that part yourself.")
         }
         if context.targetElementFacts?.isSecureTextField == true {
             return .usersStep(reason: "that's a password field, so please fill it in yourself.")

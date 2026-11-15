@@ -999,7 +999,9 @@ final class ScreenActionCoordinator: ObservableObject {
             isTargetApplicationPrivacyBlocked: isTargetApplicationPrivacyBlocked,
             userUtterance: userUtterance,
             isSecureEventInputActive: IsSecureEventInputEnabled(),
-            dragDropTargetElementFacts: dragDropTargetElementFacts
+            dragDropTargetElementFacts: dragDropTargetElementFacts,
+            isTargetWebsitePrivate: PrivateWebsiteList.shared.isPrivate(host: targetElementFacts?.webPageHost)
+                || PrivateWebsiteList.shared.isPrivate(host: dragDropTargetElementFacts?.webPageHost)
         )
 
         return ResolvedScreenAction(
