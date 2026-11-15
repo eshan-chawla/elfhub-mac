@@ -885,7 +885,8 @@ final class CompanionManager: ObservableObject {
                 )
             ),
             usesAnthropicComputerToolset: usesAnthropicComputerToolset,
-            extraToolDefinitions: usesAnthropicComputerToolset ? [] : [GuidanceToolDefinitions.computerUseStepToolDefinition],
+            extraToolDefinitions: (usesAnthropicComputerToolset ? [] : [GuidanceToolDefinitions.computerUseStepToolDefinition])
+                + [GuidanceToolDefinitions.openAppOrWebsiteToolDefinition],
             systemPromptAddition: "coordinates:\n" + coordinateConvention.systemPromptCoordinateDescription
                 + "\n\n" + CompanionPromptBuilder.stepByStepActionInstructions,
             firstInterfaceDescription: await ComputerUseLiveScreen.interfaceDescription(on: screenCapture, convention: coordinateConvention),

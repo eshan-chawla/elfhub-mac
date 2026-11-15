@@ -206,7 +206,7 @@ enum ConsentPolicy {
         case .drag:
             return sensitiveEffect(forTargetText: context.dragDropTargetElementFacts?.title)
                 ?? sensitiveEffect(forTargetText: context.targetElementFacts?.title)
-        case .scroll, .moveMouse:
+        case .scroll, .moveMouse, .openApplication, .openWebsite:
             return nil
         }
     }

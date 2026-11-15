@@ -44,7 +44,9 @@ enum ComputerUseToolCallTranslator {
     /// Whether this call is a step on the screen (rather than pointing, a
     /// note, or an elf's own tool).
     static func isComputerUseCall(_ toolCall: LanguageModelToolCall) -> Bool {
-        toolCall.toolsetName == claudeComputerToolsetName || toolCall.toolName == GuidanceToolDefinitions.screenActionToolName
+        toolCall.toolsetName == claudeComputerToolsetName
+            || toolCall.toolName == GuidanceToolDefinitions.screenActionToolName
+            || toolCall.toolName == GuidanceToolDefinitions.openAppOrWebsiteToolName
     }
 
     static func command(
@@ -56,6 +58,9 @@ enum ComputerUseToolCallTranslator {
         let stepReader = StepArgumentReader(arguments: arguments, convention: convention, sentImageSize: sentImageSize)
         if toolCall.toolsetName == claudeComputerToolsetName {
             return claudeToolsetCommand(memberName: toolCall.toolName, stepReader: stepReader)
+        }
+        if toolCall.toolName == GuidanceToolDefinitions.openAppOrWebsiteToolName {
+            return openCommand(applicationName: stepReader.string(named: "app"), websiteAddress: stepReader.string(named: "website"))
         }
         return functionToolCommand(stepReader: stepReader)
     }
@@ -195,6 +200,24 @@ enum ComputerUseToolCallTranslator {
             .scroll(screenshotPixel: targetPoint, direction: direction, screenNumber: nil, amountInTenthsOfScreen: scrollAmount),
             repeatCount: 1
         )
+    }
+
+    /// Opening an app or a website: one of the two; websites over http(s) only.
+    private static func openCommand(applicationName: String?, websiteAddress: String?) -> ComputerUseStepCommand {
+        switch (applicationName, websiteAddress) {
+        case let (applicationName?, nil):
+            return .act(.openApplication(name: applicationName), repeatCount: 1)
+        case let (nil, websiteAddress?):
+            let addressWithScheme = websiteAddress.contains("://") ? websiteAddress : "https://" + websiteAddress
+            guard let websiteURL = URL(string: addressWithScheme),
+                  ["http", "https"].contains(websiteURL.scheme?.lowercased()),
+                  websiteURL.host?.isEmpty == false else {
+                return .refuse(reason: "website must be an http or https address, like https://example.com.")
+            }
+            return .act(.openWebsite(url: websiteURL), repeatCount: 1)
+        default:
+            return .refuse(reason: "give either app (its name) or website (an https address), not both.")
+        }
     }
 
     private static func keyCommand(comboString: String?, repeatCount: Int) -> ComputerUseStepCommand {

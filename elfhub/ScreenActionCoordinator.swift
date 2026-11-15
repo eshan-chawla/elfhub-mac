@@ -130,6 +130,9 @@ struct ResolvedScreenAction {
     var coreGraphicsDragEndPoint: CGPoint? = nil
     /// What a drag would drop onto, when known.
     var dragDropTargetElementFacts: AccessibilityElementFacts? = nil
+    /// The app an open step brings up (the app itself, or the browser a
+    /// website opens in) — that's the app the step works in.
+    var openedApplicationBundleIdentifier: String? = nil
 
     /// Plain-English description for the consent card and narration. Prefers
     /// the real element's title over the model's label.
@@ -702,6 +705,10 @@ final class ScreenActionCoordinator: ObservableObject {
         case .moveMouse:
             guard let coreGraphicsTargetPoint = resolvedAction.coreGraphicsTargetPoint else { return false }
             ScreenActionSynthesizer.movePointer(to: coreGraphicsTargetPoint)
+        case let .openApplication(name):
+            return await ApplicationLocator.openApplication(named: name)
+        case let .openWebsite(url):
+            return await ApplicationLocator.openWebsite(url)
         }
         return true
     }
@@ -804,7 +811,8 @@ final class ScreenActionCoordinator: ObservableObject {
             return .handedToUser(reason: reason)
         }
 
-        let targetApplicationBundleIdentifier = resolvedAction.targetElementFacts?.owningApplicationBundleIdentifier
+        let targetApplicationBundleIdentifier = resolvedAction.openedApplicationBundleIdentifier
+            ?? resolvedAction.targetElementFacts?.owningApplicationBundleIdentifier
             ?? resolvedAction.frontmostApplicationBundleIdentifier
         // A drag into another app (onto the Dock's Trash, say) leaves too.
         let dropApplicationBundleIdentifier = resolvedAction.dragDropTargetElementFacts?.owningApplicationBundleIdentifier
@@ -991,10 +999,24 @@ final class ScreenActionCoordinator: ObservableObject {
             targetElementFacts = await AccessibilityElementLocator.focusedElementFacts()
         }
 
+        // Opening an app or a website works in that app (or the browser).
+        var openedApplicationBundleIdentifier: String?
+        var openedWebsiteHost: String?
+        switch action {
+        case let .openApplication(name):
+            openedApplicationBundleIdentifier = ApplicationLocator.bundleIdentifier(ofApplicationNamed: name)
+        case let .openWebsite(url):
+            openedApplicationBundleIdentifier = ApplicationLocator.defaultBrowserBundleIdentifier(for: url)
+            openedWebsiteHost = url.host
+        default:
+            break
+        }
+
         let screenCapturePrivacyBlocklist = ScreenCapturePrivacyBlocklist.shared
         let isTargetApplicationPrivacyBlocked =
             screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: targetElementFacts?.owningApplicationBundleIdentifier)
             || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: frontmostApplicationBundleIdentifier)
+            || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: openedApplicationBundleIdentifier)
 
         let consentContext = ScreenActionConsentContext(
             action: action,
@@ -1006,6 +1028,7 @@ final class ScreenActionCoordinator: ObservableObject {
             dragDropTargetElementFacts: dragDropTargetElementFacts,
             isTargetWebsitePrivate: PrivateWebsiteList.shared.isPrivate(host: targetElementFacts?.webPageHost)
                 || PrivateWebsiteList.shared.isPrivate(host: dragDropTargetElementFacts?.webPageHost)
+                || PrivateWebsiteList.shared.isPrivate(host: openedWebsiteHost)
         )
 
         return ResolvedScreenAction(
@@ -1018,14 +1041,15 @@ final class ScreenActionCoordinator: ObservableObject {
             consentDecision: ConsentPolicy.evaluate(consentContext),
             consequentialEffect: ConsentPolicy.consequentialEffect(of: consentContext),
             coreGraphicsDragEndPoint: coreGraphicsDragEndPoint,
-            dragDropTargetElementFacts: dragDropTargetElementFacts
+            dragDropTargetElementFacts: dragDropTargetElementFacts,
+            openedApplicationBundleIdentifier: openedApplicationBundleIdentifier
         )
     }
 
     private static func isKeystrokeAction(_ action: CompanionScreenAction) -> Bool {
         switch action {
         case .type, .key: return true
-        case .click, .doubleClick, .scroll, .rightClick, .tripleClick, .drag, .moveMouse: return false
+        case .click, .doubleClick, .scroll, .rightClick, .tripleClick, .drag, .moveMouse, .openApplication, .openWebsite: return false
         }
     }
 
@@ -1041,7 +1065,7 @@ final class ScreenActionCoordinator: ObservableObject {
         // A drag is judged by where it starts: that's what it picks up.
         case let .drag(fromScreenshotPixel, _, screenNumber):
             return (fromScreenshotPixel, screenNumber)
-        case .type, .key:
+        case .type, .key, .openApplication, .openWebsite:
             return nil
         }
     }
@@ -1107,7 +1131,7 @@ final class ScreenActionCoordinator: ObservableObject {
             return "drag from here"
         case .moveMouse:
             return "pointer"
-        case .type, .key:
+        case .type, .key, .openApplication, .openWebsite:
             return nil
         }
     }

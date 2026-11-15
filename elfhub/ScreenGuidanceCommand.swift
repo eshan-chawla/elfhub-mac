@@ -138,7 +138,7 @@ enum ScreenGuidanceCoordinateNormalizer {
                 ))
             case let .moveMouse(modelPoint, screenNumber):
                 return .act(.moveMouse(screenshotPixel: convertPoint(modelPoint, screenNumber: screenNumber), screenNumber: screenNumber))
-            case .type, .key:
+            case .type, .key, .openApplication, .openWebsite:
                 return command
             }
         }

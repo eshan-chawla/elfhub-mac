@@ -87,6 +87,8 @@ extension ComputerUseAuditEntry {
         case .tripleClick: return "triple_click"
         case .drag: return "drag"
         case .moveMouse: return "move_mouse"
+        case .openApplication: return "open_app"
+        case .openWebsite: return "open_website"
         }
     }
 

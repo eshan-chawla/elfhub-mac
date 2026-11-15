@@ -110,6 +110,8 @@ struct ComputerUseLoopGuard {
         case let .tripleClick(screenshotPixel, _, _): return "triple@" + gridCell(screenshotPixel)
         case let .drag(startPixel, endPixel, _): return "drag@" + gridCell(startPixel) + ">" + gridCell(endPixel)
         case let .type(text): return "type:" + text
+        case let .openApplication(name): return "open:" + name.lowercased()
+        case let .openWebsite(url): return "open:" + url.absoluteString
         case .scroll, .key, .moveMouse: return nil
         }
     }

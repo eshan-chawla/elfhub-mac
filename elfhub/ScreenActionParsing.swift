@@ -42,6 +42,9 @@ enum CompanionScreenAction: Equatable {
     case drag(fromScreenshotPixel: CGPoint, toScreenshotPixel: CGPoint, screenNumber: Int?)
     /// Move the pointer without clicking (to show a hover menu).
     case moveMouse(screenshotPixel: CGPoint, screenNumber: Int?)
+    /// Open an app by name, or a web address in the user's browser.
+    case openApplication(name: String)
+    case openWebsite(url: URL)
 
     /// Half a screen, when no amount is given (the [SCROLL] tag).
     static let defaultScrollAmountInTenthsOfScreen = 5
@@ -68,6 +71,10 @@ enum CompanionScreenAction: Equatable {
             return "drag from here to there"
         case .moveMouse:
             return "move the pointer here"
+        case let .openApplication(name):
+            return "open \(name)"
+        case let .openWebsite(url):
+            return "open \(url.host ?? url.absoluteString)"
         }
     }
 }
