@@ -25,13 +25,14 @@ enum LanguageModelTurnRouting {
     static func activeConfiguration(
         mainActiveConfiguration: ProviderConfiguration?,
         elfPreferredConfiguration: ProviderConfiguration?,
-        isElfPreferredConfigurationReady: Bool
+        isElfPreferredConfigurationReady: Bool,
+        hasReadyFallbackForChatGPTPlan: Bool = false
     ) -> ProviderConfiguration? {
         guard let elfPreferredConfiguration else { return mainActiveConfiguration }
         // An elf on the ChatGPT plan stays on it even when it can't be used
-        // right now: the plan's own fallback (the user's choice) answers then,
-        // not the main elf's model.
-        if elfPreferredConfiguration.kind == .chatGPTPlan { return elfPreferredConfiguration }
+        // right now, when there's a fallback for it: the user's chosen
+        // fallback answers then, not the main elf's model.
+        if elfPreferredConfiguration.kind == .chatGPTPlan, hasReadyFallbackForChatGPTPlan { return elfPreferredConfiguration }
         guard isElfPreferredConfigurationReady else { return mainActiveConfiguration }
         return elfPreferredConfiguration
     }

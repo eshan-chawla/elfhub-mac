@@ -542,12 +542,13 @@ struct AnthropicStreamAccumulator {
                 ? [String: Any]()
                 : (try? JSONSerialization.jsonObject(with: Data(partialToolInputJSON.utf8)) as? [String: Any]) ?? [:]
             contentBlocksByIndex[blockIndex]?["input"] = parsedToolInput
-            // Screen steps are announced right away so they can start while
-            // the rest of the reply arrives. (Only the computer toolset's:
-            // a run never has a server-side fallback that could restart the
-            // reply on another model.)
-            if contentBlocksByIndex[blockIndex]?["toolset_name"] as? String == "computer",
-               let completedToolCall = toolCall(atBlockIndex: blockIndex) {
+            // Every complete call is announced, in order, so screen steps can
+            // start while the rest of the reply arrives (the agent loop starts
+            // only those, and only in a run, which never has a server-side
+            // fallback that could restart the reply on another model). All of
+            // them, not just the toolset's: an open step written before a
+            // click must still run first.
+            if let completedToolCall = toolCall(atBlockIndex: blockIndex) {
                 return .toolCallCompleted(completedToolCall)
             }
             return .none

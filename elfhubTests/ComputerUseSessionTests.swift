@@ -81,7 +81,14 @@ final class FakeComputerUseScreen: ComputerUseScreen {
 
     func pointerLocationInScreenshotPixels(on capture: CompanionScreenCapture) -> CGPoint? { CGPoint(x: 12, y: 34) }
 
-    func wait(seconds: Double) async throws { waitedSeconds.append(seconds) }
+    /// Waits really take time (to stop a run in the middle of one).
+    var waitTakesRealTime = false
+    func wait(seconds: Double) async throws {
+        waitedSeconds.append(seconds)
+        if waitTakesRealTime {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        }
+    }
 
     /// Whether the target's part of the screen changed since the
     /// screenshot the model saw.
@@ -394,6 +401,38 @@ struct ComputerUseSessionTests {
         }
         #expect(secondRequestResults == ["a", "b"])
         #expect(loopResult.replyText == "done.")
+    }
+
+    @Test func stoppingTheTurnStopsStepsThatStartedWhileTheReplyArrived() async throws {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([
+                toolsetCall("a", "wait", #"{"duration":1}"#),
+                toolsetCall("b", "left_click", #"{"coordinate":[100,200]}"#),
+            ]),
+        ])
+        languageModelProvider.announcesComputerCallsWhileStreaming = true
+        screen.waitTakesRealTime = true
+        let loopTask = Task { @MainActor in
+            try await ElfAgentLoop.run(
+                initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "wait then click"),
+                languageModelProvider: languageModelProvider,
+                toolRegistry: ElfToolRegistry(tools: []),
+                toolContext: nil,
+                guidanceToolNames: GuidanceToolDefinitions.toolNames,
+                maximumRounds: 3 + ComputerUseLoopGuard.maximumSteps,
+                computerUseExecutor: session,
+                onReplyTextDelta: { _ in },
+                onModelRoundEnded: {}
+            )
+        }
+        // Stop while the first step (the wait) is still going, after the reply ended.
+        try await Task.sleep(nanoseconds: 300_000_000)
+        loopTask.cancel()
+        _ = try? await loopTask.value
+        try await Task.sleep(nanoseconds: 1_200_000_000)
+        #expect(screen.performedActions.isEmpty)
     }
 
     @Test func theAgentLoopStopsWithoutAskingTheModelAgainWhenTheUserStops() async throws {

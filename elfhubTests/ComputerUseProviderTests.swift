@@ -115,10 +115,14 @@ struct ComputerUseProviderTests {
         #expect(toolCall.toolName == "left_click")
         #expect(toolCall.argumentsDictionary["coordinate"] as? [Int] == [5, 6])
 
-        // An ordinary tool's call waits for the whole reply.
+        // Every call is announced in order (an open step before a click
+        // must run first); the agent loop starts only the screen ones early.
         var plainAccumulator = AnthropicStreamAccumulator()
-        _ = plainAccumulator.consume(sseLine: #"data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"read_file","input":{}}}"#)
-        #expect(plainAccumulator.consume(sseLine: #"data: {"type":"content_block_stop","index":0}"#) == .none)
+        _ = plainAccumulator.consume(sseLine: #"data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"open_app_or_website","input":{}}}"#)
+        guard case .toolCallCompleted = plainAccumulator.consume(sseLine: #"data: {"type":"content_block_stop","index":0}"#) else {
+            Issue.record("expected every completed call to be announced")
+            return
+        }
     }
 
     // MARK: - Other providers

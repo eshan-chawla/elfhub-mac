@@ -32,7 +32,8 @@ enum SensitiveIdentifierDetector {
     nonisolated private static let ontarioHealthCardPattern = #"\b\d{4}[ -]?\d{3}[ -]?\d{3}[ -]?[A-Z]{2}\b"#
     /// A health or patient label, then its value: number-like tokens (each
     /// starting with a digit, the first optionally with one letter).
-    nonisolated private static let labeledIdentifierPattern = #"(?i)\b(?:MRN|PHN|SSN|SIN|social (?:security|insurance)(?: number| no\.?)?|health ?card(?: number| no\.?)?|health number|patient ?(?:id|number|no\.?)|medical record(?: number| no\.?)?|member ?id|date of birth|DOB|birth ?date)\b\s*[:#]?\s*#?\s*((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? \d{1,2},? \d{4}|[A-Z]?\d[\dA-Z]*(?:[ /.\-]\d[\dA-Z]*)*)"#
+    /// "SSN" and "SIN" only in capitals ("sin" is Spanish, and sine).
+    nonisolated private static let labeledIdentifierPattern = #"(?:\b(?:SSN|SIN)\b|(?i:\b(?:MRN|PHN|social (?:security|insurance)(?: number| no\.?)?|health ?card(?: number| no\.?)?|health number|patient ?(?:id|number|no\.?)|medical record(?: number| no\.?)?|member ?id|date of birth|DOB|birth ?date)\b))\s*[:#]?\s*#?\s*((?i:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\.? \d{1,2},? \d{4}|[A-Za-z]?\d[\dA-Za-z]*(?:[ /.\-]\d[\dA-Za-z]*)*)"#
 
     /// The parts of `text` to black out, in order, never overlapping.
     nonisolated static func sensitiveRanges(in text: String) -> [Range<String.Index>] {
@@ -41,7 +42,9 @@ enum SensitiveIdentifierDetector {
         foundRanges += matches(of: socialSecurityNumberPattern, in: text)
         foundRanges += matches(of: socialInsuranceNumberPattern, in: text).filter { passesLuhnCheck(String(text[$0])) }
         foundRanges += matches(of: ontarioHealthCardPattern, in: text)
-        foundRanges += matches(of: ontarioHealthNumberWithoutVersionPattern, in: text)
+        // Ontario health numbers carry the same checksum as cards, which
+        // phone numbers grouped the same way (Australia's 04xx xxx xxx) fail.
+        foundRanges += matches(of: ontarioHealthNumberWithoutVersionPattern, in: text).filter { passesLuhnCheck(String(text[$0])) }
         foundRanges += matches(of: labeledIdentifierPattern, in: text, captureGroup: 1)
         return mergedRanges(foundRanges)
     }

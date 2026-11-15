@@ -72,9 +72,12 @@ struct BacklogFixesTests {
         let forgotten = ElfTaskScheduler.finishedTasksToForget(among: [recentTask, oldTask, oldUnreportedTask, oldWaitingTask], now: now)
         #expect(forgotten.map(\.id) == [oldTask.id])
 
-        // Beyond the newest 50 finished tasks of an elf, the oldest go too.
+        // Beyond the newest 50 finished tasks of an elf, the oldest go too —
+        // only once the user has been told about them.
         let manyRecentTasks = (0..<55).map { finishedTask(daysAgo: Double($0) / 10) }
         #expect(ElfTaskScheduler.finishedTasksToForget(among: manyRecentTasks, now: now).count == 5)
+        let manyUnreportedTasks = (0..<55).map { finishedTask(daysAgo: Double($0) / 10, reported: false) }
+        #expect(ElfTaskScheduler.finishedTasksToForget(among: manyUnreportedTasks, now: now).isEmpty)
     }
 
     // MARK: - Consent
@@ -110,9 +113,12 @@ struct BacklogFixesTests {
         #expect(hiddenParts("Social insurance number: 046454286") == ["046454286"])
         #expect(hiddenParts("patient id a12-4471") == ["a12-4471"])
         #expect(hiddenParts("DOB: Jan 5, 1980") == ["Jan 5, 1980"])
-        #expect(hiddenParts("Health card 1234-567-890") == ["1234-567-890"])
-        // Still left alone.
+        #expect(hiddenParts("Health card 1234-567-897") == ["1234-567-897"])
+        // Still left alone: phone numbers here and in Australia, "sin" in
+        // Spanish and in maths.
         #expect(hiddenParts("Call 416-555-0199 about order 123456789").isEmpty)
+        #expect(hiddenParts("Call 0412 345 678 or 1800 123 456").isEmpty)
+        #expect(hiddenParts("café sin 300 gramos de azúcar, sin 30 = 0.5").isEmpty)
     }
 }
 
@@ -125,10 +131,19 @@ struct BacklogFixesSecondBatchTests {
         let elfActiveConfiguration = LanguageModelTurnRouting.activeConfiguration(
             mainActiveConfiguration: mainConfiguration,
             elfPreferredConfiguration: chatGPTPlanConfiguration,
-            isElfPreferredConfigurationReady: false
+            isElfPreferredConfigurationReady: false,
+            hasReadyFallbackForChatGPTPlan: true
         )
         // The plan stays the elf's model, so the plan's fallback rules apply.
         #expect(elfActiveConfiguration?.id == chatGPTPlanConfiguration.id)
+        // With no fallback to go to, the main elf's model answers instead of failing.
+        let withoutFallback = LanguageModelTurnRouting.activeConfiguration(
+            mainActiveConfiguration: mainConfiguration,
+            elfPreferredConfiguration: chatGPTPlanConfiguration,
+            isElfPreferredConfigurationReady: false,
+            hasReadyFallbackForChatGPTPlan: false
+        )
+        #expect(withoutFallback?.id == mainConfiguration.id)
     }
 
     @Test func aVoiceRemovedFromTheMacFallsBackToMainsVoice() {

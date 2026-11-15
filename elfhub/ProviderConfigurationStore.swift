@@ -168,12 +168,13 @@ final class ProviderConfigurationStore: ObservableObject {
         let elfPreferredConfiguration = preferredConfigurationIdentifier.flatMap { preferredIdentifier in
             configurations.first { $0.id == preferredIdentifier }
         }
+        let fallbackConfiguration = fallbackConfiguration
         let elfActiveConfiguration = LanguageModelTurnRouting.activeConfiguration(
             mainActiveConfiguration: activeConfiguration,
             elfPreferredConfiguration: elfPreferredConfiguration,
-            isElfPreferredConfigurationReady: elfPreferredConfiguration.map(isReady) ?? false
+            isElfPreferredConfigurationReady: elfPreferredConfiguration.map(isReady) ?? false,
+            hasReadyFallbackForChatGPTPlan: fallbackConfiguration.map { $0.kind != .chatGPTPlan && isReady($0) } ?? false
         )
-        let fallbackConfiguration = fallbackConfiguration
         return LanguageModelTurnRouting.configurationForNextTurn(
             activeConfiguration: elfActiveConfiguration,
             fallbackConfiguration: fallbackConfiguration,

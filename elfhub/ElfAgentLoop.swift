@@ -137,11 +137,17 @@ enum ElfAgentLoop {
             let finalRoundInstruction = isComputerUseSummaryRound
                 ? ComputerUseSession.runEndedInstruction
                 : (isLastAllowedRound ? answerNowInstruction : nil)
-            if let finalRoundInstruction, let lastMessage = roundMessages.last, lastMessage.role == .user {
-                roundMessages[roundMessages.count - 1] = LanguageModelMessage(
-                    role: .user,
-                    content: lastMessage.content + [.text(finalRoundInstruction)]
-                )
+            if let finalRoundInstruction, let lastMessage = roundMessages.last {
+                if lastMessage.role == .user {
+                    roundMessages[roundMessages.count - 1] = LanguageModelMessage(
+                        role: .user,
+                        content: lastMessage.content + [.text(finalRoundInstruction)]
+                    )
+                } else {
+                    // After a turn the server paused, the last message is the
+                    // assistant's: the instruction comes as its own message.
+                    roundMessages.append(LanguageModelMessage(role: .user, content: [.text(finalRoundInstruction)]))
+                }
             }
             var roundRequest = LanguageModelRequest(
                 systemPrompt: initialRequest.systemPrompt,
@@ -174,19 +180,27 @@ enum ElfAgentLoop {
                         }
                     }
                 } onCancel: {
-                    Task { @MainActor in streamedRound.cancel() }
+                    streamedRound.cancelFromAnyThread()
                 }
             } catch {
                 // Esc or a failed reply: steps already started stop before
                 // their next event, and nothing more starts.
-                streamedRound.cancel()
-                await streamedRound.waitUntilStartedStepsAreDone()
+                await streamedRound.stopStartedSteps()
                 throw error
             }
-            try Task.checkCancellation()
+            // From here on, any way out of the round first stops the steps
+            // that started while the reply arrived (they run in their own
+            // tasks, which the turn's cancellation doesn't reach by itself).
+            if Task.isCancelled {
+                await streamedRound.stopStartedSteps()
+                throw CancellationError()
+            }
             roundsUsed = roundNumber
             outputTokensUsed += roundResponse.usage?.outputTokens ?? 0
-            if let budget, outputTokensUsed > budget.maximumOutputTokens { throw ElfAgentLoopError.budgetExceeded }
+            if let budget, outputTokensUsed > budget.maximumOutputTokens {
+                await streamedRound.stopStartedSteps()
+                throw ElfAgentLoopError.budgetExceeded
+            }
             onModelRoundEnded()
 
             // A search the model ran itself is using the web: its results
@@ -243,11 +257,19 @@ enum ElfAgentLoop {
                     ))
                     continue
                 }
-                try Task.checkCancellation()
+                if Task.isCancelled {
+                    await streamedRound.stopStartedSteps()
+                    throw CancellationError()
+                }
                 let toolOutcome: ElfToolOutcome
                 let calledTool = toolRegistry.tool(named: toolCall.toolName)
                 if let calledTool, let toolContext {
-                    toolOutcome = try await calledTool.run(argumentsJSON: toolCall.argumentsJSON, context: toolContext)
+                    do {
+                        toolOutcome = try await calledTool.run(argumentsJSON: toolCall.argumentsJSON, context: toolContext)
+                    } catch {
+                        await streamedRound.stopStartedSteps()
+                        throw error
+                    }
                 } else {
                     toolOutcome = .failure("there's no tool called \(toolCall.toolName).")
                 }
@@ -270,13 +292,22 @@ enum ElfAgentLoop {
                 roundReplyTexts.append(skippedFinalStepsNote)
             }
             if let computerUseExecutor, !computerUseToolCalls.isEmpty, !isFinalRound {
-                try Task.checkCancellation()
+                if Task.isCancelled {
+                    await streamedRound.stopStartedSteps()
+                    throw CancellationError()
+                }
                 let wasAlreadyOver = computerUseExecutor.hasEnded
                 let computerUseStepResult: ComputerUseStepResult
                 if streamedRound.hasBegun {
                     // Some steps already ran as the reply arrived: let them
                     // finish, run any not announced, then end the round.
-                    await streamedRound.waitUntilStartedStepsAreDone()
+                    // Stopping the turn (Esc, a task's Stop) while waiting
+                    // stops these steps too.
+                    await withTaskCancellationHandler {
+                        await streamedRound.waitUntilStartedStepsAreDone()
+                    } onCancel: {
+                        streamedRound.cancelFromAnyThread()
+                    }
                     for toolCall in computerUseToolCalls where !streamedRound.startedCallIdentifiers.contains(toolCall.toolCallIdentifier) {
                         await computerUseExecutor.runCallInCurrentRound(toolCall)
                     }
@@ -328,36 +359,74 @@ enum ElfAgentLoop {
 
 /// Screen steps of one round started while the model's reply is still
 /// arriving: each runs after the one before it (the round's order and its
-/// stop-at-the-first-failure rule hold), and all of them can be stopped.
+/// stop-at-the-first-failure rule hold), and all of them can be stopped —
+/// from any thread, since a task's cancellation handler isn't on the main
+/// actor.
 @MainActor
 final class StreamedComputerUseRound {
     private(set) var hasBegun = false
     private(set) var startedCallIdentifiers: [String] = []
-    private var stepTasks: [Task<Void, Never>] = []
-    private var isCancelled = false
+    nonisolated private let stepTaskList = CancellableStepTaskList()
 
     func start(_ toolCall: LanguageModelToolCall, on computerUseExecutor: ComputerUseStepExecutor) {
-        guard !isCancelled else { return }
+        guard !stepTaskList.isCancelled else { return }
         if !hasBegun {
             computerUseExecutor.beginRound()
             hasBegun = true
         }
         startedCallIdentifiers.append(toolCall.toolCallIdentifier)
-        let stepBeforeThisOne = stepTasks.last
-        stepTasks.append(Task { @MainActor in
+        let stepBeforeThisOne = stepTaskList.lastTask
+        stepTaskList.append(Task { @MainActor in
             await stepBeforeThisOne?.value
             await computerUseExecutor.runCallInCurrentRound(toolCall)
         })
     }
 
-    func cancel() {
-        isCancelled = true
-        for stepTask in stepTasks {
-            stepTask.cancel()
-        }
+    nonisolated func cancelFromAnyThread() {
+        stepTaskList.cancelAll()
+    }
+
+    /// Stops the started steps before their next event and waits for them.
+    func stopStartedSteps() async {
+        stepTaskList.cancelAll()
+        await waitUntilStartedStepsAreDone()
     }
 
     func waitUntilStartedStepsAreDone() async {
-        await stepTasks.last?.value
+        await stepTaskList.lastTask?.value
+    }
+}
+
+/// The step tasks, behind a lock so they can be cancelled from any thread.
+final class CancellableStepTaskList: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tasks: [Task<Void, Never>] = []
+    private var wasCancelled = false
+
+    var isCancelled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return wasCancelled
+    }
+
+    var lastTask: Task<Void, Never>? {
+        lock.lock(); defer { lock.unlock() }
+        return tasks.last
+    }
+
+    /// A task added after cancelling is cancelled straight away.
+    func append(_ task: Task<Void, Never>) {
+        lock.lock()
+        tasks.append(task)
+        let shouldCancel = wasCancelled
+        lock.unlock()
+        if shouldCancel { task.cancel() }
+    }
+
+    func cancelAll() {
+        lock.lock()
+        wasCancelled = true
+        let tasksToCancel = tasks
+        lock.unlock()
+        for task in tasksToCancel { task.cancel() }
     }
 }

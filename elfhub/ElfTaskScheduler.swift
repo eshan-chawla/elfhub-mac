@@ -163,9 +163,12 @@ final class ElfTaskScheduler: ObservableObject {
         for (_, finishedTasks) in finishedTasksByElf {
             let newestFirst = finishedTasks.sorted { $0.createdAt > $1.createdAt }
             for (position, finishedTask) in newestFirst.enumerated() {
+                // Never one the user hasn't been told about yet. (Age is from
+                // when the task was made; tasks don't record when they ended.)
+                guard finishedTask.reportedToUser else { continue }
                 let isBeyondTheKeptNumber = position >= finishedTasksKeptPerElf
-                let isOldAndReported = finishedTask.reportedToUser && now.timeIntervalSince(finishedTask.createdAt) > finishedTaskLifetimeInSeconds
-                if isBeyondTheKeptNumber || isOldAndReported {
+                let isOld = now.timeIntervalSince(finishedTask.createdAt) > finishedTaskLifetimeInSeconds
+                if isBeyondTheKeptNumber || isOld {
                     tasksToForget.append(finishedTask)
                 }
             }
