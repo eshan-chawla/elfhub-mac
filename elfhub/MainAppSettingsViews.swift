@@ -542,13 +542,35 @@ struct PersonalNumberMaskingSettingsSection: View {
 /// Settings › Modes: saying "stop" while elfhub acts, without push-to-talk.
 struct SpokenStopSettingsRow: View {
     @AppStorage(SpokenStopListener.isEnabledKey) private var listensForSpokenStopWhileActing = false
+    /// Why it can't listen on this Mac, shown under the switch while it's on.
+    @State private var unavailableReason: String?
 
     var body: some View {
-        SettingsToggleRow(
-            iconName: "hand.raised",
-            title: "Listen for “stop” while acting",
-            detail: "While elfhub works on your screen step by step, you can say “stop”, “cancel”, “wait” or “hold on” instead of pressing Esc. The microphone is on only during those runs, and what it hears is recognized on this Mac and never sent anywhere.",
-            isOn: $listensForSpokenStopWhileActing
-        )
+        VStack(alignment: .leading, spacing: 6) {
+            SettingsToggleRow(
+                iconName: "hand.raised",
+                title: "Listen for “stop” while acting",
+                detail: "While elfhub works on your screen step by step, you can say “stop”, “cancel”, “wait” or “hold on” instead of pressing Esc. The microphone is on only during those runs, and what it hears is recognized on this Mac and never sent anywhere. Bluetooth headsets may switch to their call microphone meanwhile.",
+                isOn: Binding(
+                    get: { listensForSpokenStopWhileActing },
+                    set: { isOn in
+                        listensForSpokenStopWhileActing = isOn
+                        guard isOn else { return }
+                        Task { @MainActor in
+                            _ = await SpokenStopListener.requestSpeechRecognitionPermission()
+                            unavailableReason = SpokenStopListener.unavailableReason
+                        }
+                    }
+                )
+            )
+            if listensForSpokenStopWhileActing, let unavailableReason {
+                Text(unavailableReason)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 24)
+            }
+        }
+        .onAppear { unavailableReason = SpokenStopListener.unavailableReason }
     }
 }

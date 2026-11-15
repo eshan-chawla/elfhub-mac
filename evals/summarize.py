@@ -34,6 +34,8 @@ def summarize(tries):
     for each_try in tries:
         tries_by_task[each_try["task_id"]].append(each_try)
 
+    if not tries_by_task:
+        return "no tries in the results file yet"
     first_tries = [min(task_tries, key=lambda t: as_int(t["trial"], 99)) for task_tries in tries_by_task.values()]
     pass_at_one = sum(as_int(t["passed"]) for t in first_tries) / len(first_tries)
     tasks_with_three_tries = [task_tries for task_tries in tries_by_task.values() if len(task_tries) >= 3]

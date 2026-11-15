@@ -69,6 +69,8 @@ protocol ComputerUseScreen: AnyObject {
     func targetRegionChanged(since capture: CompanionScreenCapture, aroundScreenshotPixel screenshotPixel: CGPoint) async -> Bool
     /// The last performed step in words, naming the real element when known.
     var lastPerformedStepDescription: String? { get }
+    /// The app the last performed step worked in, when known.
+    var lastPerformedStepApplicationBundleIdentifier: String? { get }
 }
 
 @MainActor
@@ -93,6 +95,8 @@ final class ComputerUseSession: ComputerUseStepExecutor {
     /// What it did on the screen, in order ("click “Export”"), for the
     /// conversation history — typed text only as its length.
     private(set) var performedStepDescriptions: [String] = []
+    /// The app each performed step worked in (nil when unknown), in order.
+    private(set) var performedStepApplicationBundleIdentifiers: [String?] = []
     /// Click targets held back as changed; the same click asked again after
     /// the fresh screenshot goes through (something there keeps moving —
     /// a video, a terminal — and the model has now seen it).
@@ -261,6 +265,7 @@ final class ComputerUseSession: ComputerUseStepExecutor {
                     performedDescription = screen.lastPerformedStepDescription ?? action.humanReadableDescription
                 }
                 performedStepDescriptions.append(repeatCount > 1 ? "\(performedDescription) ×\(repeatCount)" : performedDescription)
+                performedStepApplicationBundleIdentifiers.append(screen.lastPerformedStepApplicationBundleIdentifier)
                 round.needsFreshScreenshot = true
                 round.results.append((toolCall, "OK.", nil, false))
             case let .notPerformed(reason):
@@ -447,6 +452,10 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
     /// The real element the last step acted on, in words ("click “Export”").
     var lastPerformedStepDescription: String? {
         screenActionCoordinator.lastFiredActionDescription
+    }
+
+    var lastPerformedStepApplicationBundleIdentifier: String? {
+        screenActionCoordinator.lastFiredActionApplicationBundleIdentifier
     }
 
     func captureScreenAfterSettling(previousCapture: CompanionScreenCapture) async throws -> CompanionScreenCapture {

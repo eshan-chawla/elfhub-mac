@@ -41,6 +41,7 @@ enum ElfExporter {
         }
         for folderName in ["skills", "files"] {
             packageFiles += try regularFiles(inside: home.directory.appendingPathComponent(folderName, isDirectory: true), packagePathPrefix: "elf/\(folderName)/")
+                .filter { !isLeftOutOfExports(packagePath: $0.path) }
         }
         try checkThatItCanBeImported(packageFiles)
         if options.includesChats {
@@ -54,6 +55,12 @@ enum ElfExporter {
             }
         }
         return packageFiles
+    }
+
+    /// Screen recipes (ScreenRecipeNotes) describe this Mac's apps and what
+    /// the user did there, so they stay on this Mac.
+    static func isLeftOutOfExports(packagePath: String) -> Bool {
+        packagePath.hasPrefix("elf/" + ScreenRecipeNotes.notesFolder + "/")
     }
 
     /// Writes the `.elf` file to `destinationURL`, replacing an existing file.

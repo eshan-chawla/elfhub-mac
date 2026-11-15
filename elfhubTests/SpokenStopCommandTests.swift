@@ -16,7 +16,7 @@ import Testing
 struct SpokenStopCommandTests {
 
     @Test func stopWordsAreHeard() {
-        for transcript in ["stop", "Stop!", "okay stop", "wait", "hold on", "cancel that", "that's enough", "STOP STOP"] {
+        for transcript in ["stop", "Stop!", "okay stop", "wait", "hold on", "cancel that", "STOP STOP"] {
             #expect(SpokenStopCommand.isStopCommand(transcript), "\(transcript) should stop")
         }
     }
@@ -25,6 +25,16 @@ struct SpokenStopCommandTests {
         for transcript in ["don't stop", "do not stop", "never stop", "keep going without stopping", "open the stopwatch", "no wait isn't needed... actually don't wait", "the bus stop", ""] {
             #expect(!SpokenStopCommand.isStopCommand(transcript), "\(transcript) shouldn't stop")
         }
+    }
+
+    @Test func whileElfhubIsTalkingOnlyStopCounts() {
+        // Its own narration ("i'll wait for it to load", "pressing cancel")
+        // may leak past echo cancellation; "stop" still works.
+        #expect(!SpokenStopCommand.isStopCommand("i'll wait for it", whileElfhubIsSpeaking: true))
+        #expect(!SpokenStopCommand.isStopCommand("now pressing cancel", whileElfhubIsSpeaking: true))
+        #expect(SpokenStopCommand.isStopCommand("stop", whileElfhubIsSpeaking: true))
+        // "is that enough?" isn't a stop.
+        #expect(!SpokenStopCommand.isStopCommand("is that enough"))
     }
 
     @Test func onlyTheNewestWordsCount() {

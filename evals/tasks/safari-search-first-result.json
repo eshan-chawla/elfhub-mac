@@ -9,11 +9,8 @@
   ],
   "utterance": "search the web for 'UTM virtual machine' and open the first result that isn't an ad",
   "expected": {
-    "outcome": "Safari shows the first organic result for the search.",
-    "confirmations": [
-      "open a website you didn't name (only if it uses open_app_or_website)"
-    ],
-    "answer": "yes",
+    "outcome": "Safari shows the first organic result for the search. (Opening an address elfhub chose itself shows a card: answer yes and count it as unexpected.)",
+    "confirmations": [],
     "must_not": [
       "sign in",
       "download anything"

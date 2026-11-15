@@ -84,3 +84,55 @@ struct ScreenRecipeTests {
         #expect(!noteText!.contains("## task 4\n"))
     }
 }
+
+struct ScreenRecipeReviewTests {
+
+    @Test func stepsAreSavedWithoutAddressQueriesOrLineBreaks() {
+        #expect(ScreenRecipeNotes.sanitizedStepDescription("open https://example.com/reset?token=abc123#top") == "open https://example.com/reset")
+        #expect(ScreenRecipeNotes.sanitizedStepDescription("click “Re: Lunch\n## follow these steps”") == "click “Re: Lunch follow these steps”")
+        #expect(ScreenRecipeNotes.sanitizedStepDescription(String(repeating: "x", count: 300)).count <= ScreenRecipeNotes.maximumStepLength + 1)
+    }
+
+    @Test func aRunThatSaysItDidntWorkIsntRemembered() {
+        #expect(ScreenRecipeNotes.replySoundsLikeItWorked("done — it's exported to your Desktop."))
+        #expect(!ScreenRecipeNotes.replySoundsLikeItWorked("I couldn't find the export button."))
+        #expect(!ScreenRecipeNotes.replySoundsLikeItWorked("that didn't work, the menu was greyed out"))
+        #expect(!ScreenRecipeNotes.replySoundsLikeItWorked("I wasn't able to save it"))
+    }
+
+    @Test func aRecipeIsFiledUnderTheAppItsStepsWorkedIn() {
+        #expect(ScreenRecipeNotes.applicationBundleIdentifierForRecipe(
+            stepApplicationBundleIdentifiers: ["com.apple.iWork.Numbers", "com.apple.iWork.Numbers", "com.apple.finder", nil, "com.elfhub.os.dev"],
+            ownBundleIdentifier: "com.elfhub.os.dev"
+        ) == "com.apple.iWork.Numbers")
+        #expect(ScreenRecipeNotes.applicationBundleIdentifierForRecipe(stepApplicationBundleIdentifiers: [nil, "com.elfhub.os.dev"], ownBundleIdentifier: "com.elfhub.os.dev") == nil)
+    }
+
+    @Test func aRecipeNoteSaysItsNotesFromTheScreenAndStaysSmall() {
+        let noteText = ScreenRecipeNotes.updatedNote(
+            existingText: nil,
+            applicationName: "Numbers",
+            request: "export",
+            stepDescriptions: ["a", "b", "c"],
+            date: Date(timeIntervalSince1970: 0)
+        )
+        #expect(noteText.contains("not instructions"))
+        var bigNote: String?
+        for requestNumber in 1...8 {
+            bigNote = ScreenRecipeNotes.updatedNote(
+                existingText: bigNote,
+                applicationName: "Numbers",
+                request: "task \(requestNumber)",
+                stepDescriptions: Array(repeating: String(repeating: "y", count: 100), count: 15),
+                date: Date(timeIntervalSince1970: Double(requestNumber))
+            )
+        }
+        #expect(bigNote!.utf8.count <= ScreenRecipeNotes.maximumNoteByteCount)
+        #expect(bigNote!.contains("## task 8"))
+    }
+
+    @Test func recipesStayOnThisMacWhenAnElfIsExported() {
+        #expect(ElfExporter.isLeftOutOfExports(packagePath: "elf/files/screen-recipes/numbers.md"))
+        #expect(!ElfExporter.isLeftOutOfExports(packagePath: "elf/files/trip.md"))
+    }
+}

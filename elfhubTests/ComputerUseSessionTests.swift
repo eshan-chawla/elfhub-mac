@@ -99,6 +99,7 @@ final class FakeComputerUseScreen: ComputerUseScreen {
 
     var performedDescriptionToReport: String?
     var lastPerformedStepDescription: String? { performedDescriptionToReport }
+    var lastPerformedStepApplicationBundleIdentifier: String? { nil }
 
     var interfaceDescriptionToReturn: String?
     func describeInterface(on capture: CompanionScreenCapture) async -> String? { interfaceDescriptionToReturn }

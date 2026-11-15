@@ -283,6 +283,8 @@ final class ScreenActionCoordinator: ObservableObject {
     /// The last run step fired, in words naming the real element — for the
     /// conversation history (typed text is replaced there by its length).
     private(set) var lastFiredActionDescription: String?
+    /// The app the last run step fired in.
+    private(set) var lastFiredActionApplicationBundleIdentifier: String?
     /// The run in progress; an older run finishing late can't end it.
     private var currentComputerUseRunIdentifier: UUID?
     /// When the run's last step ended (or the user last okayed one): input
@@ -965,6 +967,9 @@ final class ScreenActionCoordinator: ObservableObject {
 
         let didPerformAction = await perform(resolvedAction)
         lastFiredActionDescription = resolvedAction.humanReadableDescription
+        lastFiredActionApplicationBundleIdentifier = resolvedAction.openedApplicationBundleIdentifier
+            ?? resolvedAction.targetElementFacts?.owningApplicationBundleIdentifier
+            ?? resolvedAction.frontmostApplicationBundleIdentifier
         if isStopRequested {
             recordAuditEntry(for: resolvedAction, approvalProvenance: approvalProvenance, outcome: .stoppedByUser)
             return .stoppedByUser

@@ -1053,17 +1053,20 @@ final class CompanionManager: ObservableObject {
             self.stopEverythingOnEscape()
             self.speakResponse("stopped.")
         }
-        spokenStopListeningCancellable = screenActionCoordinator.$isComputerUseRunActive
-            .removeDuplicates()
+        spokenStopListener.isElfhubSpeaking = { [weak self] in
+            self?.streamingSpeechPlayer.isSpeaking ?? false
+        }
+        // Checked again whenever a run starts or ends, push-to-talk starts
+        // or finishes (answering a card mid-run), or the setting or input
+        // mode changes — so listening comes back after a spoken "yes".
+        let dictationActivityPublisher = buddyDictationManager.$isPreparingToRecord
+            .combineLatest(buddyDictationManager.$isRecordingFromKeyboardShortcut, buddyDictationManager.$isRecordingFromMicrophoneButton, buddyDictationManager.$isFinalizingTranscript)
+            .map { _ in () }
+        let settingChangePublisher = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification).map { _ in () }
+        spokenStopListeningCancellable = screenActionCoordinator.$isComputerUseRunActive.map { _ in () }
+            .merge(with: dictationActivityPublisher, settingChangePublisher, $interactionInputMode.map { _ in () }.eraseToAnyPublisher())
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isComputerUseRunActive in
-                guard let self else { return }
-                if isComputerUseRunActive && self.interactionInputMode.isVoiceInputEnabled && !self.buddyDictationManager.isDictationInProgress {
-                    self.spokenStopListener.startListening()
-                } else {
-                    self.spokenStopListener.stopListening()
-                }
-            }
+            .sink { [weak self] _ in self?.refreshSpokenStopListening() }
         userScreenInkRecorder.onStrokesChanged = { [weak self] userInkStrokes in
             self?.companionEventBus.emit(.userInkChanged(userInkStrokes))
         }
@@ -1094,6 +1097,20 @@ final class CompanionManager: ObservableObject {
                     self.escapeStopMonitor.stop()
                 }
             }
+    }
+
+    /// Listens for "stop" only while a run is on the screen, the setting and
+    /// voice input are on, and push-to-talk isn't using the microphone.
+    private func refreshSpokenStopListening() {
+        let shouldListen = screenActionCoordinator.isComputerUseRunActive
+            && SpokenStopListener.isEnabled
+            && interactionInputMode.isVoiceInputEnabled
+            && !buddyDictationManager.isDictationInProgress
+        if shouldListen && !spokenStopListener.isListening {
+            spokenStopListener.startListeningForRun()
+        } else if !shouldListen && spokenStopListener.isListening {
+            spokenStopListener.stopListening()
+        }
     }
 
     /// Esc stops whatever elfhub is doing: a push-to-talk recording (nothing
