@@ -107,6 +107,21 @@ struct ComputerUseLoopGuardTests {
         return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8])!
     }
 
+    @Test func aPopUpOverTheTargetCountsAsChangedButThePointerDoesnt() throws {
+        let before = jpegData { _ in }
+        let pointerMoved = jpegData { $0.fill(CGRect(x: 640, y: 380, width: 14, height: 22)) }
+        let dialogOpened = jpegData { $0.fill(CGRect(x: 450, y: 250, width: 380, height: 280)) }
+        let target = CGPoint(x: 640, y: 400)
+        let pointerChange = try #require(ScreenshotRegionComparison.changedFraction(beforeJPEG: before, afterJPEG: pointerMoved, aroundScreenshotPixel: target))
+        let dialogChange = try #require(ScreenshotRegionComparison.changedFraction(beforeJPEG: before, afterJPEG: dialogOpened, aroundScreenshotPixel: target))
+        #expect(pointerChange < ScreenshotRegionComparison.changedFractionThatMeansStale)
+        #expect(dialogChange >= ScreenshotRegionComparison.changedFractionThatMeansStale)
+        // Something changing elsewhere on screen doesn't matter.
+        let elsewhere = jpegData { $0.fill(CGRect(x: 0, y: 0, width: 300, height: 200)) }
+        let elsewhereChange = try #require(ScreenshotRegionComparison.changedFraction(beforeJPEG: before, afterJPEG: elsewhere, aroundScreenshotPixel: target))
+        #expect(elsewhereChange == 0)
+    }
+
     @Test func theFingerprintSeesACheckboxButNotABlinkingCursor() throws {
         let blankScreen = try #require(ScreenshotFingerprint(jpegData: jpegData { _ in }))
         let sameBlankScreen = try #require(ScreenshotFingerprint(jpegData: jpegData { _ in }))

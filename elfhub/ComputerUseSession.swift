@@ -59,6 +59,9 @@ protocol ComputerUseScreen: AnyObject {
     /// The window in front's controls, as text to send beside this
     /// screenshot (AccessibilitySnapshotFormatter), or nil.
     func describeInterface(on capture: CompanionScreenCapture) async -> String?
+    /// Whether the part of the screen around this point changed a lot since
+    /// `capture` was taken (false when that can't be told).
+    func targetRegionChanged(since capture: CompanionScreenCapture, aroundScreenshotPixel screenshotPixel: CGPoint) async -> Bool
 }
 
 @MainActor
@@ -184,6 +187,15 @@ final class ComputerUseSession: ComputerUseStepExecutor {
                 results.append((toolCall, pointerText, nil, false))
 
             case let .act(action, repeatCount):
+                // A click aimed at something that has since changed (a
+                // dialog opened over it) would land on what the model never saw.
+                if let targetPixel = Self.clickTargetPixel(of: action),
+                   await screen.targetRegionChanged(since: latestCapture, aroundScreenshotPixel: targetPixel) {
+                    aStepFailed = true
+                    needsFreshScreenshot = true
+                    results.append((toolCall, "Error: that part of the screen changed since your screenshot (something opened or moved), so nothing was done. look at the fresh screenshot before trying again.", nil, true))
+                    continue
+                }
                 let stepDescription = "step \(stepNumber) of \(ComputerUseLoopGuard.maximumSteps) · \(action.humanReadableDescription)"
                 var lastOutcome = ComputerUseActionOutcome.performed
                 didTryToAct = true
@@ -253,6 +265,20 @@ final class ComputerUseSession: ComputerUseStepExecutor {
         )
     }
 
+    /// Where a click-like action lands (a drag: where it picks up). Scrolls,
+    /// pointer moves, typing, keys and opening things aren't checked.
+    static func clickTargetPixel(of action: CompanionScreenAction) -> CGPoint? {
+        switch action {
+        case let .click(screenshotPixel, _, _), let .doubleClick(screenshotPixel, _, _),
+             let .rightClick(screenshotPixel, _, _), let .tripleClick(screenshotPixel, _, _):
+            return screenshotPixel
+        case let .drag(startPixel, _, _):
+            return startPixel
+        case .scroll, .moveMouse, .type, .key, .openApplication, .openWebsite:
+            return nil
+        }
+    }
+
     private func screenshotImage(of capture: CompanionScreenCapture) -> LanguageModelImage {
         LanguageModelImage(
             data: capture.imageData,
@@ -309,15 +335,41 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
         self.turnToken = turnToken
     }
 
+    /// A frame taken at the same moment as the last screenshot sent, but
+    /// without the privacy changes (black boxes, left-out browsers), so a
+    /// later frame can be compared with it like for like. Never sent.
+    private var referenceFrameForLatestCapture: (sentImageData: Data, referenceImageData: Data)?
+
+    private func uncheckedFrame() async throws -> CompanionScreenCapture {
+        try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile, appliesPrivacyChecks: false)
+    }
+
     func captureScreen() async throws -> CompanionScreenCapture {
-        try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile)
+        let referenceFrame = try await uncheckedFrame()
+        let sentCapture = try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile)
+        referenceFrameForLatestCapture = (sentCapture.imageData, referenceFrame.imageData)
+        return sentCapture
+    }
+
+    func targetRegionChanged(since capture: CompanionScreenCapture, aroundScreenshotPixel screenshotPixel: CGPoint) async -> Bool {
+        // Only a screenshot this run took has a frame to compare with (the
+        // turn's first one was taken before the run began).
+        guard let referenceFrameForLatestCapture,
+              referenceFrameForLatestCapture.sentImageData == capture.imageData,
+              let currentFrame = try? await uncheckedFrame(),
+              let changedFraction = ScreenshotRegionComparison.changedFraction(
+                beforeJPEG: referenceFrameForLatestCapture.referenceImageData,
+                afterJPEG: currentFrame.imageData,
+                aroundScreenshotPixel: screenshotPixel
+              ) else { return false }
+        return changedFraction >= ScreenshotRegionComparison.changedFractionThatMeansStale
     }
 
     func captureScreenAfterSettling(previousCapture: CompanionScreenCapture) async throws -> CompanionScreenCapture {
         // Frames compared while waiting skip the privacy checks (they're
         // only compared, never sent); the one that's sent is taken after.
         func settleCheckFrame() async throws -> CompanionScreenCapture {
-            try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile, appliesPrivacyChecks: false)
+            try await uncheckedFrame()
         }
         try await Task.sleep(nanoseconds: UInt64(Self.firstSettleDelaySeconds * 1_000_000_000))
         var latestFrame = try await settleCheckFrame()
@@ -330,7 +382,10 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
                   let nextFingerprint = ScreenshotFingerprint(jpegData: nextFrame.imageData),
                   latestFingerprint.differs(from: nextFingerprint) else { break }
         }
-        return try await captureScreen()
+        // The settled frame is the reference for the screenshot sent now.
+        let sentCapture = try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile)
+        referenceFrameForLatestCapture = (sentCapture.imageData, latestFrame.imageData)
+        return sentCapture
     }
 
     func captureZoomedRegion(_ regionInScreenshotPixels: CGRect, of capture: CompanionScreenCapture) async throws -> Data {

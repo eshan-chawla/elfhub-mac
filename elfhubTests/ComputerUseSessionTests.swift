@@ -83,6 +83,13 @@ final class FakeComputerUseScreen: ComputerUseScreen {
 
     func wait(seconds: Double) async throws { waitedSeconds.append(seconds) }
 
+    /// Whether the target's part of the screen changed since the
+    /// screenshot the model saw.
+    var targetRegionHasChanged = false
+    func targetRegionChanged(since capture: CompanionScreenCapture, aroundScreenshotPixel screenshotPixel: CGPoint) async -> Bool {
+        targetRegionHasChanged
+    }
+
     var interfaceDescriptionToReturn: String?
     func describeInterface(on capture: CompanionScreenCapture) async -> String? { interfaceDescriptionToReturn }
 }
@@ -134,6 +141,25 @@ struct ComputerUseSessionTests {
         let session = makeSession(screen: screen)
         let stepResult = await session.runStep([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)])
         #expect(computerResults(stepResult).last?.resultText.hasSuffix("- button “Export” at (124, 98)") == true)
+    }
+
+    @Test func aClickWhoseTargetChangedSinceTheScreenshotIsntFired() async {
+        let screen = FakeComputerUseScreen()
+        screen.targetRegionHasChanged = true
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+            toolsetCall("b", "type", #"{"text":"hello"}"#),
+        ])
+        #expect(screen.performedActions.isEmpty)
+        let results = computerResults(stepResult)
+        #expect(results.first?.isError == true)
+        #expect(results.first?.resultText.contains("changed since") == true)
+        #expect(results.last?.image != nil)
+        // Typing has no target on screen, so it isn't held back by this.
+        screen.targetRegionHasChanged = true
+        _ = await makeSession(screen: screen).runStep([toolsetCall("c", "type", #"{"text":"hi"}"#)])
+        #expect(screen.performedActions.count == 1)
     }
 
     @Test func theRoundStopsAtTheFirstFailure() async {

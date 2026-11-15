@@ -154,10 +154,56 @@ struct ScreenshotFingerprint: Equatable {
         self.cellBrightnessValues = cellBrightnessValues
     }
 
+    /// The share (0–1) of cells whose brightness moved past the threshold.
+    func changedCellFraction(comparedTo otherFingerprint: ScreenshotFingerprint) -> Double {
+        guard cellBrightnessValues.count == otherFingerprint.cellBrightnessValues.count, !cellBrightnessValues.isEmpty else { return 1 }
+        let changedCellCount = zip(cellBrightnessValues, otherFingerprint.cellBrightnessValues).filter { cellBrightness, otherCellBrightness in
+            abs(Int(cellBrightness) - Int(otherCellBrightness)) >= Self.changedCellBrightnessThreshold
+        }.count
+        return Double(changedCellCount) / Double(cellBrightnessValues.count)
+    }
+
     func differs(from otherFingerprint: ScreenshotFingerprint) -> Bool {
         guard cellBrightnessValues.count == otherFingerprint.cellBrightnessValues.count else { return true }
         return zip(cellBrightnessValues, otherFingerprint.cellBrightnessValues).contains { cellBrightness, otherCellBrightness in
             abs(Int(cellBrightness) - Int(otherCellBrightness)) >= Self.changedCellBrightnessThreshold
         }
+    }
+}
+
+/// Whether the part of the screen around a click target changed between
+/// the screenshot the model decided from and now — a dialog popped up, the
+/// page moved on — so the click would land on something it never saw.
+/// The pointer moving or a button lighting up under it changes too little
+/// to count.
+enum ScreenshotRegionComparison {
+    /// Half the side of the square compared, in screenshot pixels.
+    static let regionRadiusInPixels: CGFloat = 120
+    /// This share of the region's cells changed means it's stale.
+    static let changedFractionThatMeansStale = 0.3
+
+    /// The share (0–1) of the region's 16×16 cells whose brightness moved,
+    /// or nil when an image can't be read.
+    static func changedFraction(beforeJPEG: Data, afterJPEG: Data, aroundScreenshotPixel screenshotPixel: CGPoint) -> Double? {
+        guard let beforeImage = decodedImage(beforeJPEG), let afterImage = decodedImage(afterJPEG),
+              beforeImage.width == afterImage.width, beforeImage.height == afterImage.height else { return nil }
+        let imageBounds = CGRect(x: 0, y: 0, width: beforeImage.width, height: beforeImage.height)
+        let region = CGRect(
+            x: screenshotPixel.x - regionRadiusInPixels,
+            y: screenshotPixel.y - regionRadiusInPixels,
+            width: regionRadiusInPixels * 2,
+            height: regionRadiusInPixels * 2
+        ).intersection(imageBounds).integral
+        guard !region.isEmpty,
+              let beforeRegion = beforeImage.cropping(to: region),
+              let afterRegion = afterImage.cropping(to: region),
+              let beforeFingerprint = ScreenshotFingerprint(image: beforeRegion),
+              let afterFingerprint = ScreenshotFingerprint(image: afterRegion) else { return nil }
+        return beforeFingerprint.changedCellFraction(comparedTo: afterFingerprint)
+    }
+
+    private static func decodedImage(_ jpegData: Data) -> CGImage? {
+        guard let imageSource = CGImageSourceCreateWithData(jpegData as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(imageSource, 0, nil)
     }
 }
