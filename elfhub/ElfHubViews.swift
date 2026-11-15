@@ -492,8 +492,8 @@ private struct ElfFolderGrantsSection: View {
         openPanel.allowsMultipleSelection = false
         guard openPanel.runModal() == .OK, let folderURL = openPanel.url else { return }
         let chosenPath = folderURL.standardizedFileURL.path
-        guard chosenPath != "/", chosenPath != NSHomeDirectory() else {
-            errorMessage = "Pick a specific folder, not your whole disk or home folder."
+        if let grantProblem = ElfFolderTools.grantProblem(forFolder: folderURL) {
+            errorMessage = grantProblem
             return
         }
         perform {
@@ -1189,7 +1189,10 @@ private struct ElfBehaviourSection: View {
                     : "Searches and opens web pages for its tasks — only pages it's led to: search results and their links, or addresses you give it. What it reads goes to your language model like the rest of the conversation.",
                 isOn: Binding(
                     get: { elfEditor.elf.configuration.capabilities.isWebEnabled(isMainElf: elfEditor.isMainElf) },
-                    set: { isWebEnabled in try? elfEditor.updateCapabilities { $0.webEnabled = isWebEnabled } }
+                    set: { isWebEnabled in
+                        // A failed save (the elf's folder is gone) sends the page back to main.
+                        try? elfEditor.updateCapabilities { $0.webEnabled = isWebEnabled }
+                    }
                 )
             )
             SettingsToggleRow(

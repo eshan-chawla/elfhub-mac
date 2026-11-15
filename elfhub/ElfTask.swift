@@ -90,6 +90,11 @@ nonisolated struct ElfTask: Codable, Equatable, Identifiable, Sendable {
     /// True once the user has been told the result.
     var reportedToUser: Bool
     let createdAt: Date
+    /// The web or the user's folders, once a run used them — kept, so a run
+    /// resumed after a question still uses only that one.
+    var usedResources: Set<ElfOutsideResource>
+    /// What the task has read that could steer it, kept across runs.
+    var influencedBy: Set<ElfChangeLogEntry.Influence>
 
     init(
         id: UUID = UUID(),
@@ -116,6 +121,8 @@ nonisolated struct ElfTask: Codable, Equatable, Identifiable, Sendable {
         self.budgetUsage = ElfTaskBudgetUsage()
         self.reportedToUser = false
         self.createdAt = createdAt
+        self.usedResources = []
+        self.influencedBy = []
     }
 
     /// Moves the task to a new status, or throws when that move isn't allowed.
@@ -129,7 +136,7 @@ nonisolated struct ElfTask: Codable, Equatable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, elfIdentifier, instruction, contextFromMain, conversationExcerpt, originConversationIdentifier, status
         case progressNotes, pendingQuestion, isWaitingForTheScreen, answers, result, failureReason, budgetUsage
-        case reportedToUser, createdAt
+        case reportedToUser, createdAt, usedResources, influencedBy
     }
 
     /// Fields missing from older files get their defaults.
@@ -151,6 +158,8 @@ nonisolated struct ElfTask: Codable, Equatable, Identifiable, Sendable {
         budgetUsage = try container.decodeIfPresent(ElfTaskBudgetUsage.self, forKey: .budgetUsage) ?? ElfTaskBudgetUsage()
         reportedToUser = try container.decodeIfPresent(Bool.self, forKey: .reportedToUser) ?? false
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        usedResources = (try? container.decodeIfPresent(Set<ElfOutsideResource>.self, forKey: .usedResources)) ?? []
+        influencedBy = (try? container.decodeIfPresent(Set<ElfChangeLogEntry.Influence>.self, forKey: .influencedBy)) ?? []
     }
 }
 

@@ -22,6 +22,8 @@ nonisolated struct ElfFolderGrant: Codable, Equatable, Hashable, Sendable {
 enum ElfFolderAccessError: Error {
     case notInAGrantedFolder
     case writingNotAllowed
+    /// elfhub's own data (every elf's folder, chats) is never reachable.
+    case elfhubData
 }
 
 enum ElfFolderTools {
@@ -40,12 +42,46 @@ enum ElfFolderTools {
         return folderTools
     }
 
+    /// elfhub's own data folder (every elf, chats, settings).
+    static var elfhubDataFolder: URL { ElfHome.defaultElvesDirectory.deletingLastPathComponent() }
+
+    /// Why a folder can't be granted (too broad, or elfhub's own data), or nil.
+    static func grantProblem(forFolder folderURL: URL) -> String? {
+        let resolvedFolderPath = ElfHome.resolvedPath(of: folderURL)
+        let resolvedHomePath = ElfHome.resolvedPath(of: URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true))
+        let tooBroadPaths = ["/", "/Users", "/System", "/System/Volumes/Data", "/Volumes", "/Library", "/private", resolvedHomePath,
+                             ElfHome.resolvedPath(of: URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library"))]
+        func contains(_ outerPath: String, _ innerPath: String) -> Bool {
+            innerPath == outerPath || innerPath.hasPrefix(outerPath == "/" ? "/" : outerPath + "/")
+        }
+        if tooBroadPaths.contains(where: { contains(resolvedFolderPath, $0) }) {
+            return "Pick a specific folder — not your whole disk, home folder or Library."
+        }
+        let resolvedElfhubDataPath = ElfHome.resolvedPath(of: elfhubDataFolder)
+        if contains(resolvedElfhubDataPath, resolvedFolderPath) || contains(resolvedFolderPath, resolvedElfhubDataPath) {
+            return "That folder holds elfhub's own data, which elves can't be given."
+        }
+        return nil
+    }
+
     /// The real location of `requestedPath` ("~/…" allowed), when it's inside
-    /// a granted folder (and that folder allows writing, for a write).
-    static func resolvedURL(forUserPath requestedPath: String, grants: [ElfFolderGrant], forWriting: Bool) throws -> URL {
+    /// a granted folder (and that folder allows writing, for a write), and
+    /// outside elfhub's own data and the elf's own folder.
+    static func resolvedURL(
+        forUserPath requestedPath: String,
+        grants: [ElfFolderGrant],
+        forWriting: Bool,
+        forbiddenFolders: [URL] = []
+    ) throws -> URL {
         let expandedPath = (requestedPath.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
         guard expandedPath.hasPrefix("/") else { throw ElfFolderAccessError.notInAGrantedFolder }
         let resolvedRequestedPath = ElfHome.resolvedPath(of: URL(fileURLWithPath: expandedPath))
+        for forbiddenFolder in forbiddenFolders + [elfhubDataFolder] {
+            let resolvedForbiddenPath = ElfHome.resolvedPath(of: forbiddenFolder)
+            if resolvedRequestedPath == resolvedForbiddenPath || resolvedRequestedPath.hasPrefix(resolvedForbiddenPath + "/") {
+                throw ElfFolderAccessError.elfhubData
+            }
+        }
         let containingGrants = grants.filter { folderGrant in
             let resolvedGrantPath = ElfHome.resolvedPath(of: URL(fileURLWithPath: folderGrant.path, isDirectory: true))
             return resolvedRequestedPath == resolvedGrantPath || resolvedRequestedPath.hasPrefix(resolvedGrantPath + "/")
@@ -56,6 +92,24 @@ enum ElfFolderTools {
     }
 
     static let notGrantedMessage = "that isn't in a folder the user shared with you. call list_user_folder with no path to see which ones you can use."
+
+    /// The grants as they are now (read at the moment of use, so removing a
+    /// grant stops a task already running), and the folders never reachable.
+    @MainActor
+    static func currentAccess(for context: ElfToolContext) -> (grants: [ElfFolderGrant], forbiddenFolders: [URL]) {
+        (context.elf.home.readFolderGrants(), [context.elf.home.directory])
+    }
+
+    @MainActor
+    static func resolvedURL(forUserPath requestedPath: String, context: ElfToolContext, forWriting: Bool) throws -> URL {
+        let currentAccess = currentAccess(for: context)
+        return try resolvedURL(
+            forUserPath: requestedPath,
+            grants: currentAccess.grants,
+            forWriting: forWriting,
+            forbiddenFolders: currentAccess.forbiddenFolders
+        )
+    }
 }
 
 /// Folder tools are for any role; the registry only gets them for an elf
@@ -66,6 +120,8 @@ extension UserFolderTool {
 }
 
 private struct ListUserFolderTool: UserFolderTool {
+    /// The grants when the tools were handed out; the tools read the
+    /// current ones each time they run.
     let grants: [ElfFolderGrant]
     let group = ElfToolGroup.userFolders
     let resultFeedsBackToModel = true
@@ -77,14 +133,18 @@ private struct ListUserFolderTool: UserFolderTool {
 
     func run(argumentsJSON: String, context: ElfToolContext) async throws -> ElfToolOutcome {
         let requestedPath = ElfToolArguments(argumentsJSON: argumentsJSON).string("path")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let currentGrants = ElfFolderTools.currentAccess(for: context).grants
         guard !requestedPath.isEmpty else {
-            let grantLines = grants.map { "- \($0.path)" + ($0.allowsWriting ? " (you may change files)" : " (read only)") }
+            guard !currentGrants.isEmpty else { return .failure("the user doesn't share any folders with you now.") }
+            let grantLines = currentGrants.map { "- \($0.path)" + ($0.allowsWriting ? " (you may change files)" : " (read only)") }
             return ElfToolOutcome(resultText: "folders the user shared with you:\n" + grantLines.joined(separator: "\n"))
         }
-        if let refusal = context.beginUsing(.userFolders) { return .failure(refusal) }
-        guard let folderURL = try? ElfFolderTools.resolvedURL(forUserPath: requestedPath, grants: grants, forWriting: false) else {
+        guard let folderURL = try? ElfFolderTools.resolvedURL(forUserPath: requestedPath, context: context, forWriting: false) else {
             return .failure(ElfFolderTools.notGrantedMessage)
         }
+        if let refusal = context.beginUsing(.userFolders) { return .failure(refusal) }
+        // File names can steer what the elf does next, like file text.
+        context.influencedBy.insert(.file)
         guard let folderItemNames = try? FileManager.default.contentsOfDirectory(atPath: folderURL.path) else {
             return .failure("there's no folder at \(requestedPath).")
         }
@@ -98,6 +158,8 @@ private struct ListUserFolderTool: UserFolderTool {
 }
 
 private struct ReadUserFileTool: UserFolderTool {
+    /// The grants when the tools were handed out; the tools read the
+    /// current ones each time they run.
     let grants: [ElfFolderGrant]
     let group = ElfToolGroup.userFolders
     let resultFeedsBackToModel = true
@@ -114,11 +176,16 @@ private struct ReadUserFileTool: UserFolderTool {
     func run(argumentsJSON: String, context: ElfToolContext) async throws -> ElfToolOutcome {
         let arguments = ElfToolArguments(argumentsJSON: argumentsJSON)
         guard let requestedPath = arguments.string("path") else { return .failure("give the file's full path.") }
-        if let refusal = context.beginUsing(.userFolders) { return .failure(refusal) }
-        guard let fileURL = try? ElfFolderTools.resolvedURL(forUserPath: requestedPath, grants: grants, forWriting: false) else {
+        guard let fileURL = try? ElfFolderTools.resolvedURL(forUserPath: requestedPath, context: context, forWriting: false) else {
             return .failure(ElfFolderTools.notGrantedMessage)
         }
-        let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
+        // Only plain files: reading a pipe or device would never finish.
+        let fileAttributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+        guard fileAttributes?[.type] as? FileAttributeType == .typeRegular else {
+            return .failure("there's no text file elfhub can read at \(requestedPath).")
+        }
+        if let refusal = context.beginUsing(.userFolders) { return .failure(refusal) }
+        let fileSize = fileAttributes?[.size] as? Int ?? 0
         guard fileSize <= ElfFolderTools.maximumReadableFileBytes,
               let fileText = try? String(contentsOf: fileURL, encoding: .utf8) else {
             return .failure("there's no text file elfhub can read at \(requestedPath).")
@@ -134,6 +201,8 @@ private struct ReadUserFileTool: UserFolderTool {
 }
 
 private struct WriteUserFileTool: UserFolderTool {
+    /// The grants when the tools were handed out; the tools read the
+    /// current ones each time they run.
     let grants: [ElfFolderGrant]
     let group = ElfToolGroup.userFolders
     let resultFeedsBackToModel = false
@@ -152,15 +221,31 @@ private struct WriteUserFileTool: UserFolderTool {
         guard let requestedPath = arguments.string("path"), let newText = arguments.string("content") else {
             return .failure("give the file's full path and its content.")
         }
-        if let refusal = context.beginUsing(.userFolders) { return .failure(refusal) }
         let fileURL: URL
         do {
-            fileURL = try ElfFolderTools.resolvedURL(forUserPath: requestedPath, grants: grants, forWriting: true)
+            fileURL = try ElfFolderTools.resolvedURL(forUserPath: requestedPath, context: context, forWriting: true)
         } catch ElfFolderAccessError.writingNotAllowed {
             return .failure("that folder is read only for you. the user can allow changes in your page.")
         } catch {
             return .failure(ElfFolderTools.notGrantedMessage)
         }
+        // Hidden folders (.git and the like) are tools' business, not an elf's.
+        if fileURL.pathComponents.contains(where: { $0.hasPrefix(".") }) {
+            return .failure("elves don't change hidden files or folders (like .git).")
+        }
+        // Only text files it can keep a full backup of: a large or non-text
+        // file (a spreadsheet, a document) could never be put back.
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            let existingFileAttributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+            let existingFileSize = existingFileAttributes?[.size] as? Int ?? 0
+            guard existingFileAttributes?[.type] as? FileAttributeType == .typeRegular,
+                  existingFileSize <= ElfHome.fileByteLimit,
+                  let existingData = try? Data(contentsOf: fileURL),
+                  String(data: existingData, encoding: .utf8) != nil else {
+                return .failure("that file is too large or isn't plain text, so it can't be replaced safely. write a new file next to it instead.")
+            }
+        }
+        if let refusal = context.beginUsing(.userFolders) { return .failure(refusal) }
         // A link inside the folder would make "the file" something else.
         let requestedURL = URL(fileURLWithPath: (requestedPath as NSString).expandingTildeInPath)
         if (try? requestedURL.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {

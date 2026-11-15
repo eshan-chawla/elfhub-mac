@@ -65,4 +65,9 @@ struct WebSearchProviderTests {
         #expect(ConfiguredWebSearchProvider.makeIfReady(preset: .searxng, apiKey: nil, searxngBaseURL: URL(string: "http://localhost:8888")) != nil)
         #expect(ConfiguredWebSearchProvider.makeIfReady(preset: nil, apiKey: "key", searxngBaseURL: nil) == nil)
     }
+
+    @Test func eachServiceKeepsItsOwnKey() {
+        let accountNames = Set(WebSearchServicePreset.allCases.map(WebSearchSettings.keychainAccountName(for:)))
+        #expect(accountNames.count == WebSearchServicePreset.allCases.count)
+    }
 }

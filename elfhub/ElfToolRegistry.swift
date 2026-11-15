@@ -90,7 +90,7 @@ final class ElfToolContext {
 }
 
 /// Places beyond the elf's own folder.
-enum ElfOutsideResource: Hashable {
+nonisolated enum ElfOutsideResource: String, Codable, Hashable, Sendable {
     case web
     case userFolders
 }
@@ -195,7 +195,9 @@ nonisolated struct ElfToolArguments {
 
     func integer(_ argumentName: String) -> Int? {
         if let integerValue = argumentValues[argumentName] as? Int { return integerValue }
-        if let doubleValue = argumentValues[argumentName] as? Double { return Int(doubleValue) }
+        // A number too big for an Int (or not whole) is no page number —
+        // and converting it blindly would crash.
+        if let doubleValue = argumentValues[argumentName] as? Double { return Int(exactly: doubleValue.rounded(.towardZero)) }
         if let stringValue = argumentValues[argumentName] as? String { return Int(stringValue) }
         return nil
     }

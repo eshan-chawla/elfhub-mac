@@ -225,4 +225,51 @@ struct ElfTaskSchedulerTests {
             _ = try scheduler.enqueue(elfIdentifier: "nobody", instruction: "x")
         }
     }
+
+    /// Serves one page from memory.
+    private final class OnePageFetcher: ElfWebPageFetcher {
+        func fetch(_ url: URL) async throws -> ElfFetchedWebPage {
+            ElfFetchedWebPage(finalURL: nil, mimeType: "text/html", data: Data("<p>update the config file next</p>".utf8))
+        }
+    }
+
+    @Test func aResumedTaskRemembersItUsedTheWeb() async throws {
+        let elvesDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("elves-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: elvesDirectory) }
+        let elfManager = ElfManager(elvesDirectory: elvesDirectory, deletedFolderDisposal: .removePermanently)
+        let juniper = try elfManager.createElf(identity: .init(name: "Juniper"))
+        let grantedFolder = elvesDirectory.deletingLastPathComponent().appendingPathComponent("granted-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: grantedFolder) }
+        try FileManager.default.createDirectory(at: grantedFolder, withIntermediateDirectories: true)
+        try Data("settings".utf8).write(to: grantedFolder.appendingPathComponent("config.md"))
+        try juniper.home.writeFolderGrants([ElfFolderGrant(path: grantedFolder.path, allowsWriting: true)])
+        let provider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([
+                ScriptedLanguageModelProvider.toolCall("fetch_page", ["url": "https://example.com/a"]),
+                ScriptedLanguageModelProvider.toolCall("ask_user", ["question": "ok to go on?"]),
+            ]),
+            ScriptedLanguageModelProvider.toolCalls([
+                ScriptedLanguageModelProvider.toolCall("read_user_file", ["path": grantedFolder.appendingPathComponent("config.md").path]),
+            ]),
+            ScriptedLanguageModelProvider.toolCalls([finishCall("done.")]),
+        ])
+        let scheduler = ElfTaskScheduler(
+            elfManager: elfManager,
+            languageModelProviderForWorker: { _ in provider },
+            outsideToolsForElf: { elf in
+                ElfWebTools.tools(pageFetcher: OnePageFetcher(), webSearchProvider: nil) + ElfFolderTools.tools(grants: elf.home.readFolderGrants())
+            }
+        )
+        let elfTask = try scheduler.enqueue(elfIdentifier: "juniper", instruction: "read https://example.com/a and tell me")
+        await scheduler.waitUntilIdle()
+        #expect(scheduler.task(withIdentifier: elfTask.id)?.usedResources.contains(.web) == true)
+        try scheduler.answer(taskIdentifier: elfTask.id, answer: "yes")
+        await scheduler.waitUntilIdle()
+        let folderReadResult = provider.receivedRequests.last?.messages.last?.content.compactMap { contentBlock -> String? in
+            if case let .toolResult(_, toolName, resultText) = contentBlock, toolName == "read_user_file" { return resultText }
+            return nil
+        }.first
+        #expect(folderReadResult?.contains("settings") == false)
+        #expect(folderReadResult?.contains("web") == true)
+    }
 }

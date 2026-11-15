@@ -49,7 +49,8 @@ nonisolated struct ElfChangeLogEntry: Codable, Equatable, Identifiable, Sendable
 
     let id: UUID
     let date: Date
-    /// The file's path inside the elf's folder ("files/trip.md").
+    /// The file's path inside the elf's folder ("files/trip.md"), or the
+    /// full path of a file in a folder the user granted.
     let path: String
     /// For a rename: where the file went.
     let renamedToPath: String?
@@ -97,6 +98,8 @@ nonisolated struct ElfChangeLog {
     static let maximumEntryCount = 500
     static let maximumEntryAge: TimeInterval = 30 * 24 * 3600
     static let maximumBackupsByteCount = 20 * 1024 * 1024
+    /// Changes this recent are never dropped to save space.
+    static let minimumKeptAge: TimeInterval = 24 * 3600
 
     let home: ElfHome
 
@@ -305,7 +308,11 @@ nonisolated struct ElfChangeLog {
             let neededSHA256s = Set(entries.flatMap { [$0.previousContentSHA256, $0.newContentSHA256].compactMap { $0 } })
             return neededSHA256s.reduce(0) { byteCount, contentSHA256 in byteCount + (backupByteCountBySHA256[contentSHA256] ?? 0) }
         }
-        while !keptEntries.isEmpty, neededBackupByteCount(keptEntries) > Self.maximumBackupsByteCount {
+        // Over the size budget, the oldest go first — but never a change
+        // from the last day, so a fresh undo is always there.
+        while let oldestEntry = keptEntries.first,
+              now.timeIntervalSince(oldestEntry.date) > Self.minimumKeptAge,
+              neededBackupByteCount(keptEntries) > Self.maximumBackupsByteCount {
             keptEntries.removeFirst()
         }
 
@@ -333,7 +340,20 @@ nonisolated struct ElfChangeLog {
     /// file in a folder the user granted (an absolute path, checked against
     /// the grants by the folder tools before it's ever logged).
     private func fileURL(forLoggedPath loggedPath: String) throws -> URL {
-        loggedPath.hasPrefix("/") ? URL(fileURLWithPath: loggedPath) : try home.resolvedURLInsideHome(loggedPath)
+        guard loggedPath.hasPrefix("/") else { return try home.resolvedURLInsideHome(loggedPath) }
+        // A logged path outside the elf's folder never points into elfhub's
+        // own data — an undo can't be used to rewrite it.
+        let elfhubDataFolderPath = ElfHome.resolvedPath(of: ElfHome.defaultElvesDirectory.deletingLastPathComponent())
+        let resolvedLoggedPath = ElfHome.resolvedPath(of: URL(fileURLWithPath: loggedPath))
+        guard !Self.isInsideElfhubData(resolvedLoggedPath, elfhubDataFolderPath: elfhubDataFolderPath),
+              !Self.isInsideElfhubData(resolvedLoggedPath, elfhubDataFolderPath: ElfHome.resolvedPath(of: home.directory)) else {
+            throw ElfChangeLogError.elfFolderGone
+        }
+        return URL(fileURLWithPath: resolvedLoggedPath)
+    }
+
+    static func isInsideElfhubData(_ path: String, elfhubDataFolderPath: String) -> Bool {
+        path == elfhubDataFolderPath || path.hasPrefix(elfhubDataFolderPath + "/")
     }
 
     /// A change never recreates an elf whose folder is gone — a worker still

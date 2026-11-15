@@ -27,6 +27,11 @@ protocol ElfWebPageFetcher: AnyObject {
 enum ElfWebTools {
     static let maximumPageTextCharacters = 20_000
 
+    /// The elf's web switch, read from disk at the moment of use.
+    static func isWebStillOn(for context: ElfToolContext) -> Bool {
+        context.elf.home.readConfiguration().capabilities.isWebEnabled(isMainElf: context.elf.id == ElfManager.mainElfIdentifier)
+    }
+
     static func tools(pageFetcher: ElfWebPageFetcher, webSearchProvider: WebSearchProvider?) -> [ElfTool] {
         var webTools: [ElfTool] = [FetchPageTool(pageFetcher: pageFetcher)]
         if let webSearchProvider {
@@ -59,7 +64,12 @@ private struct FetchPageTool: ElfTool {
         let arguments = ElfToolArguments(argumentsJSON: argumentsJSON)
         guard let address = arguments.string("url")?.trimmingCharacters(in: .whitespacesAndNewlines),
               let pageURL = URL(string: address) else { return .failure("give the page's full address.") }
-        guard context.fetchPageURLPolicy.allows(pageURL) else {
+        // Read now, not when the tool was handed out: switching the web off
+        // stops a task already running.
+        guard ElfWebTools.isWebStillOn(for: context) else {
+            return .failure("the web is switched off for you now.")
+        }
+        guard context.fetchPageURLPolicy.allows(pageURL), let httpsPageURL = FetchPageURLPolicy.httpsURL(for: pageURL) else {
             return .failure("you can only open pages from your search results, links on pages you opened, or addresses the user gave you.")
         }
         if let refusal = context.beginUsing(.web) { return .failure(refusal) }
@@ -67,7 +77,7 @@ private struct FetchPageTool: ElfTool {
 
         let fetchedPage: ElfFetchedWebPage
         do {
-            fetchedPage = try await pageFetcher.fetch(pageURL)
+            fetchedPage = try await pageFetcher.fetch(httpsPageURL)
         } catch {
             return .failure("couldn't open \(address): \(error.localizedDescription)")
         }
@@ -82,10 +92,13 @@ private struct FetchPageTool: ElfTool {
         let pageTitle: String
         let pageText: String
         if mimeType.contains("html") {
-            let extractedPage = WebPageTextExtractor.page(
-                fromHTML: String(decoding: fetchedPage.data, as: UTF8.self),
-                pageURL: fetchedPage.finalURL ?? pageURL
-            )
+            let pageData = fetchedPage.data
+            let extractionBaseURL = fetchedPage.finalURL ?? httpsPageURL
+            // Off the main thread: the page is whatever the site sent.
+            let extractedPage = await Task.detached(priority: .userInitiated) {
+                WebPageTextExtractor.page(fromHTML: String(decoding: pageData, as: UTF8.self), pageURL: extractionBaseURL)
+            }.value
+            try Task.checkCancellation()
             pageTitle = extractedPage.title
             pageText = extractedPage.text
             context.fetchPageURLPolicy.recordLinks(onOpenedPage: extractedPage.linkURLs)
@@ -101,7 +114,7 @@ private struct FetchPageTool: ElfTool {
         let pageCount = max(1, Int((Double(pageText.count) / Double(ElfWebTools.maximumPageTextCharacters)).rounded(.up)))
         let requestedPage = min(max(arguments.integer("page") ?? 1, 1), pageCount)
         let shownText = String(pageText.dropFirst((requestedPage - 1) * ElfWebTools.maximumPageTextCharacters).prefix(ElfWebTools.maximumPageTextCharacters))
-        var header = (pageTitle.isEmpty ? "" : pageTitle + "\n") + (fetchedPage.finalURL ?? pageURL).absoluteString
+        var header = (pageTitle.isEmpty ? "" : pageTitle + "\n") + (fetchedPage.finalURL ?? httpsPageURL).absoluteString
         if pageCount > 1 { header += " (part \(requestedPage) of \(pageCount))" }
         return ElfToolOutcome(resultText: header + "\n\n" + shownText)
     }
@@ -122,6 +135,7 @@ private struct WebSearchTool: ElfTool {
     func run(argumentsJSON: String, context: ElfToolContext) async throws -> ElfToolOutcome {
         guard let query = ElfToolArguments(argumentsJSON: argumentsJSON).string("query")?.trimmingCharacters(in: .whitespacesAndNewlines),
               !query.isEmpty else { return .failure("give a search query.") }
+        guard ElfWebTools.isWebStillOn(for: context) else { return .failure("the web is switched off for you now.") }
         if let refusal = context.beginUsing(.web) { return .failure(refusal) }
         try Task.checkCancellation()
         let searchResults: [WebSearchResult]
@@ -147,8 +161,8 @@ private struct WebSearchTool: ElfTool {
 /// before connecting and on each redirect — so no name that points into
 /// the user's own network is ever contacted.
 final class URLSessionWebPageFetcher: NSObject, ElfWebPageFetcher, URLSessionTaskDelegate {
-    static let timeoutInSeconds: TimeInterval = 15
-    static let maximumPageBytes = 2 * 1024 * 1024
+    nonisolated static let timeoutInSeconds: TimeInterval = 15
+    nonisolated static let maximumPageBytes = 2 * 1024 * 1024
 
     private lazy var urlSession: URLSession = {
         let sessionConfiguration = URLSessionConfiguration.ephemeral
@@ -162,22 +176,34 @@ final class URLSessionWebPageFetcher: NSObject, ElfWebPageFetcher, URLSessionTas
         guard let host = url.host, await Self.resolvesOnlyToPublicAddresses(host: host) else {
             throw URLError(.cannotConnectToHost)
         }
-        let (responseBytes, response) = try await urlSession.bytes(from: url)
-        if let expectedLength = (response as? HTTPURLResponse)?.expectedContentLength, expectedLength > Self.maximumPageBytes {
-            throw URLError(.dataLengthExceedsMaximum)
-        }
-        var pageData = Data()
-        for try await byte in responseBytes {
-            pageData.append(byte)
-            if pageData.count > Self.maximumPageBytes { throw URLError(.dataLengthExceedsMaximum) }
-        }
+        // Note: ATS (https only for named hosts) plus the certificate check
+        // is what stops a name that resolves differently a moment later
+        // (DNS rebinding) from reaching the user's network; keep both.
+        let pageSession = urlSession
+        let (pageData, response) = try await Task.detached(priority: .userInitiated) {
+            try await Self.download(url, using: pageSession)
+        }.value
         if let statusCode = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(statusCode) {
             throw URLError(.badServerResponse)
         }
         return ElfFetchedWebPage(finalURL: response.url, mimeType: response.mimeType, data: pageData)
     }
 
-    func urlSession(
+    /// Reads the page off the main thread, stopping past 2 MB.
+    nonisolated private static func download(_ url: URL, using pageSession: URLSession) async throws -> (Data, URLResponse) {
+        let (responseBytes, response) = try await pageSession.bytes(from: url)
+        if let expectedLength = (response as? HTTPURLResponse)?.expectedContentLength, expectedLength > maximumPageBytes {
+            throw URLError(.dataLengthExceedsMaximum)
+        }
+        var pageData = Data()
+        for try await byte in responseBytes {
+            pageData.append(byte)
+            if pageData.count > maximumPageBytes { throw URLError(.dataLengthExceedsMaximum) }
+        }
+        return (pageData, response)
+    }
+
+    nonisolated func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
         willPerformHTTPRedirection response: HTTPURLResponse,

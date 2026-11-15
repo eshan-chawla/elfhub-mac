@@ -113,4 +113,65 @@ struct ElfFolderGrantTests {
         #expect(!ElfExporter.exportedItemNames(options: ElfExporter.Options(includesProfile: true, includesFiles: true)).contains("access.json"))
         #expect(throws: ElfHomeError.self) { try fixture.home.resolvedURLForElfTool("access.json", access: .read) }
     }
+
+    // MARK: Review fixes
+
+    @Test func elfhubsOwnDataIsNeverReachableThroughAGrant() async throws {
+        let fixture = try makeFixture(allowsWriting: true)
+        defer { try? FileManager.default.removeItem(at: fixture.rootDirectory) }
+        // A grant that contains the elf's own folder.
+        try fixture.home.writeFolderGrants([ElfFolderGrant(path: fixture.rootDirectory.path, allowsWriting: true)])
+        let accessFilePath = fixture.home.accessURL.path
+        #expect(try await run("read_user_file", ["path": fixture.home.configurationURL.path], fixture).isFailure)
+        #expect(try await run("write_user_file", ["path": accessFilePath, "content": "[]"], fixture).isFailure)
+        #expect(fixture.home.readFolderGrants().count == 1)
+    }
+
+    @Test func foldersThatAreTooBroadCannotBeGranted() {
+        let homeFolder = URL(fileURLWithPath: NSHomeDirectory())
+        #expect(ElfFolderTools.grantProblem(forFolder: URL(fileURLWithPath: "/")) != nil)
+        #expect(ElfFolderTools.grantProblem(forFolder: URL(fileURLWithPath: "/Users")) != nil)
+        #expect(ElfFolderTools.grantProblem(forFolder: homeFolder) != nil)
+        #expect(ElfFolderTools.grantProblem(forFolder: homeFolder.appendingPathComponent("Library")) != nil)
+        #expect(ElfFolderTools.grantProblem(forFolder: homeFolder.appendingPathComponent("Library/Application Support/elfhub/Elves")) != nil)
+        #expect(ElfFolderTools.grantProblem(forFolder: homeFolder.appendingPathComponent("Documents/Trip")) == nil)
+    }
+
+    @Test func largeOrNonTextFilesAreNotOverwrittenAndDotFoldersAreLeftAlone() async throws {
+        let fixture = try makeFixture(allowsWriting: true)
+        defer { try? FileManager.default.removeItem(at: fixture.rootDirectory) }
+        let bigFileURL = fixture.grantedFolder.appendingPathComponent("big.csv")
+        try Data(repeating: 0x41, count: ElfHome.fileByteLimit + 1).write(to: bigFileURL)
+        #expect(try await run("write_user_file", ["path": bigFileURL.path, "content": "x"], fixture).isFailure)
+        let binaryFileURL = fixture.grantedFolder.appendingPathComponent("report.docx")
+        try Data([0xFF, 0xFE, 0x00, 0xD8]).write(to: binaryFileURL)
+        #expect(try await run("write_user_file", ["path": binaryFileURL.path, "content": "x"], fixture).isFailure)
+        let gitConfigPath = fixture.grantedFolder.appendingPathComponent(".git/config").path
+        #expect(try await run("write_user_file", ["path": gitConfigPath, "content": "x"], fixture).isFailure)
+    }
+
+    @Test func removingAGrantStopsToolsAlreadyHanded() async throws {
+        let fixture = try makeFixture(allowsWriting: true)
+        defer { try? FileManager.default.removeItem(at: fixture.rootDirectory) }
+        let readTool = try #require(ElfFolderTools.tools(grants: fixture.home.readFolderGrants()).first { $0.definition.name == "read_user_file" })
+        try fixture.home.writeFolderGrants([])
+        let argumentsJSON = String(decoding: try JSONSerialization.data(withJSONObject: ["path": fixture.grantedFolder.appendingPathComponent("plan.md").path]), as: UTF8.self)
+        #expect(try await readTool.run(argumentsJSON: argumentsJSON, context: toolContext(fixture)).isFailure)
+    }
+
+    @Test func specialFilesAreNotRead() async throws {
+        let fixture = try makeFixture(allowsWriting: false)
+        defer { try? FileManager.default.removeItem(at: fixture.rootDirectory) }
+        let pipePath = fixture.grantedFolder.appendingPathComponent("pipe").path
+        #expect(mkfifo(pipePath, 0o600) == 0)
+        #expect(try await run("read_user_file", ["path": pipePath], fixture).isFailure)
+    }
+
+    @Test func aBadPathDoesNotLockOutTheWeb() async throws {
+        let fixture = try makeFixture(allowsWriting: false)
+        defer { try? FileManager.default.removeItem(at: fixture.rootDirectory) }
+        let context = toolContext(fixture)
+        _ = try await run("read_user_file", ["path": fixture.outsideFolder.appendingPathComponent("diary.md").path], fixture, context: context)
+        #expect(!context.usedResources.contains(.userFolders))
+    }
 }

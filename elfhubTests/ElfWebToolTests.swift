@@ -177,4 +177,59 @@ struct ElfWebToolTests {
         bothContext.usedResources.insert(.userFolders)
         #expect(!(try await fetchPage("https://example.com/a", with: fetcher, context: bothContext)).isFailure)
     }
+
+    // MARK: Review fixes
+
+    @Test func hostilePagesAreReadQuickly() throws {
+        let pageURL = try #require(URL(string: "https://example.com/"))
+        for hostileHTML in [String(repeating: "<", count: 100_000), String(repeating: "<!--", count: 25_000), String(repeating: "<style>", count: 15_000)] {
+            let startDate = Date()
+            _ = WebPageTextExtractor.page(fromHTML: hostileHTML, pageURL: pageURL)
+            #expect(Date().timeIntervalSince(startDate) < 1.5)
+        }
+    }
+
+    @Test func tableCellsStaySeparateAndUnclosedScriptsStayHidden() throws {
+        let pageURL = try #require(URL(string: "https://example.com/"))
+        #expect(WebPageTextExtractor.page(fromHTML: "<table><tr><td>a</td><td>b</td></tr></table>", pageURL: pageURL).text == "a b")
+        #expect(!WebPageTextExtractor.page(fromHTML: "<p>hi</p><script>var secret = 1;", pageURL: pageURL).text.contains("secret"))
+    }
+
+    @Test func addressesTypedWithoutHttpsOpenOverHttps() async throws {
+        let (toolContext, cleanUp) = try makeToolContext(userUtterance: "read example.com/post please")
+        defer { cleanUp() }
+        let fetcher = FakeWebPageFetcher()
+        fetcher.pagesByURL["https://example.com/post"] = htmlPage("<p>the post</p>")
+        let httpsOutcome = try await fetchPage("https://example.com/post", with: fetcher, context: toolContext)
+        #expect(httpsOutcome.resultText.contains("the post"))
+        let httpOutcome = try await fetchPage("http://example.com/post", with: fetcher, context: toolContext)
+        #expect(httpOutcome.resultText.contains("the post"))
+        #expect(fetcher.fetchedURLs.allSatisfy { $0.scheme == "https" })
+    }
+
+    @Test func aHugePageNumberDoesNotCrash() async throws {
+        #expect(ElfToolArguments(argumentsJSON: #"{"page": 1e20}"#).integer("page") == nil)
+        #expect(ElfToolArguments(argumentsJSON: #"{"page": 2}"#).integer("page") == 2)
+    }
+
+    @Test func turningTheWebOffStopsAToolAlreadyHanded() async throws {
+        let (toolContext, cleanUp) = try makeToolContext(userUtterance: "read https://example.com/a")
+        defer { cleanUp() }
+        let fetcher = FakeWebPageFetcher()
+        fetcher.pagesByURL["https://example.com/a"] = htmlPage("<p>a</p>")
+        var switchedOffConfiguration = toolContext.elf.home.readConfiguration()
+        switchedOffConfiguration.capabilities.webEnabled = false
+        try toolContext.elf.home.writeConfiguration(switchedOffConfiguration)
+        #expect(try await fetchPage("https://example.com/a", with: fetcher, context: toolContext).isFailure)
+        #expect(fetcher.fetchedURLs.isEmpty)
+    }
+
+    @Test func moreAddressRangesAreRecognisedAsPrivate() {
+        for privateHost in ["198.18.1.1", "224.0.0.1", "255.255.255.255", "240.0.0.1", "fec0::1", "64:ff9b::7f00:1", "::127.0.0.1", "::ffff:10.0.0.1", "localhost."] {
+            #expect(FetchPageURLPolicy.isPrivateNetworkHost(privateHost), "\(privateHost)")
+        }
+        for publicHost in ["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946", "example.com"] {
+            #expect(!FetchPageURLPolicy.isPrivateNetworkHost(publicHost), "\(publicHost)")
+        }
+    }
 }

@@ -277,8 +277,22 @@ final class ElfTaskScheduler: ObservableObject {
             changeLog: ElfChangeLog(home: workingElf.home),
             origin: .task(taskIdentifier: taskIdentifier),
             userUtterance: runningTask.instruction,
+            // What earlier runs of this task read and used still counts.
+            influencedBy: runningTask.influencedBy,
             turnEffectLedger: turnEffectLedger
         )
+        toolContext.usedResources = runningTask.usedResources
+        // Whatever happens, the next run (and the hub) know what this one used.
+        defer {
+            if var endedTask = task(withIdentifier: taskIdentifier) {
+                endedTask.usedResources.formUnion(toolContext.usedResources)
+                endedTask.influencedBy.formUnion(toolContext.influencedBy)
+                store(endedTask)
+            }
+            if !turnEffectLedger.recordedFileChanges.isEmpty {
+                try? ElfChangeLog(home: workingElf.home).prune(now: Date())
+            }
+        }
         let initialRequest = LanguageModelRequest(
             systemPrompt: systemPrompt,
             history: runningTask.conversationExcerpt.map { LanguageModelHistoryTurn(userText: $0.userText, assistantText: $0.assistantText) },

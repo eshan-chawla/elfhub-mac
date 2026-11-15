@@ -67,11 +67,21 @@ enum WebSearchSettings {
         set { UserDefaults.standard.set(newValue, forKey: searxngBaseURLDefaultsKey) }
     }
 
+    /// Each service keeps its own key, so switching services never sends
+    /// one vendor's key to another.
+    static func keychainAccountName(for preset: WebSearchServicePreset) -> String {
+        "service-key-web-search-" + preset.rawValue
+    }
+
+    static func savedKey(for preset: WebSearchServicePreset) -> String? {
+        KeychainSecretStore.secret(forAccount: keychainAccountName(for: preset))
+    }
+
     /// The search provider for elves, or nil when none is set up.
     static func currentProvider() -> ConfiguredWebSearchProvider? {
         ConfiguredWebSearchProvider.makeIfReady(
             preset: selectedPreset,
-            apiKey: KeychainSecretStore.secret(for: .webSearch),
+            apiKey: selectedPreset.flatMap(savedKey(for:)),
             searxngBaseURL: URL(string: searxngBaseURL)
         )
     }
@@ -162,8 +172,11 @@ struct ConfiguredWebSearchProvider: WebSearchProvider, Equatable {
         .map { $0 }
     }
 
+    /// One shared ephemeral session for searches (no cookies or cache).
+    private static let searchSession = URLSession(configuration: .ephemeral)
+
     func search(query: String) async throws -> [WebSearchResult] {
-        let (responseData, response) = try await URLSession(configuration: .ephemeral).data(for: try makeRequest(query: query))
+        let (responseData, response) = try await Self.searchSession.data(for: try makeRequest(query: query))
         if let statusCode = (response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(statusCode) {
             throw URLError(statusCode == 401 || statusCode == 403 ? .userAuthenticationRequired : .badServerResponse)
         }

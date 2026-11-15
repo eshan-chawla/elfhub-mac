@@ -147,7 +147,7 @@ struct ElfChangeLogTests {
         for writeNumber in 1...120 {
             try changeLog.recordWrite(path: "files/big-\(writeNumber).md", newText: largeText + "\(writeNumber)", origin: .hub, influencedBy: [])
         }
-        try changeLog.prune(now: Date())
+        try changeLog.prune(now: Date(timeIntervalSinceNow: 2 * 24 * 3600))
         #expect(changeLog.backupsByteCount() <= ElfChangeLog.maximumBackupsByteCount)
         #expect(!changeLog.entries().isEmpty)
     }
@@ -177,5 +177,21 @@ struct ElfChangeLogTests {
             try changeLog.recordWrite(path: "files/a.md", newText: "a", origin: .hub, influencedBy: [])
         }
         #expect(!FileManager.default.fileExists(atPath: home.directory.path))
+    }
+
+    @Test func todaysChangesAreNeverPrunedForSize() throws {
+        let (_, changeLog, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        let largeText = String(repeating: "x", count: 200_000)
+        for writeNumber in 1...120 {
+            try changeLog.recordWrite(path: "files/big-\(writeNumber).md", newText: largeText + "\(writeNumber)", origin: .hub, influencedBy: [])
+        }
+        try changeLog.prune(now: Date())
+        #expect(changeLog.entries().count == 120)
+    }
+
+    @Test func undoNeverWritesIntoElfhubsOwnFolder() throws {
+        #expect(ElfChangeLog.isInsideElfhubData("/Users/someone/Library/Application Support/elfhub/Elves/main/access.json", elfhubDataFolderPath: "/Users/someone/Library/Application Support/elfhub"))
+        #expect(!ElfChangeLog.isInsideElfhubData("/Users/someone/Documents/plan.md", elfhubDataFolderPath: "/Users/someone/Library/Application Support/elfhub"))
     }
 }

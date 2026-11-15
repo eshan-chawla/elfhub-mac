@@ -387,7 +387,7 @@ struct ComputerUseAuditLogSettingsSection: View {
 private struct WebSearchSettingsCard: View {
     @State private var selectedPreset = WebSearchSettings.selectedPreset
     @State private var apiKeyDraft = ""
-    @State private var hasSavedKey = KeychainSecretStore.secret(for: .webSearch)?.isEmpty == false
+    @State private var savedKeyRevision = 0
     @State private var searxngBaseURLDraft = WebSearchSettings.searxngBaseURL
 
     var body: some View {
@@ -407,6 +407,7 @@ private struct WebSearchSettingsCard: View {
                     set: { newPreset in
                         selectedPreset = newPreset
                         WebSearchSettings.selectedPreset = newPreset
+                        apiKeyDraft = ""
                     }
                 )) {
                     Text("Off").tag(WebSearchServicePreset?.none)
@@ -420,13 +421,21 @@ private struct WebSearchSettingsCard: View {
                 .pointerCursor()
             }
             if let selectedPreset, selectedPreset.needsKey {
+                let hasSavedKey = savedKeyRevision >= 0 && WebSearchSettings.savedKey(for: selectedPreset)?.isEmpty == false
                 HStack(spacing: 8) {
-                    SecureField(hasSavedKey ? "Key saved — paste a new one to replace it" : "\(selectedPreset.displayName) key", text: $apiKeyDraft)
+                    SecureField(hasSavedKey ? "\(selectedPreset.displayName) key saved — paste a new one to replace it" : "\(selectedPreset.displayName) key", text: $apiKeyDraft)
                         .textFieldStyle(.roundedBorder)
-                        .onSubmit { saveKey() }
-                    Button("Save") { saveKey() }
+                        .onSubmit { saveKey(for: selectedPreset) }
+                    Button("Save") { saveKey(for: selectedPreset) }
                         .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
                         .pointerCursor(isEnabled: !apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if hasSavedKey {
+                        Button("Remove key") {
+                            _ = KeychainSecretStore.deleteSecret(forAccount: WebSearchSettings.keychainAccountName(for: selectedPreset))
+                            savedKeyRevision += 1
+                        }
+                        .pointerCursor()
+                    }
                     if let keyPageURL = selectedPreset.keyPageURL {
                         Button("Get a key") { NSWorkspace.shared.open(keyPageURL) }
                             .pointerCursor()
@@ -437,6 +446,7 @@ private struct WebSearchSettingsCard: View {
                 TextField("SearXNG address", text: $searxngBaseURLDraft)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { WebSearchSettings.searxngBaseURL = searxngBaseURLDraft }
+                    .onChange(of: searxngBaseURLDraft) { _, newAddress in WebSearchSettings.searxngBaseURL = newAddress }
                 Text("Its JSON output must be switched on (search.formats: json in its settings).")
                     .font(.system(size: 11))
                     .foregroundColor(DS.Colors.textTertiary)
@@ -444,10 +454,11 @@ private struct WebSearchSettingsCard: View {
         }
     }
 
-    private func saveKey() {
+    private func saveKey(for preset: WebSearchServicePreset) {
         let trimmedKey = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else { return }
-        hasSavedKey = KeychainSecretStore.setSecret(trimmedKey, for: .webSearch)
+        _ = KeychainSecretStore.setSecret(trimmedKey, forAccount: WebSearchSettings.keychainAccountName(for: preset))
+        savedKeyRevision += 1
         apiKeyDraft = ""
     }
 }
@@ -460,7 +471,7 @@ private struct ElvesReachSettingsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             LayerFieldLabel(text: "What your elves reach")
-            Text("Elves with the web switched on (your other elves by default; your main elf only if you turn it on) send their search words to the web search service you picked in Settings › Models, and open web pages they were led to — search results and their links, or addresses you give them. Pages are fetched by this app straight from those sites, never through an elfhub server, and never from your own Mac or home network.")
+            Text("Elves with the web switched on (your other elves by default; your main elf only if you turn it on) send their search words to the web search service you picked in Settings › Models, and open web pages they were led to — search results and their links, or addresses you give them. Pages are fetched by this app straight from those sites over https, never through an elfhub server, and addresses on your own Mac or home network are refused.")
                 .font(.system(size: 12))
                 .foregroundColor(DS.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
