@@ -118,7 +118,7 @@ final class CompanionManager: ObservableObject {
     /// The web (when the elf may use it) for this elf's turns and tasks.
     func outsideTools(for elf: Elf) -> [ElfTool] {
         guard elf.configuration.capabilities.isWebEnabled(isMainElf: elf.id == ElfManager.mainElfIdentifier) else { return [] }
-        return ElfWebTools.tools(pageFetcher: webPageFetcher, webSearchProvider: nil)
+        return ElfWebTools.tools(pageFetcher: webPageFetcher, webSearchProvider: WebSearchSettings.currentProvider())
     }
 
     /// Whether an elf can work in the background: it (or the main elf) has

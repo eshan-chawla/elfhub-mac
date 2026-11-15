@@ -97,6 +97,8 @@ enum ServiceSecretAccount: String, CaseIterable, Identifiable {
     case elevenLabs
     case openAICompatibleTranscription
     case openAICompatibleSpeech
+    /// The web search service elves use (Brave, Tavily or Exa).
+    case webSearch
 
     var id: String { rawValue }
 
@@ -106,6 +108,7 @@ enum ServiceSecretAccount: String, CaseIterable, Identifiable {
         case .elevenLabs: return "service-key-elevenlabs"
         case .openAICompatibleTranscription: return "service-key-openai-transcription"
         case .openAICompatibleSpeech: return "service-key-openai-speech"
+        case .webSearch: return "service-key-web-search"
         }
     }
 
@@ -115,6 +118,7 @@ enum ServiceSecretAccount: String, CaseIterable, Identifiable {
         case .elevenLabs: return "ElevenLabs"
         case .openAICompatibleTranscription: return "Whisper / OpenAI transcription"
         case .openAICompatibleSpeech: return "OpenAI-compatible voice"
+        case .webSearch: return "Web search"
         }
     }
 }

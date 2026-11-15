@@ -149,6 +149,9 @@ private struct ModelsSettingsContent: View {
             TextToSpeechLayerSection(companionManager: companionManager)
         }
 
+        WebSearchSettingsCard()
+            .mainAppCard()
+
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.down.circle")
@@ -372,5 +375,77 @@ struct ComputerUseAuditLogSettingsSection: View {
         } message: {
             Text("This removes the record of actions elfhub took from this Mac. It can't be undone.")
         }
+    }
+}
+
+// MARK: - Web search
+
+/// The optional search service elves use for web_search: off, or Brave,
+/// Tavily or Exa with the user's key, or their own SearXNG server.
+private struct WebSearchSettingsCard: View {
+    @State private var selectedPreset = WebSearchSettings.selectedPreset
+    @State private var apiKeyDraft = ""
+    @State private var hasSavedKey = KeychainSecretStore.secret(for: .webSearch)?.isEmpty == false
+    @State private var searxngBaseURLDraft = WebSearchSettings.searxngBaseURL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LayerFieldLabel(text: "Web search (optional)")
+            Text("Lets your elves search the web for their tasks. The service you pick gets only the search words. Without one, elves can still open addresses you give them.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Text("Service")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(DS.Colors.textSecondary)
+                Spacer()
+                Picker("", selection: Binding(
+                    get: { selectedPreset },
+                    set: { newPreset in
+                        selectedPreset = newPreset
+                        WebSearchSettings.selectedPreset = newPreset
+                    }
+                )) {
+                    Text("Off").tag(WebSearchServicePreset?.none)
+                    ForEach(WebSearchServicePreset.allCases) { preset in
+                        Text(preset.displayName).tag(WebSearchServicePreset?.some(preset))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+                .pointerCursor()
+            }
+            if let selectedPreset, selectedPreset.needsKey {
+                HStack(spacing: 8) {
+                    SecureField(hasSavedKey ? "Key saved — paste a new one to replace it" : "\(selectedPreset.displayName) key", text: $apiKeyDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { saveKey() }
+                    Button("Save") { saveKey() }
+                        .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .pointerCursor(isEnabled: !apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if let keyPageURL = selectedPreset.keyPageURL {
+                        Button("Get a key") { NSWorkspace.shared.open(keyPageURL) }
+                            .pointerCursor()
+                    }
+                }
+            }
+            if selectedPreset == .searxng {
+                TextField("SearXNG address", text: $searxngBaseURLDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { WebSearchSettings.searxngBaseURL = searxngBaseURLDraft }
+                Text("Its JSON output must be switched on (search.formats: json in its settings).")
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.textTertiary)
+            }
+        }
+    }
+
+    private func saveKey() {
+        let trimmedKey = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty else { return }
+        hasSavedKey = KeychainSecretStore.setSecret(trimmedKey, for: .webSearch)
+        apiKeyDraft = ""
     }
 }
