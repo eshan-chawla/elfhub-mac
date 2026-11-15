@@ -48,9 +48,12 @@ struct ComputerUseToolCallTranslatorTests {
         #expect(command(toolsetCall("key", #"{"text":"cmd+s","repeat":3}"#)) == .act(.key(comboString: "cmd+s"), repeatCount: 3))
         #expect(command(toolsetCall("wait", #"{"duration":2}"#)) == .wait(seconds: 2))
         #expect(command(toolsetCall("zoom", #"{"region":[100,200,400,350]}"#)) == .zoom(regionInScreenshotPixels: CGRect(x: 100, y: 200, width: 300, height: 150)))
-        // Six wheel clicks are three of elfhub's six-line scroll steps.
+        // One scroll, as far as asked (each unit a tenth of the screen) —
+        // not a row of separate scrolls.
         #expect(command(toolsetCall("scroll", #"{"coordinate":[500,400],"scroll_direction":"down","scroll_amount":6}"#))
-            == .act(.scroll(screenshotPixel: CGPoint(x: 500, y: 400), direction: .down, screenNumber: nil), repeatCount: 3))
+            == .act(.scroll(screenshotPixel: CGPoint(x: 500, y: 400), direction: .down, screenNumber: nil, amountInTenthsOfScreen: 6), repeatCount: 1))
+        #expect(command(toolsetCall("scroll", #"{"coordinate":[500,400],"scroll_direction":"up"}"#))
+            == .act(.scroll(screenshotPixel: CGPoint(x: 500, y: 400), direction: .up, screenNumber: nil, amountInTenthsOfScreen: CompanionScreenAction.defaultScrollAmountInTenthsOfScreen), repeatCount: 1))
     }
 
     @Test func outOfRangeOrUnsupportedStepsAreRefusedWithAReason() {
@@ -75,6 +78,8 @@ struct ComputerUseToolCallTranslatorTests {
         #expect(command(functionCall(#"{"action":"drag","x":0,"y":0,"x2":10,"y2":20}"#))
             == .act(.drag(fromScreenshotPixel: .zero, toScreenshotPixel: CGPoint(x: 10, y: 20), screenNumber: nil), repeatCount: 1))
         #expect(command(functionCall(#"{"action":"key","keys":"tab","repeat":2}"#)) == .act(.key(comboString: "tab"), repeatCount: 2))
+        #expect(command(functionCall(#"{"action":"scroll","x":10,"y":20,"direction":"down","repeat":3}"#))
+            == .act(.scroll(screenshotPixel: CGPoint(x: 10, y: 20), direction: .down, screenNumber: nil, amountInTenthsOfScreen: 3), repeatCount: 1))
         #expect(command(functionCall(#"{"action":"take_screenshot"}"#)) == .screenshot)
         #expect(command(functionCall(#"{"action":"zoom","x":0,"y":0,"x2":640,"y2":400}"#)) == .zoom(regionInScreenshotPixels: CGRect(x: 0, y: 0, width: 640, height: 400)))
         #expect(command(functionCall(#"{"action":"wait","seconds":1.5}"#)) == .wait(seconds: 1.5))
@@ -96,6 +101,16 @@ struct ComputerUseToolCallTranslatorTests {
             nativePixelsPerScreenshotPixel: 2
         )
         #expect(wideZoom.widthInPixels == 1280 && wideZoom.heightInPixels == 128)
+    }
+
+    @Test func aScrollMovesAKnownDistanceInSmallSmoothSteps() {
+        // Five tenths of a 900-point-tall screen is 450 points.
+        #expect(ScreenActionSynthesizer.scrollDistanceInPoints(amountInTenthsOfScreen: 5, displayHeightInPoints: 900) == 450)
+        // Small steps add up to exactly the distance, none bigger than the step size.
+        let chunks = ScreenActionSynthesizer.scrollChunksInPoints(totalDistanceInPoints: 450)
+        #expect(chunks.reduce(0, +) == 450)
+        #expect(chunks.allSatisfy { $0 > 0 && $0 <= ScreenActionSynthesizer.maximumScrollChunkInPoints })
+        #expect(ScreenActionSynthesizer.scrollChunksInPoints(totalDistanceInPoints: 0).isEmpty)
     }
 
     @Test func onlyComputerCallsAreHandled() {

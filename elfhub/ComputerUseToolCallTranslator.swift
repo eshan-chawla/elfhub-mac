@@ -38,9 +38,8 @@ enum ComputerUseToolCallTranslator {
     static let claudeComputerToolsetName = "computer"
     static let maximumWaitInSeconds: Double = 10
     static let maximumRepeatCount = 20
-    /// Claude's scroll amount counts wheel clicks; one of elfhub's scroll
-    /// steps moves six lines, about two clicks.
-    static let wheelClicksPerScrollStep = 2
+    /// The farthest one scroll goes, in tenths of the screen (two screens).
+    static let maximumScrollAmountInTenthsOfScreen = 20
 
     /// Whether this call is a step on the screen (rather than pointing, a
     /// note, or an elf's own tool).
@@ -97,12 +96,11 @@ enum ComputerUseToolCallTranslator {
             guard let direction = stepReader.string(named: "scroll_direction").flatMap(ScreenActionSynthesizer.ScrollDirection.init(rawValue:)) else {
                 return .refuse(reason: "scroll needs scroll_direction: up, down, left or right.")
             }
-            let wheelClicks = stepReader.integer(named: "scroll_amount") ?? 3
-            guard (1...(maximumRepeatCount * wheelClicksPerScrollStep)).contains(wheelClicks) else {
-                return .refuse(reason: "scroll_amount must be between 1 and \(maximumRepeatCount * wheelClicksPerScrollStep).")
-            }
-            let scrollSteps = Int((Double(wheelClicks) / Double(wheelClicksPerScrollStep)).rounded(.up))
-            return .act(.scroll(screenshotPixel: targetPoint, direction: direction, screenNumber: nil), repeatCount: scrollSteps)
+            return scrollCommand(
+                targetPoint: targetPoint,
+                direction: direction,
+                amountInTenthsOfScreen: stepReader.integer(named: "scroll_amount")
+            )
         case "type":
             guard let text = stepReader.rawString(named: "text"), !text.isEmpty else {
                 return .refuse(reason: "type needs the text to type.")
@@ -151,11 +149,11 @@ enum ComputerUseToolCallTranslator {
                   let direction = stepReader.string(named: "direction").flatMap(ScreenActionSynthesizer.ScrollDirection.init(rawValue:)) else {
                 return .refuse(reason: "scroll needs x, y and a direction (up, down, left, right).")
             }
-            let repeatCount = stepReader.integer(named: "repeat") ?? 1
-            guard (1...maximumRepeatCount).contains(repeatCount) else {
-                return .refuse(reason: "repeat must be between 1 and \(maximumRepeatCount).")
-            }
-            return .act(.scroll(screenshotPixel: targetPoint, direction: direction, screenNumber: nil), repeatCount: repeatCount)
+            return scrollCommand(
+                targetPoint: targetPoint,
+                direction: direction,
+                amountInTenthsOfScreen: stepReader.integer(named: "repeat")
+            )
         case "type":
             guard let text = stepReader.rawString(named: "text"), !text.isEmpty else {
                 return .refuse(reason: "type needs the text to type.")
@@ -180,6 +178,23 @@ enum ComputerUseToolCallTranslator {
         case "mouse_move": return .moveMouse(screenshotPixel: targetPoint, screenNumber: nil)
         default: return .click(screenshotPixel: targetPoint, label: label, screenNumber: nil)
         }
+    }
+
+    /// One scroll as far as asked (each unit a tenth of the screen), so it
+    /// is previewed once and moves a distance the model can predict.
+    private static func scrollCommand(
+        targetPoint: CGPoint,
+        direction: ScreenActionSynthesizer.ScrollDirection,
+        amountInTenthsOfScreen: Int?
+    ) -> ComputerUseStepCommand {
+        let scrollAmount = amountInTenthsOfScreen ?? CompanionScreenAction.defaultScrollAmountInTenthsOfScreen
+        guard (1...maximumScrollAmountInTenthsOfScreen).contains(scrollAmount) else {
+            return .refuse(reason: "scroll amount must be between 1 and \(maximumScrollAmountInTenthsOfScreen) (tenths of the screen; 10 is a full screen).")
+        }
+        return .act(
+            .scroll(screenshotPixel: targetPoint, direction: direction, screenNumber: nil, amountInTenthsOfScreen: scrollAmount),
+            repeatCount: 1
+        )
     }
 
     private static func keyCommand(comboString: String?, repeatCount: Int) -> ComputerUseStepCommand {
@@ -311,7 +326,7 @@ extension GuidanceToolDefinitions {
                 "direction": ["type": "string", "enum": ["up", "down", "left", "right"]],
                 "text": ["type": "string", "description": "literal text to type into the focused field"],
                 "keys": ["type": "string", "description": "shortcut such as cmd+s, return, tab, esc"],
-                "repeat": ["type": "integer", "description": "key or scroll: how many times (1-20)"],
+                "repeat": ["type": "integer", "description": "key: how many times (1-20). scroll: how far, in tenths of the screen (5 = half a screen, 10 = a full screen)"],
                 "seconds": ["type": "number", "description": "wait: how long, up to 10"],
             ],
             "required": ["action"],

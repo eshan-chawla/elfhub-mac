@@ -640,9 +640,18 @@ final class ScreenActionCoordinator: ObservableObject {
         case .doubleClick:
             guard let coreGraphicsTargetPoint = resolvedAction.coreGraphicsTargetPoint else { return false }
             await ScreenActionSynthesizer.performDoubleClick(at: coreGraphicsTargetPoint)
-        case let .scroll(_, direction, _):
+        case let .scroll(_, direction, _, amountInTenthsOfScreen):
             guard let coreGraphicsTargetPoint = resolvedAction.coreGraphicsTargetPoint else { return false }
-            await ScreenActionSynthesizer.performScroll(at: coreGraphicsTargetPoint, direction: direction)
+            let displayHeightInPoints = resolvedAction.displayFrame?.height ?? CGDisplayBounds(CGMainDisplayID()).height
+            await ScreenActionSynthesizer.performScroll(
+                at: coreGraphicsTargetPoint,
+                direction: direction,
+                distanceInPoints: ScreenActionSynthesizer.scrollDistanceInPoints(
+                    amountInTenthsOfScreen: amountInTenthsOfScreen,
+                    displayHeightInPoints: displayHeightInPoints
+                ),
+                shouldContinue: { [weak self] in !(self?.isStopRequested ?? true) }
+            )
         case let .type(text):
             // Focus is only known now (an earlier click may have moved it), so
             // the password rules are re-checked at the moment of typing.
@@ -1009,7 +1018,7 @@ final class ScreenActionCoordinator: ObservableObject {
         switch action {
         case let .click(screenshotPixel, _, screenNumber),
              let .doubleClick(screenshotPixel, _, screenNumber),
-             let .scroll(screenshotPixel, _, screenNumber),
+             let .scroll(screenshotPixel, _, screenNumber, _),
              let .rightClick(screenshotPixel, _, screenNumber),
              let .tripleClick(screenshotPixel, _, screenNumber),
              let .moveMouse(screenshotPixel, screenNumber):

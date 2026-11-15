@@ -27,7 +27,10 @@ import Foundation
 enum CompanionScreenAction: Equatable {
     case click(screenshotPixel: CGPoint, label: String?, screenNumber: Int?)
     case doubleClick(screenshotPixel: CGPoint, label: String?, screenNumber: Int?)
-    case scroll(screenshotPixel: CGPoint, direction: ScreenActionSynthesizer.ScrollDirection, screenNumber: Int?)
+    /// Scrolls the content under the point by `amountInTenthsOfScreen`
+    /// tenths of the screen's height — a known distance in every app,
+    /// unlike wheel "lines", which each app turns into its own distance.
+    case scroll(screenshotPixel: CGPoint, direction: ScreenActionSynthesizer.ScrollDirection, screenNumber: Int?, amountInTenthsOfScreen: Int = CompanionScreenAction.defaultScrollAmountInTenthsOfScreen)
     case type(text: String)
     case key(comboString: String)
     // Used by the multi-step loop (computer use); single-shot replies and
@@ -40,6 +43,9 @@ enum CompanionScreenAction: Equatable {
     /// Move the pointer without clicking (to show a hover menu).
     case moveMouse(screenshotPixel: CGPoint, screenNumber: Int?)
 
+    /// Half a screen, when no amount is given (the [SCROLL] tag).
+    static let defaultScrollAmountInTenthsOfScreen = 5
+
     /// Short human-readable description used in the consent card and narration,
     /// e.g. "click the save button" or "press cmd+s".
     var humanReadableDescription: String {
@@ -48,7 +54,7 @@ enum CompanionScreenAction: Equatable {
             return "click \(label.map { "the \($0)" } ?? "here")"
         case let .doubleClick(_, label, _):
             return "double-click \(label.map { "the \($0)" } ?? "here")"
-        case let .scroll(_, direction, _):
+        case let .scroll(_, direction, _, _):
             return "scroll \(direction.rawValue)"
         case let .type(text):
             return "type \"\(text)\""

@@ -189,29 +189,65 @@ enum ScreenActionSynthesizer {
 
     // MARK: - Scroll
 
-    /// Scrolls at the given point. Line-based units are more broadly compatible
-    /// across native apps than pixel-based scrolling.
-    static func performScroll(at coreGraphicsGlobalPoint: CGPoint,
-                              direction: ScrollDirection,
-                              scrollAmountInLines: Int32 = 6) async {
+    /// The largest single scroll event, in points; a scroll is sent as a run
+    /// of these, the way a trackpad does it.
+    static let maximumScrollChunkInPoints: Int32 = 40
+
+    /// How far a scroll of `amountInTenthsOfScreen` goes on a screen this tall.
+    static func scrollDistanceInPoints(amountInTenthsOfScreen: Int, displayHeightInPoints: CGFloat) -> Int32 {
+        Int32((CGFloat(max(amountInTenthsOfScreen, 0)) * displayHeightInPoints / 10).rounded())
+    }
+
+    /// `totalDistanceInPoints` cut into steps of at most
+    /// `maximumScrollChunkInPoints` that add up to it exactly.
+    static func scrollChunksInPoints(totalDistanceInPoints: Int32) -> [Int32] {
+        var remainingDistance = max(totalDistanceInPoints, 0)
+        var chunks: [Int32] = []
+        while remainingDistance > 0 {
+            let chunk = min(remainingDistance, maximumScrollChunkInPoints)
+            chunks.append(chunk)
+            remainingDistance -= chunk
+        }
+        return chunks
+    }
+
+    /// Scrolls the content under the point by a set distance. Pixel-based,
+    /// continuous events in small steps (like a trackpad) move every app the
+    /// same amount — wheel "lines" don't: Chrome turns one into 40 points,
+    /// native lists into a few. Each event carries the target as its
+    /// location, so it reaches what's under that point.
+    static func performScroll(
+        at coreGraphicsGlobalPoint: CGPoint,
+        direction: ScrollDirection,
+        distanceInPoints: Int32,
+        shouldContinue: () -> Bool = { true }
+    ) async {
         await postMouseMove(to: coreGraphicsGlobalPoint)
 
         let eventSource = CGEventSource(stateID: .hidSystemState)
-        let verticalDelta: Int32
-        let horizontalDelta: Int32
-        switch direction {
-        case .up:    verticalDelta = scrollAmountInLines;  horizontalDelta = 0
-        case .down:  verticalDelta = -scrollAmountInLines; horizontalDelta = 0
-        case .left:  verticalDelta = 0;  horizontalDelta = scrollAmountInLines
-        case .right: verticalDelta = 0;  horizontalDelta = -scrollAmountInLines
+        for chunkDistance in scrollChunksInPoints(totalDistanceInPoints: distanceInPoints) {
+            guard shouldContinue() else { break }
+            let verticalDelta: Int32
+            let horizontalDelta: Int32
+            // Positive deltas move the content down/right (scrolling up/left).
+            switch direction {
+            case .up:    verticalDelta = chunkDistance;  horizontalDelta = 0
+            case .down:  verticalDelta = -chunkDistance; horizontalDelta = 0
+            case .left:  verticalDelta = 0;  horizontalDelta = chunkDistance
+            case .right: verticalDelta = 0;  horizontalDelta = -chunkDistance
+            }
+            let scrollEvent = CGEvent(scrollWheelEvent2Source: eventSource,
+                                      units: .pixel,
+                                      wheelCount: 2,
+                                      wheel1: verticalDelta,
+                                      wheel2: horizontalDelta,
+                                      wheel3: 0)
+            scrollEvent?.location = coreGraphicsGlobalPoint
+            scrollEvent?.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+            postTaggedEvent(scrollEvent)
+            // About one display frame apart, so apps animate it smoothly.
+            try? await Task.sleep(nanoseconds: 12_000_000)
         }
-
-        postTaggedEvent(CGEvent(scrollWheelEvent2Source: eventSource,
-                                units: .line,
-                                wheelCount: 2,
-                                wheel1: verticalDelta,
-                                wheel2: horizontalDelta,
-                                wheel3: 0))
     }
 
     // MARK: - Typing Arbitrary Text
