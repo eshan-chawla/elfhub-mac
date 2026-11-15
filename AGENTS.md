@@ -200,6 +200,8 @@ open elfhub.xcodeproj
 
 **Bundle ids and releases**: the published app is `com.elfhub.os` (final — never change it; `Config/Shared.xcconfig`, and `scripts/release.sh` passes it on the command line). Xcode builds on the maintainer's Mac use `com.elfhub.os.dev` from the gitignored `Config/Local.xcconfig`, so the installed release and the dev build keep separate permissions. Releases are Developer ID signed, notarized DMGs on GitHub Releases, made by the maintainer with `scripts/release.sh` — see `scripts/README.md` (the maintainer's full walkthrough lives in the gitignored `private-notes/session_docs/build-sign-notarize-release.md`, present only on their Mac).
 
+**Evaluations**: `evals/` (outside the app target) holds the computer-use evaluation kit — 17 OSWorld-shaped tasks in `evals/tasks/*.json` (multi-step, consent, injection, takeover, privacy; each with input mode, risk tier, expected confirmations and what must not happen), test fixtures in `evals/fixtures/`, a results template, and `evals/summarize.py` (pass@1, pass^3, steps, time, confirmation precision/recall, injection success). Run on a clean macOS VM snapshot per try, as `evals/README.md` describes.
+
 **Private notes**: research (`learnings/`), session docs and plans live in the gitignored `private-notes/` folder and are never published. Put new private docs there; planning tools that write to `docs/superpowers/` are gitignored too, so move anything worth keeping into `private-notes/`.
 
 ## Code Style & Conventions
