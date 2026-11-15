@@ -39,16 +39,30 @@ final class PrivateWebsiteList: ObservableObject {
     nonisolated static let privateHostFirstLabels: Set<String> = ["mychart", "patientportal", "onlinebanking"]
 
     private static let privateWebsiteDomainsKey = "privateWebsiteDomains"
+    private static let isGuardEnabledKey = "isPrivateWebsiteGuardEnabled"
 
     @Published private(set) var privateWebsiteDomains: [String]
+    /// The whole guard, on by default (Settings › Privacy). Off: browsers
+    /// aren't left out of screenshots, pages are read, and acting on these
+    /// sites isn't the user's step any more.
+    @Published private(set) var isGuardEnabled: Bool
+    private let userDefaults: UserDefaults
 
-    private init() {
-        privateWebsiteDomains = UserDefaults.standard.stringArray(forKey: Self.privateWebsiteDomainsKey)
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        privateWebsiteDomains = userDefaults.stringArray(forKey: Self.privateWebsiteDomainsKey)
             ?? Self.defaultPrivateWebsiteDomains
+        isGuardEnabled = userDefaults.object(forKey: Self.isGuardEnabledKey) as? Bool ?? true
+    }
+
+    func setGuardEnabled(_ isEnabled: Bool) {
+        isGuardEnabled = isEnabled
+        userDefaults.set(isEnabled, forKey: Self.isGuardEnabledKey)
     }
 
     func isPrivate(host: String?) -> Bool {
-        Self.isPrivate(host: host, domains: privateWebsiteDomains)
+        guard isGuardEnabled else { return false }
+        return Self.isPrivate(host: host, domains: privateWebsiteDomains)
     }
 
     nonisolated static func isPrivate(host: String?, domains: [String]) -> Bool {
@@ -95,13 +109,15 @@ final class PrivateWebsiteList: ObservableObject {
     }
 
     private func persist() {
-        UserDefaults.standard.set(privateWebsiteDomains, forKey: Self.privateWebsiteDomainsKey)
+        userDefaults.set(privateWebsiteDomains, forKey: Self.privateWebsiteDomainsKey)
     }
 
     /// Of these browser processes, the ones with a private website open in
     /// any window — all their windows are then left out of screenshots
     /// (in front or not: a bank beside Notes is still on the screen).
     static func browserProcessesShowingPrivateWebsites(_ browserProcessIdentifiers: Set<pid_t>) async -> Set<pid_t> {
+        // Switched off: no browser is looked at at all.
+        guard shared.isGuardEnabled else { return [] }
         var privateBrowserProcessIdentifiers: Set<pid_t> = []
         for browserProcessIdentifier in browserProcessIdentifiers {
             let pageHosts = await AccessibilityElementLocator.pageHostsInWindows(processIdentifier: browserProcessIdentifier)
@@ -137,13 +153,17 @@ struct PrivateWebsiteListEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Private websites")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(DS.Colors.textPrimary)
-            Text("While your browser shows one of these (banks, patient portals, password vaults — and any site you add), its windows are left out of screenshots, elfhub doesn't read the page, and it won't click or type there.")
-                .font(.system(size: 11))
-                .foregroundColor(DS.Colors.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            SettingsToggleRow(
+                iconName: "lock.shield",
+                title: "Keep private websites private",
+                detail: "While a browser has one of these open (banks, patient portals, password vaults — and any site you add), its windows are left out of screenshots, elfhub doesn't read the page, and it won't click or type there. On by default.",
+                isOn: Binding(
+                    get: { privateWebsiteList.isGuardEnabled },
+                    set: { privateWebsiteList.setGuardEnabled($0) }
+                )
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
 
             ForEach(websitesToShow, id: \.self) { privateDomain in
                 HStack(spacing: 8) {
@@ -194,6 +214,9 @@ struct PrivateWebsiteListEditor: View {
                 .pointerCursor()
             }
             .padding(.top, 4)
+            }
+            // The list stays editable but reads as inactive while the guard is off.
+            .opacity(privateWebsiteList.isGuardEnabled ? 1 : 0.5)
         }
     }
 

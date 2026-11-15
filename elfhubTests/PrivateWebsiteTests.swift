@@ -13,6 +13,7 @@ import Foundation
 import Testing
 @testable import elfhub
 
+@MainActor
 struct PrivateWebsiteTests {
 
     private let domains = PrivateWebsiteList.defaultPrivateWebsiteDomains
@@ -31,6 +32,22 @@ struct PrivateWebsiteTests {
         #expect(PrivateWebsiteList.isPrivate(host: "mychart.clevelandclinic.org", domains: domains))
         #expect(PrivateWebsiteList.isPrivate(host: "patientportal.example-hospital.com", domains: domains))
         #expect(!PrivateWebsiteList.isPrivate(host: "mychartblog.com", domains: domains))
+    }
+
+    @Test func theGuardIsOnByDefaultAndSwitchingItOffStopsEveryCheck() {
+        let userDefaultsSuiteName = "private-websites-\(UUID().uuidString)"
+        let userDefaults = UserDefaults(suiteName: userDefaultsSuiteName)!
+        defer { userDefaults.removePersistentDomain(forName: userDefaultsSuiteName) }
+        let privateWebsiteList = PrivateWebsiteList(userDefaults: userDefaults)
+        #expect(privateWebsiteList.isGuardEnabled)
+        #expect(privateWebsiteList.isPrivate(host: "chase.com"))
+
+        privateWebsiteList.setGuardEnabled(false)
+        #expect(!privateWebsiteList.isPrivate(host: "chase.com"))
+        #expect(!PrivateWebsiteList(userDefaults: userDefaults).isGuardEnabled)
+
+        privateWebsiteList.setGuardEnabled(true)
+        #expect(privateWebsiteList.isPrivate(host: "chase.com"))
     }
 
     @Test func actingOnAPrivateWebsiteIsTheUsersStep() {
