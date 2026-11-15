@@ -23,6 +23,8 @@ final class ElfEditor: ObservableObject {
     @Published private(set) var elfFileCount: Int
     /// Which of this Mac's models and voices the elf uses.
     @Published private(set) var localSettings: ElfLocalSettings
+    /// The user's folders this elf may use (this Mac only).
+    @Published private(set) var folderGrants: [ElfFolderGrant]
 
     private let elfManager: ElfManager
 
@@ -46,6 +48,7 @@ final class ElfEditor: ObservableObject {
         self.skills = openedElf.home.readSkills()
         self.elfFileCount = openedElf.home.fileCount()
         self.localSettings = openedElf.home.readLocalSettings()
+        self.folderGrants = openedElf.home.readFolderGrants()
     }
 
     var home: ElfHome { elf.home }
@@ -61,6 +64,7 @@ final class ElfEditor: ObservableObject {
         skills = home.readSkills()
         elfFileCount = home.fileCount()
         localSettings = home.readLocalSettings()
+        folderGrants = home.readFolderGrants()
     }
 
     // MARK: Identity and behaviour
@@ -131,6 +135,15 @@ final class ElfEditor: ObservableObject {
     /// the user's folders in one task).
     func updateCapabilities(_ updateCapabilities: (inout ElfConfiguration.Capabilities) -> Void) throws {
         try updateConfiguration { configuration in updateCapabilities(&configuration.capabilities) }
+    }
+
+    /// Changes which of the user's folders the elf may use, and how.
+    func updateFolderGrants(_ updateFolderGrants: (inout [ElfFolderGrant]) -> Void) throws {
+        try requireElfFolder()
+        var updatedFolderGrants = home.readFolderGrants()
+        updateFolderGrants(&updatedFolderGrants)
+        try home.writeFolderGrants(updatedFolderGrants)
+        folderGrants = updatedFolderGrants
     }
 
     /// Changes which of this Mac's models and voices the elf uses.

@@ -382,6 +382,8 @@ struct ElfSettingsContent: View {
             .mainAppCard()
         ElfTasksSection(elfEditor: elfEditor, elfTaskScheduler: companionManager.elfTaskScheduler)
             .mainAppCard()
+        ElfFolderGrantsSection(elfEditor: elfEditor)
+            .mainAppCard()
         ElfChangesSection(elfEditor: elfEditor)
             .mainAppCard()
         ElfHomeAndExportSection(companionManager: companionManager, elfEditor: elfEditor)
@@ -401,6 +403,115 @@ struct ElfSettingsContent: View {
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                 elfEditor.reload()
             }
+    }
+}
+
+// MARK: - Your folders
+
+/// Folders on this Mac the elf may use: read only unless changes are
+/// allowed for that folder. Kept on this Mac, never exported.
+private struct ElfFolderGrantsSection: View {
+    @ObservedObject var elfEditor: ElfEditor
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                LayerFieldLabel(text: "Your folders it can use")
+                Spacer()
+                Button("Add folder…") { chooseFolder() }
+                    .pointerCursor()
+            }
+            Text("Read only unless you allow changes; every change is kept in its Changes list so you can undo it. These stay on this Mac and are never exported.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            if elfEditor.folderGrants.isEmpty {
+                Text("No folders yet.")
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textTertiary)
+            }
+            ForEach(elfEditor.folderGrants, id: \.path) { folderGrant in
+                HStack(spacing: 8) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textTertiary)
+                    Text(folderGrant.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(DS.Colors.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Toggle("Allow changes", isOn: Binding(
+                        get: { folderGrant.allowsWriting },
+                        set: { allowsWriting in
+                            perform {
+                                try elfEditor.updateFolderGrants { folderGrants in
+                                    if let grantIndex = folderGrants.firstIndex(where: { $0.path == folderGrant.path }) {
+                                        folderGrants[grantIndex].allowsWriting = allowsWriting
+                                    }
+                                }
+                            }
+                        }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 11))
+                    .pointerCursor()
+                    Button("Remove") {
+                        perform { try elfEditor.updateFolderGrants { $0.removeAll { $0.path == folderGrant.path } } }
+                    }
+                    .pointerCursor()
+                }
+            }
+            if !elfEditor.folderGrants.isEmpty {
+                Toggle(isOn: Binding(
+                    get: { elfEditor.elf.configuration.capabilities.allowsWebAndUserFoldersTogether },
+                    set: { allowsBoth in perform { try elfEditor.updateCapabilities { $0.allowsWebAndUserFoldersTogether = allowsBoth } } }
+                )) {
+                    Text("Allow the web and these folders in the same task (off: a page it reads can't steer it into your files)")
+                        .font(.system(size: 11))
+                        .foregroundColor(DS.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .toggleStyle(.checkbox)
+                .pointerCursor()
+            }
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+            }
+        }
+    }
+
+    private func chooseFolder() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Choose a folder \(elfEditor.elf.configuration.identity.name) can use"
+        openPanel.canChooseDirectories = true
+        openPanel.canChooseFiles = false
+        openPanel.allowsMultipleSelection = false
+        guard openPanel.runModal() == .OK, let folderURL = openPanel.url else { return }
+        let chosenPath = folderURL.standardizedFileURL.path
+        guard chosenPath != "/", chosenPath != NSHomeDirectory() else {
+            errorMessage = "Pick a specific folder, not your whole disk or home folder."
+            return
+        }
+        perform {
+            try elfEditor.updateFolderGrants { folderGrants in
+                if !folderGrants.contains(where: { $0.path == chosenPath }) {
+                    folderGrants.append(ElfFolderGrant(path: chosenPath, allowsWriting: false))
+                }
+            }
+        }
+    }
+
+    private func perform(_ edit: () throws -> Void) {
+        do {
+            try edit()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

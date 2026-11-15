@@ -118,7 +118,7 @@ nonisolated struct ElfChangeLog {
         influencedBy: Set<ElfChangeLogEntry.Influence>
     ) throws -> ElfChangeLogEntry {
         try requireElfFolder()
-        let fileURL = try home.resolvedURLInsideHome(path)
+        let fileURL = try fileURL(forLoggedPath: path)
         let previousContent = try? Data(contentsOf: fileURL)
         let newContent = Data(newText.utf8)
         let previousContentSHA256 = try previousContent.map(storeBackup)
@@ -147,7 +147,7 @@ nonisolated struct ElfChangeLog {
         influencedBy: Set<ElfChangeLogEntry.Influence>
     ) throws -> ElfChangeLogEntry {
         try requireElfFolder()
-        let fileURL = try home.resolvedURLInsideHome(path)
+        let fileURL = try fileURL(forLoggedPath: path)
         let previousContent = try Data(contentsOf: fileURL)
         let previousContentSHA256 = try storeBackup(previousContent)
         try FileManager.default.removeItem(at: fileURL)
@@ -249,7 +249,7 @@ nonisolated struct ElfChangeLog {
             ))
         }
 
-        let fileURL = try home.resolvedURLInsideHome(undoneEntry.path)
+        let fileURL = try fileURL(forLoggedPath: undoneEntry.path)
         let currentContent = try? Data(contentsOf: fileURL)
         let currentContentSHA256 = currentContent.map(Self.sha256)
         if !force, currentContentSHA256 != undoneEntry.newContentSHA256 {
@@ -328,6 +328,13 @@ nonisolated struct ElfChangeLog {
     }
 
     // MARK: Storage
+
+    /// Where a logged path is: inside the elf's folder ("files/a.md"), or a
+    /// file in a folder the user granted (an absolute path, checked against
+    /// the grants by the folder tools before it's ever logged).
+    private func fileURL(forLoggedPath loggedPath: String) throws -> URL {
+        loggedPath.hasPrefix("/") ? URL(fileURLWithPath: loggedPath) : try home.resolvedURLInsideHome(loggedPath)
+    }
 
     /// A change never recreates an elf whose folder is gone — a worker still
     /// finishing after its elf was deleted, say.

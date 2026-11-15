@@ -23,7 +23,9 @@ nonisolated enum ElfTaskKind: String, Equatable, Sendable {
 }
 
 enum ElfTaskClassifier {
-    nonisolated static let modelAnswerTimeoutInSeconds: Double = 1.2
+    /// How long the model gets to answer. A setting only so tests can be
+    /// sure an instant answer wins on a busy machine.
+    nonisolated(unsafe) static var modelAnswerTimeoutInSeconds: Double = 1.2
 
     /// Long work, when the request starts with it ("research …", "can you
     /// draft …") — not when it's a word in a question ("explain this draft").

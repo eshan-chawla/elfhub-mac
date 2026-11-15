@@ -115,10 +115,14 @@ final class CompanionManager: ObservableObject {
     /// Fetches web pages for elves (one shared ephemeral session).
     private let webPageFetcher = URLSessionWebPageFetcher()
 
-    /// The web (when the elf may use it) for this elf's turns and tasks.
+    /// The web (when the elf may use it) and the folders the user granted
+    /// it, for this elf's turns and tasks.
     func outsideTools(for elf: Elf) -> [ElfTool] {
-        guard elf.configuration.capabilities.isWebEnabled(isMainElf: elf.id == ElfManager.mainElfIdentifier) else { return [] }
-        return ElfWebTools.tools(pageFetcher: webPageFetcher, webSearchProvider: WebSearchSettings.currentProvider())
+        var outsideTools = ElfFolderTools.tools(grants: elf.home.readFolderGrants())
+        if elf.configuration.capabilities.isWebEnabled(isMainElf: elf.id == ElfManager.mainElfIdentifier) {
+            outsideTools += ElfWebTools.tools(pageFetcher: webPageFetcher, webSearchProvider: WebSearchSettings.currentProvider())
+        }
+        return outsideTools
     }
 
     /// Whether an elf can work in the background: it (or the main elf) has

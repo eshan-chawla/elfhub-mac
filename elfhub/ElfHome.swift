@@ -269,6 +269,21 @@ nonisolated struct ElfHome: Equatable, Sendable {
             .map(\.notePath)
     }
 
+    // MARK: The user's folders (access.json)
+
+    /// The folders the user let this elf use, on this Mac only (never
+    /// exported; unreachable for elf tools).
+    func readFolderGrants() -> [ElfFolderGrant] {
+        guard let grantsData = try? Data(contentsOf: accessURL) else { return [] }
+        return (try? JSONDecoder().decode([ElfFolderGrant].self, from: grantsData)) ?? []
+    }
+
+    func writeFolderGrants(_ folderGrants: [ElfFolderGrant]) throws {
+        let jsonEncoder = JSONEncoder()
+        jsonEncoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try jsonEncoder.encode(folderGrants).write(to: accessURL, options: .atomic)
+    }
+
     // MARK: Paths
 
     /// A path inside the home, from a relative path the elf (or the app)
@@ -330,7 +345,7 @@ nonisolated struct ElfHome: Equatable, Sendable {
 
     /// The real path, following symlinks in every part that exists — a file
     /// that's about to be created still has its folders resolved.
-    private static func resolvedPath(of fileURL: URL) -> String {
+    static func resolvedPath(of fileURL: URL) -> String {
         var existingAncestorURL = fileURL.standardizedFileURL
         var missingPathComponents: [String] = []
         while !FileManager.default.fileExists(atPath: existingAncestorURL.path), existingAncestorURL.path != "/" {

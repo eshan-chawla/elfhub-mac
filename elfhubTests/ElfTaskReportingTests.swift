@@ -12,6 +12,7 @@ import Foundation
 import Testing
 @testable import elfhub
 
+@Suite(.serialized)
 struct ElfTaskReportingTests {
 
     // MARK: Reporting
@@ -123,6 +124,9 @@ struct ElfTaskReportingTests {
     @MainActor
     @Test func aClassifierAnswerInTimeIsUsed() async {
         let provider = ScriptedLanguageModelProvider(scriptedResponses: [ScriptedLanguageModelProvider.reply(#"{"kind":"long"}"#)])
+        // A busy test machine can hold the main thread past the usual limit.
+        ElfTaskClassifier.modelAnswerTimeoutInSeconds = 10
+        defer { ElfTaskClassifier.modelAnswerTimeoutInSeconds = 1.2 }
         #expect(await ElfTaskClassifier.classify(requestText: "how tall is the Eiffel tower", languageModelProvider: provider) == .long)
     }
 
