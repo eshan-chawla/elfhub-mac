@@ -1603,6 +1603,9 @@ struct ElfImportPreviewSheet: View {
                 if importPreview.chatCount > 0 {
                     previewLine("\(importPreview.chatCount) chat\(importPreview.chatCount == 1 ? "" : "s"), added to your chats")
                 }
+                if !importPreview.configuration.identity.aliases.isEmpty {
+                    previewLine("Also answers to: " + importPreview.configuration.identity.aliases.prefix(ElfNameRules.maximumAliasCount).joined(separator: ", "))
+                }
                 previewLine("The web and folder access start off; you choose them on its page")
             }
             if let modelHint = importPreview.modelHint {

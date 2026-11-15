@@ -754,6 +754,34 @@ struct ElfTests {
         #expect(exportedConversation.messages.allSatisfy { $0.screenshotFileName == nil })
     }
 
+    @Test func exportRefusesFilesItsImportWouldRefuse() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        var randomBytes = Data(count: ElfImportValidator.maximumFileBytes + 1)
+        randomBytes.withUnsafeMutableBytes { buffer in for byteIndex in buffer.indices { buffer[byteIndex] = UInt8.random(in: 0...255) } }
+        try randomBytes.write(to: home.filesDirectory.appendingPathComponent("video.mov"))
+        #expect(throws: ElfExportProblem.self) {
+            _ = try ElfExporter.packageFiles(home: home, configuration: home.readConfiguration(), options: ElfExporter.Options(), chats: [])
+        }
+    }
+
+    @Test func aRepetitiveFileStillImports() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        try Data(String(repeating: "same line\n", count: 300_000).utf8).write(to: home.filesDirectory.appendingPathComponent("log.txt"))
+        let exportURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).elf")
+        defer { try? FileManager.default.removeItem(at: exportURL) }
+        try ElfExporter.export(home: home, configuration: home.readConfiguration(), options: .init(), chats: [], to: exportURL)
+        #expect(try ElfImportValidator.validate(packageData: try Data(contentsOf: exportURL)).files.contains { $0.path == "elf/files/log.txt" })
+    }
+
+    @Test func elfToolsCannotReadAppFilesThroughLookalikeNames() throws {
+        let (home, cleanUp) = try makeTemporaryHome()
+        defer { cleanUp() }
+        #expect(throws: ElfHomeError.self) { try home.resolvedURLForElfTool("acce\u{017F}s.json", access: .read) }
+        #expect(throws: ElfHomeError.self) { try home.resolvedURLForElfTool("elf.j\u{017F}on", access: .read) }
+    }
+
     @Test func anExportIsAZipNamedAfterTheElf() throws {
         let (home, cleanUp) = try makeTemporaryHome()
         defer { cleanUp() }

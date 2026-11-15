@@ -205,7 +205,7 @@ struct NotepadTests {
 
         // Waits for the paced lines instead of a fixed sleep: the reveal runs
         // on the main actor, which other tests can keep busy for a while.
-        let waitDeadline = Date().addingTimeInterval(5)
+        let waitDeadline = Date().addingTimeInterval(20)
         while notepadPanelModel.markdownLines.count < 3, Date() < waitDeadline {
             try await Task.sleep(for: .milliseconds(20))
         }

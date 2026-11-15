@@ -15,7 +15,7 @@ struct ElfArchiveTests {
 
     private let sampleEntries = [
         ElfArchiveFileToWrite(path: "manifest.json", data: Data(#"{"format":"com.elfhub.elf"}"#.utf8)),
-        ElfArchiveFileToWrite(path: "elf/soul.md", data: Data(String(repeating: "be kind. ", count: 500).utf8)),
+        ElfArchiveFileToWrite(path: "elf/soul.md", data: Data((1...300).map { "line \($0) of the soul" }.joined(separator: "\n").utf8)),
         ElfArchiveFileToWrite(path: "elf/files/empty.md", data: Data()),
     ]
 
@@ -28,7 +28,7 @@ struct ElfArchiveTests {
         let listedEntries = try ElfArchive.entries(in: zipData)
         #expect(listedEntries.map(\.path) == ["manifest.json", "elf/soul.md", "elf/files/empty.md"])
         let soulEntry = try #require(listedEntries.first { $0.path == "elf/soul.md" })
-        #expect(soulEntry.uncompressedSize == 4_500)
+        #expect(soulEntry.uncompressedSize == sampleEntries[1].data.count)
         #expect(soulEntry.compressedSize < soulEntry.uncompressedSize)
         #expect(soulEntry.compressionMethod == .deflate)
         #expect(!soulEntry.isEncrypted)

@@ -40,14 +40,15 @@ struct ElfPackageTests {
         files: [(path: String, data: Data)],
         manifestEntries: [(path: String, data: Data)]? = nil,
         formatVersion: Int = ElfPackageManifest.currentFormatVersion,
-        includesManifest: Bool = true
+        includesManifest: Bool = true,
+        allowingAnyCompressionRatio: Bool = false
     ) throws -> Data {
         var archiveFiles = files.map { ElfArchiveFileToWrite(path: $0.path, data: $0.data) }
         if includesManifest {
             let manifestData = try JSONEncoder().encode(manifest(entries: manifestEntries ?? files, formatVersion: formatVersion))
             archiveFiles.insert(ElfArchiveFileToWrite(path: ElfPackageManifest.fileName, data: manifestData), at: 0)
         }
-        return try ElfArchive.zipData(files: archiveFiles)
+        return try ElfArchive.zipData(files: archiveFiles, allowingAnyCompressionRatio: allowingAnyCompressionRatio)
     }
 
     private func validPackage() throws -> Data {
@@ -145,7 +146,7 @@ struct ElfPackageTests {
     }
 
     @Test func caseFoldDuplicatesAreRefused() throws {
-        #expect(rejection(try package(files: [("elf/Soul.md", soulData), ("elf/soul.md", soulData)])) == .duplicateEntry("elf/soul.md"))
+        #expect(rejection(try package(files: [("elf/files/Notes.md", soulData), ("elf/files/notes.md", soulData)])) == .duplicateEntry("elf/files/notes.md"))
     }
 
     @Test func linksAreRefused() throws {
@@ -166,7 +167,7 @@ struct ElfPackageTests {
 
     @Test func zipBombsAreRefused() throws {
         let highlyCompressibleData = Data(count: 3 * 1024 * 1024)
-        #expect(rejection(try package(files: [("elf/files/zeros.md", highlyCompressibleData)])) == .tooLarge)
+        #expect(rejection(try package(files: [("elf/files/zeros.md", highlyCompressibleData)], allowingAnyCompressionRatio: true)) == .tooLarge)
     }
 
     @Test func oversizedFilesAreRefused() throws {
@@ -190,5 +191,37 @@ struct ElfPackageTests {
     @Test func entriesMissingFromTheManifestAreRefused() throws {
         let packageWithExtra = try package(files: [("elf/soul.md", soulData), ("elf/files/extra.md", soulData)], manifestEntries: [("elf/soul.md", soulData)])
         #expect(rejection(packageWithExtra) == .checksumMismatch("elf/files/extra.md"))
+    }
+
+    // MARK: Review fixes
+
+    @Test func namesThatLandOnTheAppsOwnFilesAreRefused() throws {
+        for trickPath in ["elf/ access.json", "elf/\u{00A0}.elfhub/tasks/x.json", "elf/acce\u{017F}s.json", "elf/acce\u{00DF}.json", "elf/access.json", "elf/.elfhub/tasks/x.json", "elf/files/ trailing /x.md"] {
+            #expect(rejection(try package(files: [(trickPath, soulData)])) != nil, "\(trickPath)")
+        }
+        // Only the elf's own parts are allowed at the top of elf/.
+        #expect(rejection(try package(files: [("elf/notes.md", soulData)])) == .unexpectedEntry("elf/notes.md"))
+    }
+
+    @Test func entriesThatOverlapOrLieAboutTheirSizeAreRefused() throws {
+        let twoFilePackage = try package(files: [("elf/soul.md", soulData), ("elf/files/a.md", Data("hello".utf8))])
+        let overlappingPackage = patchingCentralDirectory(of: twoFilePackage, forPath: "elf/files/a.md") { zipData, headerOffset in
+            for byteIndex in 0..<4 { zipData[headerOffset + 42 + byteIndex] = 0 }
+        }
+        #expect(rejection(overlappingPackage) != nil)
+        let lyingPackage = patchingCentralDirectory(of: twoFilePackage, forPath: "elf/files/a.md") { zipData, headerOffset in
+            zipData[headerOffset + 20] = 0xFF
+            zipData[headerOffset + 21] = 0xFF
+        }
+        #expect(rejection(lyingPackage) != nil)
+    }
+
+    @Test func namesWithJoinersAreAllowedButControlCharactersAreNot() {
+        #expect(ElfImportValidator.isSafePath("elf/files/👩‍💻 notes.md"))
+        #expect(!ElfImportValidator.isSafePath("elf/files/bad\u{0007}.md"))
+    }
+
+    @Test func duplicatesThatTheDiskWouldMergeAreRefused() throws {
+        #expect(rejection(try package(files: [("elf/files/cafe\u{0301}.md", soulData), ("elf/files/caf\u{00E9}.md", soulData)])) != nil)
     }
 }

@@ -145,17 +145,17 @@ struct MainAppView: View {
             ElfImportPreviewSheet(
                 importPreview: pendingElfImport.preview,
                 onImport: { companionManager.installPendingElfImport() },
-                onCancel: { companionManager.pendingElfImport = nil }
+                onCancel: { companionManager.cancelPendingElfImport() }
             )
         }
         .alert(
             "Couldn't import that elf",
             isPresented: Binding(
                 get: { companionManager.elfImportErrorMessage != nil },
-                set: { isPresented in if !isPresented { companionManager.elfImportErrorMessage = nil } }
+                set: { isPresented in if !isPresented { companionManager.dismissElfImportError() } }
             )
         ) {
-            Button("OK") { companionManager.elfImportErrorMessage = nil }
+            Button("OK") { companionManager.dismissElfImportError() }
         } message: {
             Text(companionManager.elfImportErrorMessage ?? "")
         }

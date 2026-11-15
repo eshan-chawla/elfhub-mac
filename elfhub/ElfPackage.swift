@@ -110,6 +110,14 @@ nonisolated enum ElfImportValidator {
         }
         let keptEntries = archiveEntries.filter { !isIgnoredJunk($0.path) && !$0.isDirectory }
         guard keptEntries.count <= maximumEntryCount else { throw ElfImportRejection.tooManyEntries }
+        // Entries that overlap, lie about their size or disagree with their
+        // local headers are refused before any of them is read.
+        do {
+            try ElfArchive.validateLayout(of: archiveEntries, in: packageData)
+        } catch let archiveError as ElfArchiveError {
+            if case let .damagedEntry(path) = archiveError { throw ElfImportRejection.unsupportedEntry(path) }
+            throw ElfImportRejection.notAnElfFile
+        }
         // Exports from the early test builds had no manifest and kept
         // elf.json at the top (or in one folder), not under elf/.
         let hasManifest = keptEntries.contains { $0.path == ElfPackageManifest.fileName }
@@ -131,7 +139,9 @@ nonisolated enum ElfImportValidator {
                 throw ElfImportRejection.unsafePath(archiveEntry.path)
             }
             guard isInTheLayout(archiveEntry.path) else { throw ElfImportRejection.unexpectedEntry(archiveEntry.path) }
-            let foldedPath = archiveEntry.path.lowercased()
+            // As the Mac's disk compares names: case folded (ſ, ß…) and
+            // accents in one form.
+            let foldedPath = foldedForDiskComparison(archiveEntry.path)
             guard !foldedPathsSeen.contains(foldedPath) else { throw ElfImportRejection.duplicateEntry(archiveEntry.path) }
             foldedPathsSeen.insert(foldedPath)
             guard archiveEntry.uncompressedSize <= maximumFileBytes else { throw ElfImportRejection.tooLarge }
@@ -190,20 +200,37 @@ nonisolated enum ElfImportValidator {
         path.hasPrefix("__MACOSX/") || (path as NSString).lastPathComponent == ".DS_Store"
     }
 
-    /// Relative, plain names only, at most 12 folders deep.
+    /// Relative, plain names only, at most 12 folders deep: no control
+    /// characters (joiners in emoji are fine), and no part that starts or
+    /// ends with a space — the Mac would read " access.json" differently.
     static func isSafePath(_ path: String) -> Bool {
         guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("\\"), !path.hasPrefix("~") else { return false }
-        guard !path.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return false }
+        guard !path.unicodeScalars.contains(where: { $0.properties.generalCategory == .control }) else { return false }
         let pathComponents = path.split(separator: "/", omittingEmptySubsequences: false)
         guard pathComponents.count <= maximumPathDepth + 1 else { return false }
         return pathComponents.allSatisfy { pathComponent in
             !pathComponent.isEmpty && pathComponent != "." && pathComponent != ".."
+                && pathComponent.first?.isWhitespace == false && pathComponent.last?.isWhitespace == false
         }
     }
 
-    /// manifest.json, the elf's folder under elf/, and chats/<uuid>.json.
+    /// The only names allowed at the top of elf/ — written exactly, so no
+    /// lookalike (" access.json", "acceſs.json") reaches the app's own files.
+    static let elfFolderTopLevelNames: Set<String> = ["elf.json", "soul.md", "profile.md", "skills", "files"]
+
+    static func foldedForDiskComparison(_ path: String) -> String {
+        path.precomposedStringWithCanonicalMapping.folding(options: [.caseInsensitive], locale: nil)
+    }
+
+    /// manifest.json, the elf's own parts under elf/, and chats/<uuid>.json.
     static func isInTheLayout(_ path: String) -> Bool {
-        if path == ElfPackageManifest.fileName || path.hasPrefix("elf/") { return true }
+        if path == ElfPackageManifest.fileName { return true }
+        if path.hasPrefix("elf/") {
+            let pathComponents = path.split(separator: "/")
+            guard pathComponents.count >= 2, elfFolderTopLevelNames.contains(String(pathComponents[1])) else { return false }
+            // Files are inside skills/ and files/, never those names themselves.
+            return ["skills", "files"].contains(String(pathComponents[1])) ? pathComponents.count >= 3 : pathComponents.count == 2
+        }
         let pathComponents = path.split(separator: "/")
         if pathComponents.count == 2, pathComponents[0] == "chats", pathComponents[1].hasSuffix(".json") {
             return UUID(uuidString: String(pathComponents[1].dropLast(".json".count))) != nil

@@ -62,17 +62,24 @@ nonisolated enum ElfArchive {
     private static let localFileHeaderSignature: UInt32 = 0x0403_4B50
     private static let centralDirectoryHeaderSignature: UInt32 = 0x0201_4B50
     private static let endOfCentralDirectorySignature: UInt32 = 0x0605_4B50
+    /// Matches ElfImportValidator's zip-bomb limit.
+    static let maximumDeflateRatio = 100
 
     // MARK: Writing
 
-    static func zipData(files: [ElfArchiveFileToWrite]) throws -> Data {
+    /// `allowingAnyCompressionRatio` only for tests that need a zip bomb.
+    static func zipData(files: [ElfArchiveFileToWrite], allowingAnyCompressionRatio: Bool = false) throws -> Data {
         var zipData = Data()
         var centralDirectory = Data()
         for file in files {
             let pathBytes = Data(file.path.utf8)
             let checksum = crc32(of: file.data)
             let deflatedData = deflate(file.data)
-            let usesDeflate = deflatedData.map { $0.count < file.data.count } ?? false
+            // Deflated only when smaller — and not past 100:1, which an
+            // import refuses as a possible zip bomb; such files are stored.
+            let usesDeflate = deflatedData.map { deflated in
+                deflated.count < file.data.count && (allowingAnyCompressionRatio || deflated.count * maximumDeflateRatio >= file.data.count)
+            } ?? false
             let storedData = usesDeflate ? deflatedData! : file.data
             guard storedData.count < 0xFFFF_FFFF, file.data.count < 0xFFFF_FFFF, zipData.count < 0xFFFF_FFFF else {
                 throw ElfArchiveError.tooLarge
@@ -184,6 +191,48 @@ nonisolated enum ElfArchive {
             cursor += 46 + nameLength + extraLength + commentLength
         }
         return entries
+    }
+
+    /// Checks the entries sit where they say, one after another without
+    /// overlapping or running into the directory, that each local header
+    /// agrees with the directory, and that sizes are plausible (stored:
+    /// equal; deflated: barely bigger at most) — before anything is read.
+    static func validateLayout(of entries: [ElfArchiveEntry], in zipData: Data) throws {
+        guard let endRecordOffset = endOfCentralDirectoryOffset(in: zipData) else { throw ElfArchiveError.notAZipFile }
+        let centralDirectoryOffset = Int(zipData.littleEndianUInt32(at: endRecordOffset + 16))
+        let entriesInFileOrder = entries.sorted { $0.localHeaderOffset < $1.localHeaderOffset }
+        for (entryIndex, entry) in entriesInFileOrder.enumerated() {
+            switch entry.compressionMethod {
+            case .store:
+                guard entry.compressedSize == entry.uncompressedSize else { throw ElfArchiveError.damagedEntry(path: entry.path) }
+            case .deflate:
+                guard entry.compressedSize <= entry.uncompressedSize + entry.uncompressedSize / 1000 + 1024 else {
+                    throw ElfArchiveError.damagedEntry(path: entry.path)
+                }
+            case .other:
+                break
+            }
+            let localHeaderOffset = entry.localHeaderOffset
+            guard localHeaderOffset + 30 <= zipData.count,
+                  zipData.littleEndianUInt32(at: localHeaderOffset) == localFileHeaderSignature else {
+                throw ElfArchiveError.damagedEntry(path: entry.path)
+            }
+            let localNameLength = Int(zipData.littleEndianUInt16(at: localHeaderOffset + 26))
+            let localExtraLength = Int(zipData.littleEndianUInt16(at: localHeaderOffset + 28))
+            let localNameStart = localHeaderOffset + 30
+            guard localNameStart + localNameLength <= zipData.count,
+                  zipData.subdata(in: localNameStart..<(localNameStart + localNameLength)) == entry.rawPathBytes else {
+                throw ElfArchiveError.damagedEntry(path: entry.path)
+            }
+            let contentEnd = localNameStart + localNameLength + localExtraLength + entry.compressedSize
+            let nextBoundary = entryIndex + 1 < entriesInFileOrder.count
+                ? entriesInFileOrder[entryIndex + 1].localHeaderOffset
+                : centralDirectoryOffset
+            // A data descriptor may follow the content (16 bytes at most).
+            guard contentEnd <= nextBoundary, nextBoundary - contentEnd <= 16 || entryIndex + 1 == entriesInFileOrder.count else {
+                throw ElfArchiveError.damagedEntry(path: entry.path)
+            }
+        }
     }
 
     /// One entry's content, decompressed, checked against its size and CRC-32.

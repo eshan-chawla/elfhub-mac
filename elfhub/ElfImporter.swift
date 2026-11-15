@@ -35,13 +35,29 @@ struct ElfImportPreview {
 enum ElfImporter {
     /// A .elf larger than this isn't even read.
     static let maximumPackageBytes = 110 * 1024 * 1024
+    static let maximumToneCharacters = 200
+    static let maximumLanguageCharacters = 80
+    static let maximumDescriptionCharacters = 300
 
     static func preview(packageURL: URL, elfManager: ElfManager, configurations: [ProviderConfiguration]) throws -> ElfImportPreview {
-        let packageSize = (try? FileManager.default.attributesOfItem(atPath: packageURL.path)[.size] as? Int) ?? 0
-        guard packageSize <= maximumPackageBytes else { throw ElfImportRejection.tooLarge }
-        guard let packageData = try? Data(contentsOf: packageURL) else { throw ElfImportRejection.notAnElfFile }
-        let validatedPackage = try ElfImportValidator.validate(packageData: packageData)
+        try preview(validatedPackage: try readAndValidate(packageURL: packageURL), elfManager: elfManager, configurations: configurations)
+    }
 
+    /// Reads (at most 110 MB, following links to the real file) and checks
+    /// a .elf. Pure work on the file — run it off the main thread.
+    nonisolated static func readAndValidate(packageURL: URL) throws -> ElfValidatedPackage {
+        let resolvedPackageURL = packageURL.resolvingSymlinksInPath()
+        guard let packageSize = (try? resolvedPackageURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])).flatMap({ resourceValues in
+            resourceValues.isRegularFile == true ? resourceValues.fileSize : nil
+        }) else { throw ElfImportRejection.notAnElfFile }
+        guard packageSize <= maximumPackageBytes else { throw ElfImportRejection.tooLarge }
+        guard let packageData = try? Data(contentsOf: resolvedPackageURL), packageData.count <= maximumPackageBytes else {
+            throw ElfImportRejection.notAnElfFile
+        }
+        return try ElfImportValidator.validate(packageData: packageData)
+    }
+
+    static func preview(validatedPackage: ElfValidatedPackage, elfManager: ElfManager, configurations: [ProviderConfiguration]) throws -> ElfImportPreview {
         let elfFiles: [(path: String, data: Data)] = validatedPackage.files.compactMap { packagedFile in
             guard packagedFile.path.hasPrefix("elf/") else { return nil }
             return (String(packagedFile.path.dropFirst("elf/".count)), packagedFile.data)
@@ -51,6 +67,11 @@ enum ElfImporter {
         if configuration.identity.name.trimmingCharacters(in: .whitespaces).isEmpty {
             configuration.identity.name = validatedPackage.manifest.elf.name
         }
+        // Within the editor's limits: a file can't hand an elf settings
+        // the app itself would never save.
+        configuration.behaviour.tone = String(configuration.behaviour.tone.prefix(maximumToneCharacters))
+        configuration.behaviour.language = String(configuration.behaviour.language.prefix(maximumLanguageCharacters))
+        configuration.identity.description = String(configuration.identity.description.prefix(maximumDescriptionCharacters))
         let chatDecoder = ChatConversationStore.makeJSONDecoder()
         let chats = validatedPackage.files
             .filter { $0.path.hasPrefix("chats/") }
@@ -114,25 +135,39 @@ enum ElfImporter {
 
         let stagingHome = ElfHome(directory: stagingDirectory)
         for elfFile in importPreview.elfFiles where elfFile.path != "elf.json" {
-            // Never the app's own files, whatever the package says.
-            let firstPathComponent = elfFile.path.split(separator: "/").first.map { $0.lowercased() } ?? ""
-            guard !ElfHome.pathsReservedForTheApp.contains(firstPathComponent) else { continue }
-            let destinationURL = try stagingHome.resolvedURLInsideHome(elfFile.path)
+            // Only the elf's own parts, judged by where the path really lands
+            // (as elf tools' paths are), never the app's own files.
+            let firstPathComponent = String(elfFile.path.split(separator: "/").first ?? "")
+            guard ElfImportValidator.elfFolderTopLevelNames.contains(firstPathComponent),
+                  let destinationURL = try? stagingHome.resolvedURLForElfTool(elfFile.path, access: .read) else { continue }
+            var fileData = elfFile.data
+            // Soul and notes within the editor's limits.
+            if firstPathComponent == "soul.md" || firstPathComponent == "profile.md" {
+                let characterLimit = firstPathComponent == "soul.md" ? ElfHome.soulCharacterLimit : ElfHome.profileCharacterLimit
+                fileData = Data(String(String(decoding: fileData, as: UTF8.self).prefix(characterLimit)).utf8)
+            }
             try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             // Written fresh: plain files, never executable.
-            try elfFile.data.write(to: destinationURL, options: .atomic)
+            try fileData.write(to: destinationURL, options: .atomic)
         }
+        // Belt and braces: whatever happened, no grants and no app data come
+        // from the file.
+        try? fileManager.removeItem(at: stagingHome.accessURL)
+        try? fileManager.removeItem(at: stagingHome.appDataDirectory)
 
         var importedConfiguration = importPreview.configuration
         importedConfiguration.identity.name = importPreview.elfName
         importedConfiguration.identity.emoji = importPreview.emoji
-        importedConfiguration.identity.aliases = ElfNameRules.cleanedAliases(importedConfiguration.identity.aliases, elfName: importPreview.elfName)
-            .filter { alias in
-                ElfNameRules.problems(forName: alias, otherElfNames: ElfNameRules.namesInUse(byElves: elfManager.elves, excludingElfWithIdentifier: nil))
-                    .allSatisfy(\.isWarning)
-            }
-        // Whoever made the file decides nothing about this Mac.
-        importedConfiguration.capabilities = ElfConfiguration.Capabilities()
+        // At most five other names, none clashing with the elves here.
+        let namesHere = ElfNameRules.namesInUse(byElves: elfManager.elves, excludingElfWithIdentifier: nil)
+        importedConfiguration.identity.aliases = Array(
+            ElfNameRules.cleanedAliases(importedConfiguration.identity.aliases, elfName: importPreview.elfName)
+                .filter { alias in ElfNameRules.problems(forName: alias, otherElfNames: namesHere).allSatisfy(\.isWarning) }
+                .prefix(ElfNameRules.maximumAliasCount)
+        )
+        // Whoever made the file decides nothing about this Mac: the web and
+        // folders start off, until the user switches them on.
+        importedConfiguration.capabilities = ElfConfiguration.Capabilities(webEnabled: false, allowsWebAndUserFoldersTogether: false)
         try stagingHome.writeConfiguration(importedConfiguration)
         try stagingHome.createIfNeeded(configuration: importedConfiguration)
         try stagingHome.writeLocalSettings(ElfLocalSettings(languageModelConfigurationIdentifier: importPreview.matchingConfigurationIdentifier))
@@ -151,14 +186,18 @@ enum ElfImporter {
 
         for exportedChat in importPreview.chats {
             var importedChat = ChatConversation(id: UUID(), title: exportedChat.title, createdAt: exportedChat.createdAt, messages: [])
-            importedChat.messages = exportedChat.messages.map { exportedMessage in
-                var importedMessage = exportedMessage
-                if importedMessage.role == .assistant {
-                    importedMessage.speakingElfIdentifier = importedElf.id
-                }
-                importedMessage.screenshotFileName = nil
-                importedMessage.fileChanges = []
-                return importedMessage
+            // Ordinary exchanges with new ids: nothing from the file can pose
+            // as a task report or point at screenshots or changes here.
+            importedChat.messages = exportedChat.messages.filter { $0.kind == .exchange }.map { exportedMessage in
+                StoredChatMessage(
+                    role: exportedMessage.role,
+                    text: exportedMessage.text,
+                    createdAt: exportedMessage.createdAt,
+                    isError: exportedMessage.isError,
+                    inputSource: exportedMessage.inputSource,
+                    notepad: exportedMessage.notepad,
+                    speakingElfIdentifier: exportedMessage.role == .assistant ? importedElf.id : nil
+                )
             }
             importedChat.updatedAt = exportedChat.updatedAt
             onImportedChat(importedChat)

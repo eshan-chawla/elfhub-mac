@@ -97,7 +97,8 @@ struct ElfImporterTests {
             importsDirectory: fixture.importsDirectory,
             onImportedChat: { _ in }
         )
-        #expect(importedElf.configuration.capabilities == ElfConfiguration.Capabilities())
+        #expect(!importedElf.configuration.capabilities.isWebEnabled(isMainElf: false))
+        #expect(!importedElf.configuration.capabilities.allowsWebAndUserFoldersTogether)
         #expect(importedElf.home.readFolderGrants().isEmpty)
     }
 
@@ -152,5 +153,42 @@ struct ElfImporterTests {
         #expect(throws: ElfImportRejection.notAnElfFile) {
             _ = try ElfImporter.preview(packageURL: badPackageURL, elfManager: fixture.elfManager, configurations: [])
         }
+    }
+
+    @Test func importedTextIsKeptWithinTheEditorsLimits() throws {
+        let fixture = makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootDirectory) }
+        let sourceFixture = makeFixture()
+        defer { try? FileManager.default.removeItem(at: sourceFixture.rootDirectory) }
+        let juniper = try sourceFixture.elfManager.createElf(identity: .init(name: "Juniper"))
+        // Written straight to disk, past the editor's limit.
+        try Data(("# soul\n\n" + String(repeating: "x", count: ElfHome.soulCharacterLimit + 10)).utf8).write(to: juniper.home.soulURL)
+        var configuration = juniper.home.readConfiguration()
+        configuration.behaviour.tone = String(repeating: "t", count: 5_000)
+        configuration.identity.aliases = (1...12).map { "Alias\($0)" }
+        let exportURL = sourceFixture.rootDirectory.appendingPathComponent("Juniper.elf")
+        try ElfExporter.export(home: juniper.home, configuration: configuration, options: ElfExporter.Options(), chats: [], exportedElfIdentifier: "juniper", to: exportURL)
+        let importedElf = try ElfImporter.install(
+            try ElfImporter.preview(packageURL: exportURL, elfManager: fixture.elfManager, configurations: []),
+            elfManager: fixture.elfManager,
+            importsDirectory: fixture.importsDirectory,
+            onImportedChat: { _ in }
+        )
+        #expect(importedElf.home.readSoul().count <= ElfHome.soulCharacterLimit)
+        #expect(importedElf.configuration.behaviour.tone.count <= ElfImporter.maximumToneCharacters)
+        #expect(importedElf.configuration.identity.aliases.count <= ElfNameRules.maximumAliasCount)
+    }
+
+    @Test func importedChatsAreOrdinaryExchangesWithNewMessageIds() throws {
+        let fixture = makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.rootDirectory) }
+        let packageURL = try exportedJuniper(withChats: true)
+        defer { try? FileManager.default.removeItem(at: packageURL.deletingLastPathComponent()) }
+        let importPreview = try ElfImporter.preview(packageURL: packageURL, elfManager: fixture.elfManager, configurations: [])
+        var importedChats: [ChatConversation] = []
+        try ElfImporter.install(importPreview, elfManager: fixture.elfManager, importsDirectory: fixture.importsDirectory, onImportedChat: { importedChats.append($0) })
+        let exportedMessageIdentifiers = Set(importPreview.chats.flatMap(\.messages).map(\.id))
+        let importedMessages = importedChats.flatMap(\.messages)
+        #expect(importedMessages.allSatisfy { !exportedMessageIdentifiers.contains($0.id) && $0.kind == .exchange && $0.taskIdentifier == nil })
     }
 }

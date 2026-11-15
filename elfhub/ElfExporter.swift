@@ -42,6 +42,7 @@ enum ElfExporter {
         for folderName in ["skills", "files"] {
             packageFiles += try regularFiles(inside: home.directory.appendingPathComponent(folderName, isDirectory: true), packagePathPrefix: "elf/\(folderName)/")
         }
+        try checkThatItCanBeImported(packageFiles)
         if options.includesChats {
             let chatEncoder = ChatConversationStore.makeJSONEncoder()
             for conversation in chats {
@@ -111,6 +112,9 @@ enum ElfExporter {
                     var cleanedMessage = keptMessage
                     cleanedMessage.screenshotFileName = nil
                     cleanedMessage.fileChanges = []
+                    // Nothing taken from the screen: no marks, no drawing.
+                    cleanedMessage.screenGuidance = nil
+                    cleanedMessage.userInk = nil
                     keptMessages.append(cleanedMessage)
                 }
                 pendingQuestion = nil
@@ -130,8 +134,29 @@ enum ElfExporter {
         return sanitizedName.isEmpty ? "elf" : sanitizedName
     }
 
+    /// An export its own import would refuse fails here, naming the file.
+    private static func checkThatItCanBeImported(_ packageFiles: [ElfArchiveFileToWrite]) throws {
+        guard packageFiles.count < ElfImportValidator.maximumEntryCount else {
+            throw ElfExportProblem.fileCannotBeShared(path: "files/", reason: "there are more than \(ElfImportValidator.maximumEntryCount) files.")
+        }
+        guard packageFiles.reduce(0, { $0 + $1.data.count }) <= ElfImportValidator.maximumTotalBytes else {
+            throw ElfExportProblem.fileCannotBeShared(path: "files/", reason: "together they're over 100 MB.")
+        }
+        var foldedPathsSeen: Set<String> = []
+        for packageFile in packageFiles {
+            let shownPath = String(packageFile.path.dropFirst("elf/".count))
+            guard ElfImportValidator.isSafePath(packageFile.path) else {
+                throw ElfExportProblem.fileCannotBeShared(path: shownPath, reason: "its name or folder depth can't be shared.")
+            }
+            guard foldedPathsSeen.insert(ElfImportValidator.foldedForDiskComparison(packageFile.path)).inserted else {
+                throw ElfExportProblem.fileCannotBeShared(path: shownPath, reason: "another file has the same name apart from capitals.")
+            }
+        }
+    }
+
     /// Every plain, visible file under a folder (links and hidden files
-    /// left out), as package paths.
+    /// left out), as package paths. A file too large to import is refused
+    /// before it's read.
     private static func regularFiles(inside folderURL: URL, packagePathPrefix: String) throws -> [ElfArchiveFileToWrite] {
         guard let folderEnumerator = FileManager.default.enumerator(
             at: folderURL,
@@ -146,8 +171,23 @@ enum ElfExporter {
             let filePath = fileURL.resolvingSymlinksInPath().path
             guard filePath.hasPrefix(resolvedFolderPath + "/") else { continue }
             let pathInsideFolder = String(filePath.dropFirst(resolvedFolderPath.count + 1))
+            let fileSize = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            guard fileSize <= ElfImportValidator.maximumFileBytes else {
+                throw ElfExportProblem.fileCannotBeShared(path: packagePathPrefix.dropFirst("elf/".count) + pathInsideFolder, reason: "it's over 10 MB.")
+            }
             regularFiles.append(ElfArchiveFileToWrite(path: packagePathPrefix + pathInsideFolder, data: try Data(contentsOf: fileURL)))
         }
         return regularFiles.sorted { $0.path < $1.path }
+    }
+}
+
+/// Why an elf can't be exported as it is.
+nonisolated enum ElfExportProblem: LocalizedError, Equatable {
+    case fileCannotBeShared(path: String, reason: String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .fileCannotBeShared(path, reason): return "\(path) can't go in a .elf file: \(reason)"
+        }
     }
 }

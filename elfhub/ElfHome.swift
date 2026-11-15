@@ -323,10 +323,12 @@ nonisolated struct ElfHome: Equatable, Sendable {
         let resolvedHomePath = Self.resolvedPath(of: directory)
         let resolvedTargetPath = Self.resolvedPath(of: resolvedURL)
         let pathRelativeToHome = String(resolvedTargetPath.dropFirst(resolvedHomePath.count + 1))
+        // Folded as the Mac's disk compares names, so lookalikes
+        // ("ACCESS.json", "acceſs.json") count as the reserved file.
         let firstPathComponent = pathRelativeToHome
             .split(separator: "/")
             .first
-            .map { $0.lowercased() } ?? ""
+            .map { String($0).precomposedStringWithCanonicalMapping.folding(options: [.caseInsensitive], locale: nil) } ?? ""
         let isReservedForTheApp = Self.pathsReservedForTheApp.contains(firstPathComponent)
         let isReadOnlyForElfTools = access == .write && Self.pathsElfToolsMayOnlyRead.contains(firstPathComponent)
         guard !isReservedForTheApp, !isReadOnlyForElfTools else {

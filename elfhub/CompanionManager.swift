@@ -187,19 +187,51 @@ final class CompanionManager: ObservableObject {
     /// Why the last import couldn't be read, for an alert.
     @Published var elfImportErrorMessage: String?
 
-    /// Reads and checks a .elf (writing nothing) and shows its preview in
-    /// the main window.
+    /// .elf files waiting their turn (opened together, or before elfhub
+    /// finished starting).
+    private var queuedElfImportURLs: [URL] = []
+    private var isReadyForElfImports = false
+    private var isPreparingElfImport = false
+
+    /// Queues a .elf; each is read and checked off the main thread (writing
+    /// nothing) and its preview shown in the main window, one at a time.
     func requestElfImport(from packageURL: URL) {
+        queuedElfImportURLs.append(packageURL)
+        showNextElfImportIfReady()
+    }
+
+    private func showNextElfImportIfReady() {
+        guard isReadyForElfImports, pendingElfImport == nil, elfImportErrorMessage == nil, !isPreparingElfImport,
+              !queuedElfImportURLs.isEmpty else { return }
+        let packageURL = queuedElfImportURLs.removeFirst()
+        isPreparingElfImport = true
         MainWindowPresenter.showMainWindow()
-        do {
-            pendingElfImport = PendingElfImport(preview: try ElfImporter.preview(
-                packageURL: packageURL,
-                elfManager: elfManager,
-                configurations: providerConfigurationStore.configurations
-            ))
-        } catch {
-            elfImportErrorMessage = error.localizedDescription
+        Task { @MainActor [weak self] in
+            let validationResult = await Task.detached(priority: .userInitiated) { () -> Result<ElfValidatedPackage, Error> in
+                Result { try ElfImporter.readAndValidate(packageURL: packageURL) }
+            }.value
+            guard let self else { return }
+            self.isPreparingElfImport = false
+            do {
+                self.pendingElfImport = PendingElfImport(preview: try ElfImporter.preview(
+                    validatedPackage: try validationResult.get(),
+                    elfManager: self.elfManager,
+                    configurations: self.providerConfigurationStore.configurations
+                ))
+            } catch {
+                self.elfImportErrorMessage = "\(packageURL.lastPathComponent): \(error.localizedDescription)"
+            }
         }
+    }
+
+    func cancelPendingElfImport() {
+        pendingElfImport = nil
+        showNextElfImportIfReady()
+    }
+
+    func dismissElfImportError() {
+        elfImportErrorMessage = nil
+        showNextElfImportIfReady()
     }
 
     /// Adds the previewed elf (and its chats) and opens its page.
@@ -218,6 +250,7 @@ final class CompanionManager: ObservableObject {
         } catch {
             elfImportErrorMessage = "Couldn't import it: \(error.localizedDescription)"
         }
+        showNextElfImportIfReady()
     }
 
     /// Whether finished background work is spoken when the user is idle
@@ -793,6 +826,9 @@ final class CompanionManager: ObservableObject {
             elfTaskScheduler.onTaskNeedsInput = { [weak self] askingTask in self?.reportBackgroundTask(askingTask) }
             elfTaskScheduler.loadTasksAndResumeInterruptedOnes()
         }
+        // .elf files opened before elfhub finished starting.
+        isReadyForElfImports = true
+        showNextElfImportIfReady()
         notepadPanelManager.startListening(to: companionEventBus)
         bindProviderConfigurationStore()
         applyTranscriptionProviderChoice()
