@@ -224,7 +224,7 @@ private struct AnswerTaskTool: MainElfOnlyTool {
             return .failure("that isn't what the user said. ask them, and pass on their words.")
         }
         do {
-            try scheduler.answer(taskIdentifier: answeredTask.id, answer: answer)
+            try scheduler.answer(taskIdentifier: answeredTask.id, answer: answer, usersOwnWords: context.userUtterance)
             return ElfToolOutcome(resultText: "passed on; the task carries on.")
         } catch {
             return .failure("that task isn't waiting for an answer.")

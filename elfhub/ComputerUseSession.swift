@@ -291,15 +291,17 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
     private let displayID: CGDirectDisplayID
     private let userUtterance: String
     private let turnToken: ScreenActionTurnToken
-    private let runApproval = ComputerUseRunApproval()
+    private let runApproval: ComputerUseRunApproval
 
     init(
         screenActionCoordinator: ScreenActionCoordinator,
         visionProfile: ModelVisionProfile,
         displayID: CGDirectDisplayID,
         userUtterance: String,
-        turnToken: ScreenActionTurnToken
+        turnToken: ScreenActionTurnToken,
+        asksBeforeFirstStep: Bool = false
     ) {
+        self.runApproval = ComputerUseRunApproval(asksBeforeFirstStep: asksBeforeFirstStep)
         self.screenActionCoordinator = screenActionCoordinator
         self.visionProfile = visionProfile
         self.displayID = displayID
@@ -312,18 +314,23 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
     }
 
     func captureScreenAfterSettling(previousCapture: CompanionScreenCapture) async throws -> CompanionScreenCapture {
+        // Frames compared while waiting skip the privacy checks (they're
+        // only compared, never sent); the one that's sent is taken after.
+        func settleCheckFrame() async throws -> CompanionScreenCapture {
+            try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile, appliesPrivacyChecks: false)
+        }
         try await Task.sleep(nanoseconds: UInt64(Self.firstSettleDelaySeconds * 1_000_000_000))
-        var latestCapture = try await captureScreen()
+        var latestFrame = try await settleCheckFrame()
         let settleDeadline = Date().addingTimeInterval(Self.maximumSettleSeconds - Self.firstSettleDelaySeconds)
         while Date() < settleDeadline {
             try await Task.sleep(nanoseconds: UInt64(Self.settleCheckIntervalSeconds * 1_000_000_000))
-            let nextCapture = try await captureScreen()
-            defer { latestCapture = nextCapture }
-            guard let latestFingerprint = ScreenshotFingerprint(jpegData: latestCapture.imageData),
-                  let nextFingerprint = ScreenshotFingerprint(jpegData: nextCapture.imageData),
+            let nextFrame = try await settleCheckFrame()
+            defer { latestFrame = nextFrame }
+            guard let latestFingerprint = ScreenshotFingerprint(jpegData: latestFrame.imageData),
+                  let nextFingerprint = ScreenshotFingerprint(jpegData: nextFrame.imageData),
                   latestFingerprint.differs(from: nextFingerprint) else { break }
         }
-        return latestCapture
+        return try await captureScreen()
     }
 
     func captureZoomedRegion(_ regionInScreenshotPixels: CGRect, of capture: CompanionScreenCapture) async throws -> Data {
@@ -363,7 +370,8 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
             for: snapshot,
             screenCapture: capture,
             convention: convention,
-            fenceMarker: AccessibilitySnapshotFormatter.makeFenceMarker()
+            fenceMarker: AccessibilitySnapshotFormatter.makeFenceMarker(),
+            hidesPersonalNumbers: ScreenshotSensitiveContentMasker.isEnabled
         )
         return promptText.isEmpty ? nil : promptText
     }

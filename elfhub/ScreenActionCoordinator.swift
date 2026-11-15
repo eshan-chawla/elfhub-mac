@@ -88,7 +88,15 @@ enum ComputerUseActionOutcome: Equatable {
 /// another app, or one ConsentPolicy says needs an explicit yes, still does.
 @MainActor
 final class ComputerUseRunApproval {
+    /// A background task's run always shows the card before its first
+    /// step, whatever the mode: it starts while the user may be doing
+    /// something else.
+    let asksBeforeFirstStep: Bool
     private(set) var approvalProvenance: ScreenActionApprovalProvenance?
+
+    init(asksBeforeFirstStep: Bool = false) {
+        self.asksBeforeFirstStep = asksBeforeFirstStep
+    }
     private(set) var approvedApplicationBundleIdentifiers: Set<String> = []
 
     var isApproved: Bool { approvalProvenance != nil }
@@ -718,13 +726,15 @@ final class ScreenActionCoordinator: ObservableObject {
     /// Called when a multi-step run starts: remembers where the pointer is.
     /// Returns the run's identifier, which `finishComputerUseRun` needs.
     @discardableResult
-    func beginComputerUseRun() -> UUID {
+    func beginComputerUseRun(watchesForTakeoverFromStart: Bool = false) -> UUID {
         let runIdentifier = UUID()
         currentComputerUseRunIdentifier = runIdentifier
         pointerLocationBeforeComputerUseRun = ScreenActionSynthesizer.currentPointerLocation()
         // Moving the mouse after asking, before elfhub has acted, is normal;
-        // only input after a step counts as taking over.
-        computerUseRunLastStepEndedAt = nil
+        // only input after a step counts as taking over. A background
+        // task's run starts on its own, so the user's input counts from
+        // the start.
+        computerUseRunLastStepEndedAt = watchesForTakeoverFromStart ? Date() : nil
         isComputerUseRunActive = true
         return runIdentifier
     }
@@ -819,6 +829,7 @@ final class ScreenActionCoordinator: ObservableObject {
         let stepLeavesApprovedApplications = runApproval.isApproved
             && (!runApproval.coversApplication(targetApplicationBundleIdentifier) || !runApproval.coversApplication(dropApplicationBundleIdentifier))
         let needsApproval = resolvedAction.requiresExplicitConfirmation
+            || (!runApproval.isApproved && runApproval.asksBeforeFirstStep)
             || (executionMode == .confirmEachAction && (!runApproval.isApproved || stepLeavesApprovedApplications))
 
         if needsApproval {
@@ -1013,15 +1024,17 @@ final class ScreenActionCoordinator: ObservableObject {
         }
 
         let screenCapturePrivacyBlocklist = ScreenCapturePrivacyBlocklist.shared
-        let isTargetApplicationPrivacyBlocked =
-            screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: targetElementFacts?.owningApplicationBundleIdentifier)
-            || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: frontmostApplicationBundleIdentifier)
-            || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: openedApplicationBundleIdentifier)
+        let isOpenStep = openedApplicationBundleIdentifier != nil || openedWebsiteHost != nil
+        // An open step works in the app it opens, not the one in front.
+        let isTargetApplicationPrivacyBlocked = isOpenStep
+            ? screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: openedApplicationBundleIdentifier)
+            : screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: targetElementFacts?.owningApplicationBundleIdentifier)
+                || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: frontmostApplicationBundleIdentifier)
 
         let consentContext = ScreenActionConsentContext(
             action: action,
             targetElementFacts: targetElementFacts,
-            frontmostApplicationBundleIdentifier: frontmostApplicationBundleIdentifier,
+            frontmostApplicationBundleIdentifier: isOpenStep ? openedApplicationBundleIdentifier : frontmostApplicationBundleIdentifier,
             isTargetApplicationPrivacyBlocked: isTargetApplicationPrivacyBlocked,
             userUtterance: userUtterance,
             isSecureEventInputActive: IsSecureEventInputEnabled(),

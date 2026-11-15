@@ -844,7 +844,7 @@ final class CompanionManager: ObservableObject {
         guard capabilities.supportsVision, capabilities.supportsToolCalling else {
             return .unavailable(reason: "the model you work with can't see the screen.")
         }
-        guard voiceState == .idle, !textChatViewModel.isResponding, !screenActionCoordinator.isComputerUseRunActive else {
+        guard isScreenFreeForBackgroundWork else {
             return .unavailable(reason: "the user is busy with elfhub right now. ask for the screen again a bit later.")
         }
         let screenCapture: CompanionScreenCapture
@@ -859,6 +859,11 @@ final class CompanionManager: ObservableObject {
             return .unavailable(reason: "the screen couldn't be captured (\(error.localizedDescription)).")
         }
 
+        // The capture took a moment: the user may have started something.
+        guard isScreenFreeForBackgroundWork else {
+            return .unavailable(reason: "the user is busy with elfhub right now. ask for the screen again a bit later.")
+        }
+
         let screenActionTurnToken = screenActionCoordinator.beginTurn()
         let coordinateConvention = capabilities.visionProfile.coordinateConvention
         let computerUseSession = ComputerUseSession(
@@ -866,13 +871,18 @@ final class CompanionManager: ObservableObject {
                 screenActionCoordinator: screenActionCoordinator,
                 visionProfile: capabilities.visionProfile,
                 displayID: screenCapture.displayID,
-                userUtterance: elfTask.answers.last ?? "",
-                turnToken: screenActionTurnToken
+                // No words of the user's authorize anything consequential:
+                // the yes only lets the task use the screen, and the task's
+                // own wording (written by a model) must never count as the
+                // user's. Every send, delete or purchase asks.
+                userUtterance: "",
+                turnToken: screenActionTurnToken,
+                asksBeforeFirstStep: true
             ),
             firstCapture: screenCapture,
             coordinateConvention: coordinateConvention
         )
-        let computerUseRunIdentifier = screenActionCoordinator.beginComputerUseRun()
+        let computerUseRunIdentifier = screenActionCoordinator.beginComputerUseRun(watchesForTakeoverFromStart: true)
         handOverScreen(to: workingElf)
         let usesAnthropicComputerToolset = languageModelProvider.supportsAnthropicComputerToolset
         return .granted(ElfWorkerScreenAccess(
@@ -898,6 +908,16 @@ final class CompanionManager: ObservableObject {
                 }
             }
         ))
+    }
+
+    /// Nothing else is using or about to use the screen: no voice turn, no
+    /// typed reply, no run, no card waiting, no actions firing.
+    private var isScreenFreeForBackgroundWork: Bool {
+        voiceState == .idle
+            && !textChatViewModel.isResponding
+            && !screenActionCoordinator.isComputerUseRunActive
+            && screenActionCoordinator.pendingConsent == nil
+            && !screenActionCoordinator.isRunningActions
     }
 
     private func handOverScreen(to speakingElf: Elf?) {

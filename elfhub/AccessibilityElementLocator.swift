@@ -165,41 +165,52 @@ enum AccessibilityElementLocator {
         return browserBundleIdentifierPrefixes.contains { loweredBundleIdentifier.hasPrefix($0) }
     }
 
-    /// The host of the page shown in an app's focused window (its first web
-    /// area, looked for breadth-first), or nil. Bounded so a huge page
-    /// costs at most about 0.15 s.
-    static func frontmostWindowPageHost(processIdentifier: pid_t) async -> String? {
+    /// The hosts of the pages an app shows in its windows (every web area
+    /// found in each, side panels included). Bounded: at most 8 windows,
+    /// about 0.1 s each, 0.3 s in all.
+    static func pageHostsInWindows(processIdentifier: pid_t) async -> [String] {
         await Task.detached(priority: .userInitiated) {
-            frontmostWindowPageHostSynchronously(processIdentifier: processIdentifier)
+            pageHostsInWindowsSynchronously(processIdentifier: processIdentifier)
         }.value
     }
 
-    nonisolated private static func frontmostWindowPageHostSynchronously(processIdentifier: pid_t) -> String? {
-        guard AXIsProcessTrusted() else { return nil }
+    nonisolated private static func pageHostsInWindowsSynchronously(processIdentifier: pid_t) -> [String] {
+        guard AXIsProcessTrusted() else { return [] }
         let applicationElement = AXUIElementCreateApplication(processIdentifier)
         AXUIElementSetMessagingTimeout(applicationElement, messagingTimeoutInSeconds)
-        var windowValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(applicationElement, kAXFocusedWindowAttribute as CFString, &windowValue) == .success,
-              let windowValue, CFGetTypeID(windowValue) == AXUIElementGetTypeID() else { return nil }
+        // Chromium browsers only show their pages to Accessibility once asked.
+        AccessibilitySnapshotter.enableManualAccessibilityOnce(applicationElement: applicationElement, processIdentifier: processIdentifier)
+        var windowsValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(applicationElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
+              let windowElements = windowsValue as? [AXUIElement] else { return [] }
 
-        let deadline = Date().addingTimeInterval(0.15)
-        var elementsToVisit: [(element: AXUIElement, depth: Int)] = [(windowValue as! AXUIElement, 0)]
-        var visitedElementCount = 0
-        while !elementsToVisit.isEmpty, visitedElementCount < 400, Date() < deadline {
-            let (element, depth) = elementsToVisit.removeFirst()
-            visitedElementCount += 1
-            AXUIElementSetMessagingTimeout(element, messagingTimeoutInSeconds)
-            if stringAttribute(kAXRoleAttribute, of: element) == "AXWebArea" {
-                return webPageHost(ofWebArea: element)
+        let overallDeadline = Date().addingTimeInterval(0.3)
+        var pageHosts: [String] = []
+        for windowElement in windowElements.prefix(8) {
+            let windowDeadline = min(overallDeadline, Date().addingTimeInterval(0.1))
+            var elementsToVisit: [(element: AXUIElement, depth: Int)] = [(windowElement, 0)]
+            var visitedElementCount = 0
+            while !elementsToVisit.isEmpty, visitedElementCount < 400, Date() < windowDeadline {
+                let (element, depth) = elementsToVisit.removeFirst()
+                visitedElementCount += 1
+                AXUIElementSetMessagingTimeout(element, messagingTimeoutInSeconds)
+                if stringAttribute(kAXRoleAttribute, of: element) == "AXWebArea" {
+                    if let pageHost = webPageHost(ofWebArea: element) {
+                        pageHosts.append(pageHost)
+                    }
+                    // A page's own frames are inside it; no need to go deeper.
+                    continue
+                }
+                guard depth < 14 else { continue }
+                var childrenValue: CFTypeRef?
+                if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenValue) == .success,
+                   let children = childrenValue as? [AXUIElement] {
+                    elementsToVisit += children.map { ($0, depth + 1) }
+                }
             }
-            guard depth < 14 else { continue }
-            var childrenValue: CFTypeRef?
-            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenValue) == .success,
-               let children = childrenValue as? [AXUIElement] {
-                elementsToVisit += children.map { ($0, depth + 1) }
-            }
+            if Date() >= overallDeadline { break }
         }
-        return nil
+        return pageHosts
     }
 
     /// The AXWebArea the element is inside (itself included), if any.

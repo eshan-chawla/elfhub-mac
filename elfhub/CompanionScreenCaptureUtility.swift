@@ -167,7 +167,14 @@ enum CompanionScreenCaptureUtility {
     /// The same capture of one particular display (nil = the one under the
     /// cursor). A multi-step run stays on the display it started on, even
     /// if the pointer wanders to another one.
-    static func captureDisplayAsJPEG(displayID requestedDisplayID: CGDirectDisplayID?, visionProfile: ModelVisionProfile) async throws -> CompanionScreenCapture {
+    /// `appliesPrivacyChecks: false` skips the private-website and
+    /// personal-number checks — only for comparing frames while the screen
+    /// settles; such an image must never be sent.
+    static func captureDisplayAsJPEG(
+        displayID requestedDisplayID: CGDirectDisplayID?,
+        visionProfile: ModelVisionProfile,
+        appliesPrivacyChecks: Bool = true
+    ) async throws -> CompanionScreenCapture {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
 
         guard !content.displays.isEmpty else {
@@ -181,14 +188,16 @@ enum CompanionScreenCaptureUtility {
         // their contents never leave the machine.
         let ownBundleIdentifier = Bundle.main.bundleIdentifier
         let screenCapturePrivacyBlocklist = ScreenCapturePrivacyBlocklist.shared
-        // A browser in front showing a private website (a bank, a patient
-        // portal) is left out too.
-        let privateBrowserBundleIdentifier = await PrivateWebsiteList.frontmostBrowserShowingPrivateWebsite()
+        // Browsers with a private website open (a bank, a patient portal)
+        // are left out too, in front or not.
+        let privateBrowserProcessIdentifiers = appliesPrivacyChecks
+            ? await PrivateWebsiteList.browserProcessesShowingPrivateWebsites(Self.onScreenBrowserProcessIdentifiers(in: content))
+            : []
         let excludedWindows = content.windows.filter { window in
             let owningBundleIdentifier = window.owningApplication?.bundleIdentifier
             return owningBundleIdentifier == ownBundleIdentifier
                 || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: owningBundleIdentifier)
-                || (privateBrowserBundleIdentifier != nil && owningBundleIdentifier == privateBrowserBundleIdentifier)
+                || window.owningApplication.map { privateBrowserProcessIdentifiers.contains($0.processID) } == true
         }
 
         // Build a lookup from display ID to NSScreen so we can use AppKit-coordinate
@@ -247,12 +256,12 @@ enum CompanionScreenCaptureUtility {
                           userInfo: [NSLocalizedDescriptionKey: "Failed to capture any screen"])
         }
 
-        var captureLabel = privateBrowserBundleIdentifier == nil
+        var captureLabel = privateBrowserProcessIdentifiers.isEmpty
             ? "user's screen (the one their mouse is on)"
-            : "user's screen (the one their mouse is on; the browser is left out because it's showing a private website, like a bank or a patient portal)"
+            : "user's screen (the one their mouse is on; a browser is left out because it has a private website open, like a bank or a patient portal)"
         // Card, social insurance and health numbers are blacked out before
         // the screenshot goes anywhere.
-        if ScreenshotSensitiveContentMasker.isEnabled {
+        if appliesPrivacyChecks && ScreenshotSensitiveContentMasker.isEnabled {
             let maskingResult = await ScreenshotSensitiveContentMasker.masking(jpegData)
             jpegData = maskingResult.jpegData
             if maskingResult.maskedItemCount > 0 {
@@ -288,12 +297,12 @@ enum CompanionScreenCaptureUtility {
         }
         let ownBundleIdentifier = Bundle.main.bundleIdentifier
         let screenCapturePrivacyBlocklist = ScreenCapturePrivacyBlocklist.shared
-        let privateBrowserBundleIdentifier = await PrivateWebsiteList.frontmostBrowserShowingPrivateWebsite()
+        let privateBrowserProcessIdentifiers = await PrivateWebsiteList.browserProcessesShowingPrivateWebsites(Self.onScreenBrowserProcessIdentifiers(in: content))
         let excludedWindows = content.windows.filter { window in
             let owningBundleIdentifier = window.owningApplication?.bundleIdentifier
             return owningBundleIdentifier == ownBundleIdentifier
                 || screenCapturePrivacyBlocklist.isBlocked(bundleIdentifier: owningBundleIdentifier)
-                || (privateBrowserBundleIdentifier != nil && owningBundleIdentifier == privateBrowserBundleIdentifier)
+                || window.owningApplication.map { privateBrowserProcessIdentifiers.contains($0.processID) } == true
         }
         let filter = SCContentFilter(display: display, excludingWindows: excludedWindows)
 
@@ -330,6 +339,16 @@ enum CompanionScreenCaptureUtility {
         // A zoom makes small numbers readable, so it's checked too.
         guard ScreenshotSensitiveContentMasker.isEnabled else { return jpegData }
         return await ScreenshotSensitiveContentMasker.masking(jpegData).jpegData
+    }
+
+    /// Browsers with a window on screen, by process.
+    private static func onScreenBrowserProcessIdentifiers(in content: SCShareableContent) -> Set<pid_t> {
+        Set(content.windows.compactMap { window -> pid_t? in
+            guard window.isOnScreen,
+                  let owningApplication = window.owningApplication,
+                  AccessibilityElementLocator.isBrowser(bundleIdentifier: owningApplication.bundleIdentifier) else { return nil }
+            return owningApplication.processID
+        })
     }
 
     /// Core Graphics display ID of the screen the cursor is on right now.

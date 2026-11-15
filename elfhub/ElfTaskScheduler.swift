@@ -134,8 +134,19 @@ final class ElfTaskScheduler: ObservableObject {
         return task(withIdentifier: newTask.id) ?? newTask
     }
 
+    /// How long a yes to "may i use your screen?" lasts: the screen isn't
+    /// taken long after (or after a relaunch) when the user has moved on.
+    static let screenGrantLifetimeInSeconds: TimeInterval = 5 * 60
+
+    nonisolated static func isScreenGrantStillValid(grantedAt: Date, now: Date) -> Bool {
+        now.timeIntervalSince(grantedAt) <= screenGrantLifetimeInSeconds
+    }
+
     /// The user's answer to a task's question: it goes back in the queue.
-    func answer(taskIdentifier: UUID, answer: String) throws {
+    /// `usersOwnWords` is what the user actually said when someone else
+    /// (the main elf) passes the answer on — a screen request is granted
+    /// only by those words, never by the passed-on answer.
+    func answer(taskIdentifier: UUID, answer: String, usersOwnWords: String? = nil) throws {
         guard var answeredTask = task(withIdentifier: taskIdentifier) else { throw ElfTaskError.unknownTask }
         try answeredTask.move(to: .queued)
         if let pendingQuestion = answeredTask.pendingQuestion {
@@ -145,7 +156,8 @@ final class ElfTaskScheduler: ObservableObject {
         }
         // A yes to "may i use your screen?" lets the next run use it.
         if answeredTask.isWaitingForTheScreen {
-            answeredTask.screenGrantedForNextRun = SpokenConfirmationParser.interpret(answer, requiredVerbKeywords: []) == .confirmed
+            let userSaidYes = SpokenConfirmationParser.interpret(usersOwnWords ?? answer, requiredVerbKeywords: []) == .confirmed
+            answeredTask.screenGrantedAt = userSaidYes ? Date() : nil
         }
         answeredTask.pendingQuestion = nil
         answeredTask.isWaitingForTheScreen = false
@@ -307,14 +319,18 @@ final class ElfTaskScheduler: ObservableObject {
         // The user said yes to this task using their screen: this run gets it.
         var screenAccess: ElfWorkerScreenAccess?
         var screenUnavailableReason: String?
-        if runningTask.screenGrantedForNextRun {
-            runningTask.screenGrantedForNextRun = false
+        if let screenGrantedAt = runningTask.screenGrantedAt {
+            runningTask.screenGrantedAt = nil
             store(runningTask)
-            switch await screenAccessForWorker(workingElf, runningTask, languageModelProvider) {
-            case let .granted(grantedScreenAccess):
-                screenAccess = grantedScreenAccess
-            case let .unavailable(reason):
-                screenUnavailableReason = reason
+            if Self.isScreenGrantStillValid(grantedAt: screenGrantedAt, now: Date()) {
+                switch await screenAccessForWorker(workingElf, runningTask, languageModelProvider) {
+                case let .granted(grantedScreenAccess):
+                    screenAccess = grantedScreenAccess
+                case let .unavailable(reason):
+                    screenUnavailableReason = reason
+                }
+            } else {
+                screenUnavailableReason = "the user's okay ran out (it lasts \(Int(Self.screenGrantLifetimeInSeconds / 60)) minutes). ask for the screen again if you still need it."
             }
         }
         defer { screenAccess?.finish() }

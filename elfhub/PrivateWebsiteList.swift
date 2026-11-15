@@ -98,14 +98,26 @@ final class PrivateWebsiteList: ObservableObject {
         UserDefaults.standard.set(privateWebsiteDomains, forKey: Self.privateWebsiteDomainsKey)
     }
 
-    /// The browser in front, when the page it shows is private — its
-    /// windows are then left out of screenshots.
-    static func frontmostBrowserShowingPrivateWebsite() async -> String? {
+    /// Of these browser processes, the ones with a private website open in
+    /// any window — all their windows are then left out of screenshots
+    /// (in front or not: a bank beside Notes is still on the screen).
+    static func browserProcessesShowingPrivateWebsites(_ browserProcessIdentifiers: Set<pid_t>) async -> Set<pid_t> {
+        var privateBrowserProcessIdentifiers: Set<pid_t> = []
+        for browserProcessIdentifier in browserProcessIdentifiers {
+            let pageHosts = await AccessibilityElementLocator.pageHostsInWindows(processIdentifier: browserProcessIdentifier)
+            if pageHosts.contains(where: { shared.isPrivate(host: $0) }) {
+                privateBrowserProcessIdentifiers.insert(browserProcessIdentifier)
+            }
+        }
+        return privateBrowserProcessIdentifiers
+    }
+
+    /// Whether the browser in front has a private website open (its page
+    /// is then never read).
+    static func isFrontmostBrowserShowingPrivateWebsite() async -> Bool {
         guard let frontmostApplication = NSWorkspace.shared.frontmostApplication,
-              AccessibilityElementLocator.isBrowser(bundleIdentifier: frontmostApplication.bundleIdentifier),
-              let pageHost = await AccessibilityElementLocator.frontmostWindowPageHost(processIdentifier: frontmostApplication.processIdentifier),
-              shared.isPrivate(host: pageHost) else { return nil }
-        return frontmostApplication.bundleIdentifier
+              AccessibilityElementLocator.isBrowser(bundleIdentifier: frontmostApplication.bundleIdentifier) else { return false }
+        return await !browserProcessesShowingPrivateWebsites([frontmostApplication.processIdentifier]).isEmpty
     }
 }
 

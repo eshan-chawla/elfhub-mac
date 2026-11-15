@@ -74,7 +74,8 @@ enum CompanionScreenAction: Equatable {
         case let .openApplication(name):
             return "open \(name)"
         case let .openWebsite(url):
-            return "open \(url.host ?? url.absoluteString)"
+            // The whole address: a query can carry data out.
+            return "open \(url.absoluteString)"
         }
     }
 }

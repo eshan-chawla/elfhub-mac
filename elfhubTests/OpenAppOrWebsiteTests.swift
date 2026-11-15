@@ -55,6 +55,7 @@ struct OpenAppOrWebsiteTests {
     @Test func openStepsAreDescribedPlainly() throws {
         #expect(CompanionScreenAction.openApplication(name: "Numbers").humanReadableDescription == "open Numbers")
         let exampleURL = try #require(URL(string: "https://example.com/pricing"))
-        #expect(CompanionScreenAction.openWebsite(url: exampleURL).humanReadableDescription == "open example.com")
+        // The whole address, so the card shows exactly what would be opened.
+        #expect(CompanionScreenAction.openWebsite(url: exampleURL).humanReadableDescription == "open https://example.com/pricing")
     }
 }

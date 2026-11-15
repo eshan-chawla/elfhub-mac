@@ -165,6 +165,12 @@ enum ConsentPolicy {
             return .requiresExplicitConfirmation(reason: "that button finishes the form")
         }
 
+        // An address the user didn't name could carry what's on screen out
+        // in its query, or do something by being opened.
+        if case let .openWebsite(url) = context.action, !userUtteranceNamesWebsite(context.userUtterance, websiteURL: url) {
+            return .requiresExplicitConfirmation(reason: "that opens a website you didn't name")
+        }
+
         if let sensitiveContextReason = sensitiveContextReason(of: context) {
             return .requiresExplicitConfirmation(reason: sensitiveContextReason)
         }
@@ -238,6 +244,15 @@ enum ConsentPolicy {
     }
 
     /// The effect a button/menu title implies, if any.
+    /// Whether the user's words name this website's host (without "www.").
+    static func userUtteranceNamesWebsite(_ userUtterance: String, websiteURL: URL) -> Bool {
+        guard var host = websiteURL.host?.lowercased(), !host.isEmpty else { return false }
+        if host.hasPrefix("www.") {
+            host.removeFirst(4)
+        }
+        return userUtterance.lowercased().contains(host)
+    }
+
     /// Clicks of any count press what's under them (a double-click on a
     /// default button submits just like a click).
     static func isClickOnTarget(_ action: CompanionScreenAction) -> Bool {
