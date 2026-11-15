@@ -23,6 +23,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import os
 
 /// How a run ended early.
 enum ComputerUseRunEnding: Equatable {
@@ -44,6 +45,10 @@ struct ComputerUseStepResult {
 protocol ComputerUseStepExecutor: AnyObject {
     var hasEnded: Bool { get }
     func runStep(_ toolCalls: [LanguageModelToolCall]) async -> ComputerUseStepResult
+    /// The same, a call at a time as the reply arrives.
+    func beginRound()
+    func runCallInCurrentRound(_ toolCall: LanguageModelToolCall) async
+    func finishRound() async -> ComputerUseStepResult
 }
 
 /// The screen a run works on: capturing it and acting on it.
@@ -105,181 +110,229 @@ final class ComputerUseSession: ComputerUseStepExecutor {
         self.loopGuard = ComputerUseLoopGuard(startedAt: startedAt)
     }
 
+    /// One model round's screen calls, in order: begin, each call, finish.
     func runStep(_ toolCalls: [LanguageModelToolCall]) async -> ComputerUseStepResult {
-        guard !hasEnded else {
-            return ComputerUseStepResult(
-                resultBlocks: toolCalls.map { Self.resultBlock(for: $0, text: Self.notExecutedAfterRunEndedText, image: nil, isError: true) },
-                ending: nil
-            )
+        beginRound()
+        for toolCall in toolCalls {
+            await runCallInCurrentRound(toolCall)
         }
+        return await finishRound()
+    }
 
+    /// What one round has done so far. A round can be fed its calls one at
+    /// a time while the model's reply is still arriving (each starts as
+    /// soon as its call is complete), then finished once the reply is in.
+    private struct RoundInProgress {
         var results: [(toolCall: LanguageModelToolCall, text: String, image: LanguageModelImage?, isError: Bool)] = []
         var performedActions: [CompanionScreenAction] = []
         var aStepFailed = false
         var ending: ComputerUseRunEnding?
         var needsFreshScreenshot = false
-        let stepNumber = loopGuard.stepsTaken + 1
-        let fingerprintBeforeRound = ScreenshotFingerprint(jpegData: latestCapture.imageData)
+        let stepNumber: Int
+        let fingerprintBeforeRound: ScreenshotFingerprint?
+        /// The run had already ended when this round began: nothing runs.
+        let runWasOverAtStart: Bool
+        let startedAt = Date()
+        var timeSpentActing: TimeInterval = 0
+    }
 
-        for toolCall in toolCalls {
-            if aStepFailed {
-                results.append((toolCall, Self.notExecutedAfterFailureText, nil, true))
-                continue
-            }
-            if ending != nil || Task.isCancelled {
-                ending = ending ?? .stopNow(spokenReason: nil)
-                results.append((toolCall, Self.notExecutedAfterRunEndedText, nil, true))
-                continue
-            }
-            // The time limit holds within a round too (waits and cards add up).
-            if Date().timeIntervalSince(loopGuard.startedAt) >= ComputerUseLoopGuard.maximumRunDurationInSeconds {
-                let timeLimitReason = "it ran out of time (\(Int(ComputerUseLoopGuard.maximumRunDurationInSeconds / 60)) minutes)"
-                ending = .summarize(reason: timeLimitReason)
-                results.append((toolCall, Self.notExecutedAfterRunEndedText + " the run stopped because \(timeLimitReason). " + Self.runEndedInstruction, nil, true))
-                continue
-            }
+    private var roundInProgress: RoundInProgress?
 
-            let stepCommand = ComputerUseToolCallTranslator.command(
-                for: toolCall,
-                convention: coordinateConvention,
-                sentImageSize: latestCapture.sentImageSize
-            )
-            switch stepCommand {
-            case let .refuse(reason):
-                aStepFailed = true
-                results.append((toolCall, "Error: " + reason, nil, true))
+    func beginRound() {
+        roundInProgress = RoundInProgress(
+            stepNumber: loopGuard.stepsTaken + 1,
+            fingerprintBeforeRound: ScreenshotFingerprint(jpegData: latestCapture.imageData),
+            runWasOverAtStart: hasEnded
+        )
+    }
 
-            case .screenshot:
-                do {
-                    latestCapture = try await screen.captureScreen()
-                    let interfaceDescription = await screen.describeInterface(on: latestCapture)
-                    results.append((toolCall, "the screen now." + (interfaceDescription.map { "\n\n" + $0 } ?? ""), screenshotImage(of: latestCapture), false))
-                    needsFreshScreenshot = false
-                } catch {
-                    aStepFailed = true
-                    results.append((toolCall, "Error: couldn't take a screenshot (\(error.localizedDescription)).", nil, true))
-                }
-
-            case let .zoom(regionInScreenshotPixels):
-                do {
-                    let zoomedImageData = try await screen.captureZoomedRegion(regionInScreenshotPixels, of: latestCapture)
-                    results.append((
-                        toolCall,
-                        "zoomed in. coordinates still refer to the full screenshot, not this zoomed image.",
-                        LanguageModelImage(data: zoomedImageData, label: "zoomed-in part of the screen; keep using the full screenshot's coordinates"),
-                        false
-                    ))
-                } catch {
-                    aStepFailed = true
-                    results.append((toolCall, "Error: couldn't zoom (\(error.localizedDescription)).", nil, true))
-                }
-
-            case let .wait(seconds):
-                do {
-                    try await screen.wait(seconds: seconds)
-                    results.append((toolCall, "waited \(seconds.formatted()) seconds.", nil, false))
-                    needsFreshScreenshot = true
-                } catch {
-                    ending = .stopNow(spokenReason: nil)
-                    results.append((toolCall, Self.notExecutedAfterRunEndedText, nil, true))
-                }
-
-            case .cursorPosition:
-                let pointerText = screen.pointerLocationInScreenshotPixels(on: latestCapture).map { pointerPixel in
-                    let modelPoint = ScreenshotGeometry.modelCoordinate(
-                        fromScreenshotPixel: pointerPixel,
-                        convention: coordinateConvention,
-                        sentImageSize: latestCapture.sentImageSize
-                    )
-                    return "[\(Int(modelPoint.x.rounded())), \(Int(modelPoint.y.rounded()))]"
-                } ?? "the pointer isn't on this screen."
-                results.append((toolCall, pointerText, nil, false))
-
-            case let .act(action, repeatCount):
-                // A click aimed at something that has since changed (a
-                // dialog opened over it) would land on what the model never saw.
-                if let targetPixel = Self.clickTargetPixel(of: action),
-                   !clickTargetsHeldBackAsChanged.contains(where: { hypot($0.x - targetPixel.x, $0.y - targetPixel.y) <= Self.sameClickTargetDistanceInPixels }),
-                   await screen.targetRegionChanged(since: latestCapture, aroundScreenshotPixel: targetPixel) {
-                    clickTargetsHeldBackAsChanged.append(targetPixel)
-                    aStepFailed = true
-                    needsFreshScreenshot = true
-                    results.append((toolCall, "Error: that part of the screen changed since your screenshot (something opened or moved), so nothing was done. look at the fresh screenshot before trying again.", nil, true))
-                    continue
-                }
-                let stepDescription = "step \(stepNumber) of \(ComputerUseLoopGuard.maximumSteps) · \(action.humanReadableDescription)"
-                var lastOutcome = ComputerUseActionOutcome.performed
-                didTryToAct = true
-                for _ in 0..<repeatCount {
-                    lastOutcome = await screen.perform(action, on: latestCapture, stepDescription: stepDescription)
-                    guard lastOutcome == .performed else { break }
-                }
-                switch lastOutcome {
-                case .performed:
-                    performedActions.append(action)
-                    let stepDescription: String
-                    if case let .type(typedText) = action.withoutModifierKeys {
-                        stepDescription = "type \(typedText.count) characters"
-                    } else {
-                        stepDescription = screen.lastPerformedStepDescription ?? action.humanReadableDescription
-                    }
-                    performedStepDescriptions.append(repeatCount > 1 ? "\(stepDescription) ×\(repeatCount)" : stepDescription)
-                    needsFreshScreenshot = true
-                    results.append((toolCall, "OK.", nil, false))
-                case let .notPerformed(reason):
-                    aStepFailed = true
-                    needsFreshScreenshot = true
-                    results.append((toolCall, "Error: " + reason, nil, true))
-                case .declinedByUser, .stoppedByUser:
-                    ending = .stopNow(spokenReason: nil)
-                    results.append((toolCall, "Not executed: the user stopped this.", nil, true))
-                case let .handedToUser(reason):
-                    ending = .stopNow(spokenReason: reason)
-                    results.append((toolCall, "Not executed: " + reason, nil, true))
-                }
-            }
+    /// Runs one call of the current round (after the ones before it).
+    func runCallInCurrentRound(_ toolCall: LanguageModelToolCall) async {
+        if roundInProgress == nil { beginRound() }
+        guard var round = roundInProgress else { return }
+        defer { roundInProgress = round }
+        if round.runWasOverAtStart {
+            round.results.append((toolCall, Self.notExecutedAfterRunEndedText, nil, true))
+            return
+        }
+        if round.aStepFailed {
+            round.results.append((toolCall, Self.notExecutedAfterFailureText, nil, true))
+            return
+        }
+        if round.ending != nil || Task.isCancelled {
+            round.ending = round.ending ?? .stopNow(spokenReason: nil)
+            round.results.append((toolCall, Self.notExecutedAfterRunEndedText, nil, true))
+            return
+        }
+        // The time limit holds within a round too (waits and cards add up).
+        if Date().timeIntervalSince(loopGuard.startedAt) >= ComputerUseLoopGuard.maximumRunDurationInSeconds {
+            let timeLimitReason = "it ran out of time (\(Int(ComputerUseLoopGuard.maximumRunDurationInSeconds / 60)) minutes)"
+            round.ending = .summarize(reason: timeLimitReason)
+            round.results.append((toolCall, Self.notExecutedAfterRunEndedText + " the run stopped because \(timeLimitReason). " + Self.runEndedInstruction, nil, true))
+            return
         }
 
-        // One fresh look at the screen after acting, on the last result, so
-        // the model sees what its steps did without asking for it.
+        let stepCommand = ComputerUseToolCallTranslator.command(
+            for: toolCall,
+            convention: coordinateConvention,
+            sentImageSize: latestCapture.sentImageSize
+        )
+        switch stepCommand {
+        case let .refuse(reason):
+            round.aStepFailed = true
+            round.results.append((toolCall, "Error: " + reason, nil, true))
+
+        case .screenshot:
+            do {
+                latestCapture = try await screen.captureScreen()
+                let interfaceDescription = await screen.describeInterface(on: latestCapture)
+                round.results.append((toolCall, "the screen now." + (interfaceDescription.map { "\n\n" + $0 } ?? ""), screenshotImage(of: latestCapture), false))
+                round.needsFreshScreenshot = false
+            } catch {
+                round.aStepFailed = true
+                round.results.append((toolCall, "Error: couldn't take a screenshot (\(error.localizedDescription)).", nil, true))
+            }
+
+        case let .zoom(regionInScreenshotPixels):
+            do {
+                let zoomedImageData = try await screen.captureZoomedRegion(regionInScreenshotPixels, of: latestCapture)
+                round.results.append((
+                    toolCall,
+                    "zoomed in. coordinates still refer to the full screenshot, not this zoomed image.",
+                    LanguageModelImage(data: zoomedImageData, label: "zoomed-in part of the screen; keep using the full screenshot's coordinates"),
+                    false
+                ))
+            } catch {
+                round.aStepFailed = true
+                round.results.append((toolCall, "Error: couldn't zoom (\(error.localizedDescription)).", nil, true))
+            }
+
+        case let .wait(seconds):
+            do {
+                try await screen.wait(seconds: seconds)
+                round.results.append((toolCall, "waited \(seconds.formatted()) seconds.", nil, false))
+                round.needsFreshScreenshot = true
+            } catch {
+                round.ending = .stopNow(spokenReason: nil)
+                round.results.append((toolCall, Self.notExecutedAfterRunEndedText, nil, true))
+            }
+
+        case .cursorPosition:
+            let pointerText = screen.pointerLocationInScreenshotPixels(on: latestCapture).map { pointerPixel in
+                let modelPoint = ScreenshotGeometry.modelCoordinate(
+                    fromScreenshotPixel: pointerPixel,
+                    convention: coordinateConvention,
+                    sentImageSize: latestCapture.sentImageSize
+                )
+                return "[\(Int(modelPoint.x.rounded())), \(Int(modelPoint.y.rounded()))]"
+            } ?? "the pointer isn't on this screen."
+            round.results.append((toolCall, pointerText, nil, false))
+
+        case let .act(action, repeatCount):
+            // A click aimed at something that has since changed (a
+            // dialog opened over it) would land on what the model never saw.
+            if let targetPixel = Self.clickTargetPixel(of: action),
+               !clickTargetsHeldBackAsChanged.contains(where: { hypot($0.x - targetPixel.x, $0.y - targetPixel.y) <= Self.sameClickTargetDistanceInPixels }),
+               await screen.targetRegionChanged(since: latestCapture, aroundScreenshotPixel: targetPixel) {
+                clickTargetsHeldBackAsChanged.append(targetPixel)
+                round.aStepFailed = true
+                round.needsFreshScreenshot = true
+                round.results.append((toolCall, "Error: that part of the screen changed since your screenshot (something opened or moved), so nothing was done. look at the fresh screenshot before trying again.", nil, true))
+                return
+            }
+            let stepDescription = "step \(round.stepNumber) of \(ComputerUseLoopGuard.maximumSteps) · \(action.humanReadableDescription)"
+            var lastOutcome = ComputerUseActionOutcome.performed
+            didTryToAct = true
+            let actingStartedAt = Date()
+            for _ in 0..<repeatCount {
+                lastOutcome = await screen.perform(action, on: latestCapture, stepDescription: stepDescription)
+                guard lastOutcome == .performed else { break }
+            }
+            round.timeSpentActing += Date().timeIntervalSince(actingStartedAt)
+            switch lastOutcome {
+            case .performed:
+                round.performedActions.append(action)
+                let performedDescription: String
+                if case let .type(typedText) = action.withoutModifierKeys {
+                    performedDescription = "type \(typedText.count) characters"
+                } else {
+                    performedDescription = screen.lastPerformedStepDescription ?? action.humanReadableDescription
+                }
+                performedStepDescriptions.append(repeatCount > 1 ? "\(performedDescription) ×\(repeatCount)" : performedDescription)
+                round.needsFreshScreenshot = true
+                round.results.append((toolCall, "OK.", nil, false))
+            case let .notPerformed(reason):
+                round.aStepFailed = true
+                round.needsFreshScreenshot = true
+                round.results.append((toolCall, "Error: " + reason, nil, true))
+            case .declinedByUser, .stoppedByUser:
+                round.ending = .stopNow(spokenReason: nil)
+                round.results.append((toolCall, "Not executed: the user stopped this.", nil, true))
+            case let .handedToUser(reason):
+                round.ending = .stopNow(spokenReason: reason)
+                round.results.append((toolCall, "Not executed: " + reason, nil, true))
+            }
+        }
+    }
+
+    /// Ends the current round: one fresh look at the screen after acting
+    /// (on the last result), the guard's verdict, and every call's result.
+    func finishRound() async -> ComputerUseStepResult {
+        guard var round = roundInProgress else {
+            return ComputerUseStepResult(resultBlocks: [], ending: nil)
+        }
+        roundInProgress = nil
+        guard !round.runWasOverAtStart else {
+            return ComputerUseStepResult(
+                resultBlocks: round.results.map { Self.resultBlock(for: $0.toolCall, text: $0.text, image: $0.image, isError: $0.isError) },
+                ending: nil
+            )
+        }
+
         var screenChanged: Bool?
-        if needsFreshScreenshot, ending == nil, !results.isEmpty {
+        let lookingStartedAt = Date()
+        if round.needsFreshScreenshot, round.ending == nil, !round.results.isEmpty {
             do {
                 latestCapture = try await screen.captureScreenAfterSettling(previousCapture: latestCapture)
-                if let fingerprintBeforeRound, let fingerprintAfterRound = ScreenshotFingerprint(jpegData: latestCapture.imageData) {
+                if let fingerprintBeforeRound = round.fingerprintBeforeRound,
+                   let fingerprintAfterRound = ScreenshotFingerprint(jpegData: latestCapture.imageData) {
                     screenChanged = fingerprintAfterRound.differs(from: fingerprintBeforeRound)
                 }
-                let lastIndex = results.count - 1
+                let lastIndex = round.results.count - 1
                 let changeNote = screenChanged.map { $0 ? " the screen changed." : " nothing visible changed on the screen." } ?? ""
-                results[lastIndex].text += changeNote + " here's the screen now."
-                results[lastIndex].image = screenshotImage(of: latestCapture)
+                round.results[lastIndex].text += changeNote + " here's the screen now."
+                round.results[lastIndex].image = screenshotImage(of: latestCapture)
                 if let interfaceDescription = await screen.describeInterface(on: latestCapture) {
-                    results[lastIndex].text += "\n\n" + interfaceDescription
+                    round.results[lastIndex].text += "\n\n" + interfaceDescription
                 }
             } catch {
-                results[results.count - 1].text += " (couldn't take a screenshot afterwards: \(error.localizedDescription))"
+                round.results[round.results.count - 1].text += " (couldn't take a screenshot afterwards: \(error.localizedDescription))"
             }
         }
+        let timeSpentLooking = Date().timeIntervalSince(lookingStartedAt)
 
-        if ending == nil {
-            switch loopGuard.recordStep(actions: performedActions, anyStepFailed: aStepFailed, screenChanged: screenChanged, now: Date()) {
+        if round.ending == nil {
+            switch loopGuard.recordStep(actions: round.performedActions, anyStepFailed: round.aStepFailed, screenChanged: screenChanged, now: Date()) {
             case let .keepGoing(note):
-                if let note, !results.isEmpty {
-                    results[results.count - 1].text += "\n\n" + note
+                if let note, !round.results.isEmpty {
+                    round.results[round.results.count - 1].text += "\n\n" + note
                 }
             case let .stopAndSummarize(reason):
-                ending = .summarize(reason: reason)
-                if !results.isEmpty {
-                    results[results.count - 1].text += "\n\nthe run stopped because \(reason). " + Self.runEndedInstruction
+                round.ending = .summarize(reason: reason)
+                if !round.results.isEmpty {
+                    round.results[round.results.count - 1].text += "\n\nthe run stopped because \(reason). " + Self.runEndedInstruction
                 }
             }
         }
-        hasEnded = ending != nil
-        self.ending = self.ending ?? ending
+        hasEnded = round.ending != nil
+        ending = ending ?? round.ending
+
+        // Where a step's time goes, for tuning (never what's on screen).
+        companionLogger.info("Computer use step \(round.stepNumber, privacy: .public): \(round.results.count, privacy: .public) calls, acting \(Int(round.timeSpentActing * 1000), privacy: .public) ms, settling and looking \(Int(timeSpentLooking * 1000), privacy: .public) ms, whole step \(Int(Date().timeIntervalSince(round.startedAt) * 1000), privacy: .public) ms")
 
         return ComputerUseStepResult(
-            resultBlocks: results.map { Self.resultBlock(for: $0.toolCall, text: $0.text, image: $0.image, isError: $0.isError) },
-            ending: ending
+            resultBlocks: round.results.map { Self.resultBlock(for: $0.toolCall, text: $0.text, image: $0.image, isError: $0.isError) },
+            ending: round.ending
         )
     }
 
@@ -362,8 +415,16 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
         try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile, appliesPrivacyChecks: false)
     }
 
+    /// The window's controls read at the same moment as a screenshot, for
+    /// that screenshot — reading them alongside the capture (its privacy
+    /// checks take a moment) instead of after it saves up to 0.3 s a step.
+    private var interfaceSnapshotForCapture: (capturedImageData: Data, snapshot: AccessibilitySnapshot?)?
+
     func captureScreen() async throws -> CompanionScreenCapture {
-        try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile)
+        async let interfaceSnapshot = AccessibilitySnapshotter.snapshotOfFrontmostWindow()
+        let sentCapture = try await CompanionScreenCaptureUtility.captureDisplayAsJPEG(displayID: displayID, visionProfile: visionProfile)
+        interfaceSnapshotForCapture = (sentCapture.imageData, await interfaceSnapshot)
+        return sentCapture
     }
 
     func targetRegionChanged(since capture: CompanionScreenCapture, aroundScreenshotPixel screenshotPixel: CGPoint) async -> Bool {
@@ -431,13 +492,20 @@ final class ComputerUseLiveScreen: ComputerUseScreen {
     }
 
     func describeInterface(on capture: CompanionScreenCapture) async -> String? {
-        await Self.interfaceDescription(on: capture, convention: coordinateConvention)
+        if let interfaceSnapshotForCapture, interfaceSnapshotForCapture.capturedImageData == capture.imageData {
+            return interfaceSnapshotForCapture.snapshot.flatMap { Self.promptText(for: $0, on: capture, convention: coordinateConvention) }
+        }
+        return await Self.interfaceDescription(on: capture, convention: coordinateConvention)
     }
 
     /// The window in front's controls as text for the model, or nil when
     /// they can't be read (or none are on this screen).
     static func interfaceDescription(on capture: CompanionScreenCapture, convention: ModelCoordinateConvention) async -> String? {
         guard let snapshot = await AccessibilitySnapshotter.snapshotOfFrontmostWindow() else { return nil }
+        return promptText(for: snapshot, on: capture, convention: convention)
+    }
+
+    private static func promptText(for snapshot: AccessibilitySnapshot, on capture: CompanionScreenCapture, convention: ModelCoordinateConvention) -> String? {
         let promptText = AccessibilitySnapshotFormatter.promptText(
             for: snapshot,
             screenCapture: capture,

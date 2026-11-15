@@ -201,6 +201,10 @@ struct LanguageModelRequest {
 enum LanguageModelStreamEvent: Equatable {
     /// New text since the previous event — always a delta, never accumulated.
     case textDelta(String)
+    /// A screen step (Claude's computer toolset) whose call is complete
+    /// while the rest of the reply is still arriving, so it can start now.
+    /// It's in the response's tool calls too.
+    case toolCallCompleted(LanguageModelToolCall)
 }
 
 /// Why the model stopped, normalized across providers.

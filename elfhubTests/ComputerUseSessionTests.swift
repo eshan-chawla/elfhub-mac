@@ -358,6 +358,44 @@ struct ComputerUseSessionTests {
         #expect(loopResult.guidanceToolCalls.isEmpty)
     }
 
+    @Test func stepsStartWhileTheReplyIsStillArriving() async throws {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([
+                toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+                toolsetCall("b", "type", #"{"text":"hi"}"#),
+            ]),
+            ScriptedLanguageModelProvider.reply("done."),
+        ])
+        languageModelProvider.announcesComputerCallsWhileStreaming = true
+        languageModelProvider.streamingTimeAfterAnnouncedCallsInSeconds = 0.2
+        var stepsDoneWhenEachReplyEnded: [Int] = []
+        languageModelProvider.onReplyEnded = { stepsDoneWhenEachReplyEnded.append(screen.performedActions.count) }
+
+        let loopResult = try await ElfAgentLoop.run(
+            initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "click and type"),
+            languageModelProvider: languageModelProvider,
+            toolRegistry: ElfToolRegistry(tools: []),
+            toolContext: nil,
+            guidanceToolNames: GuidanceToolDefinitions.toolNames,
+            maximumRounds: 3 + ComputerUseLoopGuard.maximumSteps,
+            computerUseExecutor: session,
+            onReplyTextDelta: { _ in },
+            onModelRoundEnded: {}
+        )
+        // Both steps were done before the first reply had even finished...
+        #expect(stepsDoneWhenEachReplyEnded.first == 2)
+        // ...each exactly once, and both answered in the next request, in order.
+        #expect(screen.performedActions.count == 2)
+        let secondRequestResults = languageModelProvider.receivedRequests[1].messages.last?.content.compactMap { block -> String? in
+            if case let .computerToolResult(result) = block { return result.toolCallIdentifier }
+            return nil
+        }
+        #expect(secondRequestResults == ["a", "b"])
+        #expect(loopResult.replyText == "done.")
+    }
+
     @Test func theAgentLoopStopsWithoutAskingTheModelAgainWhenTheUserStops() async throws {
         let screen = FakeComputerUseScreen()
         screen.scriptedOutcomes = [.handedToUser(reason: "that's a password field, so please fill it in yourself.")]

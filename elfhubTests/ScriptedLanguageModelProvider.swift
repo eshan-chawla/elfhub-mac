@@ -19,6 +19,13 @@ final class ScriptedLanguageModelProvider: LanguageModelProvider {
     var beforeEachResponse: (() -> Void)?
     /// How long each answer takes (to test time limits).
     var responseDelayInSeconds: Double = 0
+    /// Like Claude with its computer toolset: announce each screen call as
+    /// soon as it's complete, then keep "streaming" this long before the
+    /// reply ends (so work started on the announced calls can be seen).
+    var announcesComputerCallsWhileStreaming = false
+    var streamingTimeAfterAnnouncedCallsInSeconds: Double = 0
+    /// How many screen steps had been done when each reply ended.
+    var onReplyEnded: (() -> Void)?
 
     /// Whether it can search the web itself (like Claude with its web
     /// search tool).
@@ -50,6 +57,15 @@ final class ScriptedLanguageModelProvider: LanguageModelProvider {
         if !scriptedResponse.text.isEmpty {
             onStreamEvent(.textDelta(scriptedResponse.text))
         }
+        if announcesComputerCallsWhileStreaming {
+            for toolCall in scriptedResponse.toolCalls where toolCall.toolsetName == "computer" {
+                onStreamEvent(.toolCallCompleted(toolCall))
+            }
+            if streamingTimeAfterAnnouncedCallsInSeconds > 0 {
+                try await Task.sleep(nanoseconds: UInt64(streamingTimeAfterAnnouncedCallsInSeconds * 1_000_000_000))
+            }
+        }
+        onReplyEnded?()
         return scriptedResponse
     }
 

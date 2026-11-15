@@ -103,6 +103,24 @@ struct ComputerUseProviderTests {
         #expect(accumulator.toolCalls.first?.toolName == "left_click")
     }
 
+    @Test func aComputerCallIsAnnouncedAsSoonAsItsBlockIsComplete() {
+        var accumulator = AnthropicStreamAccumulator()
+        _ = accumulator.consume(sseLine: #"data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_9","name":"left_click","toolset_name":"computer","input":{}}}"#)
+        _ = accumulator.consume(sseLine: #"data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"coordinate\":[5,6]}"}}"#)
+        let blockStopOutcome = accumulator.consume(sseLine: #"data: {"type":"content_block_stop","index":0}"#)
+        guard case let .toolCallCompleted(toolCall) = blockStopOutcome else {
+            Issue.record("expected the computer call to be announced, got \(blockStopOutcome)")
+            return
+        }
+        #expect(toolCall.toolName == "left_click")
+        #expect(toolCall.argumentsDictionary["coordinate"] as? [Int] == [5, 6])
+
+        // An ordinary tool's call waits for the whole reply.
+        var plainAccumulator = AnthropicStreamAccumulator()
+        _ = plainAccumulator.consume(sseLine: #"data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"read_file","input":{}}}"#)
+        #expect(plainAccumulator.consume(sseLine: #"data: {"type":"content_block_stop","index":0}"#) == .none)
+    }
+
     // MARK: - Other providers
 
     @Test func openAICompatibleSendsTheScreenshotInAUserMessageAfterTheToolMessage() throws {

@@ -236,6 +236,8 @@ final class ClaudeAPI {
                 continue
             case let .textDelta(textDelta):
                 onStreamEvent(.textDelta(textDelta))
+            case let .toolCallCompleted(completedToolCall):
+                onStreamEvent(.toolCallCompleted(completedToolCall))
             case .streamEnded:
                 break streamLoop
             }
@@ -455,6 +457,8 @@ struct AnthropicStreamAccumulator {
     enum ConsumeOutcome: Equatable {
         case none
         case textDelta(String)
+        /// A computer toolset call is complete (its input fully arrived).
+        case toolCallCompleted(LanguageModelToolCall)
         case streamEnded
     }
 
@@ -538,6 +542,14 @@ struct AnthropicStreamAccumulator {
                 ? [String: Any]()
                 : (try? JSONSerialization.jsonObject(with: Data(partialToolInputJSON.utf8)) as? [String: Any]) ?? [:]
             contentBlocksByIndex[blockIndex]?["input"] = parsedToolInput
+            // Screen steps are announced right away so they can start while
+            // the rest of the reply arrives. (Only the computer toolset's:
+            // a run never has a server-side fallback that could restart the
+            // reply on another model.)
+            if contentBlocksByIndex[blockIndex]?["toolset_name"] as? String == "computer",
+               let completedToolCall = toolCall(atBlockIndex: blockIndex) {
+                return .toolCallCompleted(completedToolCall)
+            }
             return .none
 
         case "message_start":
@@ -583,20 +595,22 @@ struct AnthropicStreamAccumulator {
 
     /// Tool calls in the order Claude made them.
     var toolCalls: [LanguageModelToolCall] {
-        contentBlockOrder.compactMap { blockIndex in
-            guard let contentBlock = contentBlocksByIndex[blockIndex],
-                  contentBlock["type"] as? String == "tool_use",
-                  let toolCallIdentifier = contentBlock["id"] as? String,
-                  let toolName = contentBlock["name"] as? String else { return nil }
-            let toolInput = contentBlock["input"] as? [String: Any] ?? [:]
-            let argumentsData = (try? JSONSerialization.data(withJSONObject: toolInput)) ?? Data("{}".utf8)
-            return LanguageModelToolCall(
-                toolCallIdentifier: toolCallIdentifier,
-                toolName: toolName,
-                argumentsJSON: String(decoding: argumentsData, as: UTF8.self),
-                toolsetName: contentBlock["toolset_name"] as? String
-            )
-        }
+        contentBlockOrder.compactMap(toolCall(atBlockIndex:))
+    }
+
+    private func toolCall(atBlockIndex blockIndex: Int) -> LanguageModelToolCall? {
+        guard let contentBlock = contentBlocksByIndex[blockIndex],
+              contentBlock["type"] as? String == "tool_use",
+              let toolCallIdentifier = contentBlock["id"] as? String,
+              let toolName = contentBlock["name"] as? String else { return nil }
+        let toolInput = contentBlock["input"] as? [String: Any] ?? [:]
+        let argumentsData = (try? JSONSerialization.data(withJSONObject: toolInput)) ?? Data("{}".utf8)
+        return LanguageModelToolCall(
+            toolCallIdentifier: toolCallIdentifier,
+            toolName: toolName,
+            argumentsJSON: String(decoding: argumentsData, as: UTF8.self),
+            toolsetName: contentBlock["toolset_name"] as? String
+        )
     }
 
     /// Web searches Claude ran on Anthropic's servers this reply.

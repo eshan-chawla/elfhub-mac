@@ -154,10 +154,34 @@ enum ElfAgentLoop {
             )
             roundRequest.providerWebSearch = providerWebSearch
             roundRequest.usesAnthropicComputerToolset = initialRequest.usesAnthropicComputerToolset
-            let roundResponse = try await languageModelProvider.streamResponse(roundRequest) { streamEvent in
-                if case let .textDelta(textDelta) = streamEvent {
-                    onReplyTextDelta(textDelta)
+            // Screen steps start as soon as each call is complete, while the
+            // rest of the reply is still arriving (Claude's computer toolset
+            // announces them) — not on the last round, whose steps never run.
+            let streamedRound = StreamedComputerUseRound()
+            let mayStartStepsWhileStreaming = computerUseExecutor.map { !$0.hasEnded } == true && roundNumber < maximumRounds
+            let roundResponse: LanguageModelResponse
+            do {
+                roundResponse = try await withTaskCancellationHandler {
+                    try await languageModelProvider.streamResponse(roundRequest) { streamEvent in
+                        switch streamEvent {
+                        case let .textDelta(textDelta):
+                            onReplyTextDelta(textDelta)
+                        case let .toolCallCompleted(completedToolCall):
+                            guard mayStartStepsWhileStreaming,
+                                  let computerUseExecutor,
+                                  ComputerUseToolCallTranslator.isComputerUseCall(completedToolCall) else { return }
+                            streamedRound.start(completedToolCall, on: computerUseExecutor)
+                        }
+                    }
+                } onCancel: {
+                    Task { @MainActor in streamedRound.cancel() }
                 }
+            } catch {
+                // Esc or a failed reply: steps already started stop before
+                // their next event, and nothing more starts.
+                streamedRound.cancel()
+                await streamedRound.waitUntilStartedStepsAreDone()
+                throw error
             }
             try Task.checkCancellation()
             roundsUsed = roundNumber
@@ -248,7 +272,18 @@ enum ElfAgentLoop {
             if let computerUseExecutor, !computerUseToolCalls.isEmpty, !isFinalRound {
                 try Task.checkCancellation()
                 let wasAlreadyOver = computerUseExecutor.hasEnded
-                let computerUseStepResult = await computerUseExecutor.runStep(computerUseToolCalls)
+                let computerUseStepResult: ComputerUseStepResult
+                if streamedRound.hasBegun {
+                    // Some steps already ran as the reply arrived: let them
+                    // finish, run any not announced, then end the round.
+                    await streamedRound.waitUntilStartedStepsAreDone()
+                    for toolCall in computerUseToolCalls where !streamedRound.startedCallIdentifiers.contains(toolCall.toolCallIdentifier) {
+                        await computerUseExecutor.runCallInCurrentRound(toolCall)
+                    }
+                    computerUseStepResult = await computerUseExecutor.finishRound()
+                } else {
+                    computerUseStepResult = await computerUseExecutor.runStep(computerUseToolCalls)
+                }
                 toolResultBlocks += computerUseStepResult.resultBlocks
                 try Task.checkCancellation()
                 switch computerUseStepResult.ending {
@@ -288,5 +323,41 @@ enum ElfAgentLoop {
             roundsUsed: roundsUsed,
             outputTokensUsed: outputTokensUsed
         )
+    }
+}
+
+/// Screen steps of one round started while the model's reply is still
+/// arriving: each runs after the one before it (the round's order and its
+/// stop-at-the-first-failure rule hold), and all of them can be stopped.
+@MainActor
+final class StreamedComputerUseRound {
+    private(set) var hasBegun = false
+    private(set) var startedCallIdentifiers: [String] = []
+    private var stepTasks: [Task<Void, Never>] = []
+    private var isCancelled = false
+
+    func start(_ toolCall: LanguageModelToolCall, on computerUseExecutor: ComputerUseStepExecutor) {
+        guard !isCancelled else { return }
+        if !hasBegun {
+            computerUseExecutor.beginRound()
+            hasBegun = true
+        }
+        startedCallIdentifiers.append(toolCall.toolCallIdentifier)
+        let stepBeforeThisOne = stepTasks.last
+        stepTasks.append(Task { @MainActor in
+            await stepBeforeThisOne?.value
+            await computerUseExecutor.runCallInCurrentRound(toolCall)
+        })
+    }
+
+    func cancel() {
+        isCancelled = true
+        for stepTask in stepTasks {
+            stepTask.cancel()
+        }
+    }
+
+    func waitUntilStartedStepsAreDone() async {
+        await stepTasks.last?.value
     }
 }
