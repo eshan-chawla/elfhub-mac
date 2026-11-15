@@ -50,6 +50,14 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     /// Clicking the Dock icon (or opening the app again from Finder) always
     /// brings the main window back. AppKit's own reopen handling does
     /// nothing while any window is visible, and the overlay always is.
+    /// A .elf double-clicked in Finder (or dropped on the Dock icon): its
+    /// preview opens in the main window — after setup, or over onboarding.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for packageURL in urls where packageURL.pathExtension.lowercased() == "elf" {
+            companionManager.requestElfImport(from: packageURL)
+        }
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         MainWindowPresenter.showMainWindow()
         return false

@@ -195,6 +195,9 @@ struct OnboardingPane: View {
             }
 
             HStack {
+                // Bring an elf someone shared (it's added beside yours).
+                Button("Import an .elf file…") { ElfImportPicker.chooseAndPreview(companionManager: companionManager) }
+                    .pointerCursor()
                 Spacer()
                 OnboardingPrimaryButton(title: "Next", isEnabled: canContinueFromMeetYourElfStep) {
                     continueFromMeetYourElfStep()

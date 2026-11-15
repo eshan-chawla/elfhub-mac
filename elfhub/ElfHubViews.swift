@@ -22,6 +22,8 @@ import UniformTypeIdentifiers
 /// below always keep room.
 struct ElvesSidebarSection: View {
     @ObservedObject var elfManager: ElfManager
+    /// For importing a .elf from the "+" menu.
+    let companionManager: CompanionManager
     @ObservedObject var elfTaskScheduler: ElfTaskScheduler
     /// The elf whose page is showing, if any.
     let selectedElfIdentifier: String?
@@ -59,6 +61,7 @@ struct ElvesSidebarSection: View {
 
                 Menu {
                     Button("New elf…") { isShowingNewElfSheet = true }
+                    Button("Import .elf…") { ElfImportPicker.chooseAndPreview(companionManager: companionManager) }
                     let availableStarterTemplates = elfManager.availableStarterTemplates
                     if !availableStarterTemplates.isEmpty {
                         Divider()
@@ -1560,5 +1563,80 @@ private struct ElfExportOptionsView: View {
         }
         .padding(12)
         .frame(width: 380, alignment: .leading)
+    }
+}
+
+// MARK: - Importing
+
+/// Lets the user pick a .elf file to import (its preview follows).
+enum ElfImportPicker {
+    @MainActor
+    static func chooseAndPreview(companionManager: CompanionManager) {
+        let openPanel = NSOpenPanel()
+        openPanel.title = "Import an elf"
+        openPanel.allowedContentTypes = [UTType(filenameExtension: "elf") ?? .zip]
+        openPanel.allowsMultipleSelection = false
+        guard openPanel.runModal() == .OK, let packageURL = openPanel.url else { return }
+        companionManager.requestElfImport(from: packageURL)
+    }
+}
+
+/// What a .elf would add, before anything is written: Import or Cancel.
+struct ElfImportPreviewSheet: View {
+    let importPreview: ElfImportPreview
+    let onImport: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Import \(importPreview.emoji.isEmpty ? "" : importPreview.emoji + " ")\(importPreview.elfName)?")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(DS.Colors.textPrimary)
+            if !importPreview.description.isEmpty {
+                Text(importPreview.description)
+                    .font(.system(size: 12))
+                    .foregroundColor(DS.Colors.textSecondary)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                previewLine("Its soul, skills and \(importPreview.fileCount) file\(importPreview.fileCount == 1 ? "" : "s")")
+                previewLine(importPreview.includesProfile ? "Its notes about the person who made it (profile.md)" : "No notes about anyone")
+                if importPreview.chatCount > 0 {
+                    previewLine("\(importPreview.chatCount) chat\(importPreview.chatCount == 1 ? "" : "s"), added to your chats")
+                }
+                previewLine("The web and folder access start off; you choose them on its page")
+            }
+            if let modelHint = importPreview.modelHint {
+                Text(modelHint)
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Only import elves from people you trust: its soul and skills shape what it says and does.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel") { onCancel() }
+                    .keyboardShortcut(.cancelAction)
+                    .pointerCursor()
+                Button("Import") { onImport() }
+                    .keyboardShortcut(.defaultAction)
+                    .pointerCursor()
+            }
+        }
+        .padding(16)
+        .frame(width: 420)
+        .background(DS.Colors.background)
+    }
+
+    private func previewLine(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("·").foregroundColor(DS.Colors.textTertiary)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(DS.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

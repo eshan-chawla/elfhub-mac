@@ -140,6 +140,25 @@ struct MainAppView: View {
             mainAppNavigation.open(requestedMainAppSection)
             companionManager.requestedMainAppSection = nil
         }
+        // A .elf being imported (from Finder, the hub or onboarding).
+        .sheet(item: $companionManager.pendingElfImport) { pendingElfImport in
+            ElfImportPreviewSheet(
+                importPreview: pendingElfImport.preview,
+                onImport: { companionManager.installPendingElfImport() },
+                onCancel: { companionManager.pendingElfImport = nil }
+            )
+        }
+        .alert(
+            "Couldn't import that elf",
+            isPresented: Binding(
+                get: { companionManager.elfImportErrorMessage != nil },
+                set: { isPresented in if !isPresented { companionManager.elfImportErrorMessage = nil } }
+            )
+        ) {
+            Button("OK") { companionManager.elfImportErrorMessage = nil }
+        } message: {
+            Text(companionManager.elfImportErrorMessage ?? "")
+        }
         // An elf deleted in the hub or removed in Finder can't keep its page.
         .onReceive(elfManager.$elves) { rosterElves in
             mainAppNavigation.showMainElfIfElfIsGone(existingElfIdentifiers: Set(rosterElves.map(\.id)))
@@ -180,6 +199,7 @@ struct MainAppView: View {
 
                     ElvesSidebarSection(
                         elfManager: elfManager,
+                        companionManager: companionManager,
                         elfTaskScheduler: companionManager.elfTaskScheduler,
                         selectedElfIdentifier: selectedElfIdentifier,
                         onOpenElf: { elfIdentifier in mainAppNavigation.open(.elf(elfIdentifier)) }

@@ -175,6 +175,51 @@ final class CompanionManager: ObservableObject {
         }
     )
 
+    // MARK: Importing .elf files
+
+    /// An import waiting for the user to look at its preview.
+    struct PendingElfImport: Identifiable {
+        let id = UUID()
+        let preview: ElfImportPreview
+    }
+
+    @Published var pendingElfImport: PendingElfImport?
+    /// Why the last import couldn't be read, for an alert.
+    @Published var elfImportErrorMessage: String?
+
+    /// Reads and checks a .elf (writing nothing) and shows its preview in
+    /// the main window.
+    func requestElfImport(from packageURL: URL) {
+        MainWindowPresenter.showMainWindow()
+        do {
+            pendingElfImport = PendingElfImport(preview: try ElfImporter.preview(
+                packageURL: packageURL,
+                elfManager: elfManager,
+                configurations: providerConfigurationStore.configurations
+            ))
+        } catch {
+            elfImportErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Adds the previewed elf (and its chats) and opens its page.
+    func installPendingElfImport() {
+        guard let pendingElfImport else { return }
+        self.pendingElfImport = nil
+        do {
+            let importedElf = try ElfImporter.install(
+                pendingElfImport.preview,
+                elfManager: elfManager,
+                onImportedChat: { [chatConversationStore] importedChat in chatConversationStore.save(importedChat) }
+            )
+            if hasCompletedOnboarding {
+                requestedMainAppSection = .elf(importedElf.id)
+            }
+        } catch {
+            elfImportErrorMessage = "Couldn't import it: \(error.localizedDescription)"
+        }
+    }
+
     /// Whether finished background work is spoken when the user is idle
     /// (Settings › Modes); on by default.
     static let speaksTaskReportsDefaultsKey = "speaksFinishedTaskReports"
