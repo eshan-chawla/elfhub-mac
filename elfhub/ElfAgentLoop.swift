@@ -172,6 +172,9 @@ enum ElfAgentLoop {
             let computerUseToolCalls = computerUseExecutor == nil
                 ? []
                 : roundResponse.toolCalls.filter(ComputerUseToolCallTranslator.isComputerUseCall)
+            // Steps asked for in the last round would run unseen (no round
+            // after it shows the model what they did), so they don't run.
+            let isFinalRound = roundNumber == maximumRounds
             let computerUseToolCallIdentifiers = Set(computerUseToolCalls.map(\.toolCallIdentifier))
             guidanceToolCalls += roundResponse.toolCalls.filter { toolCall in
                 guidanceToolNames.contains(toolCall.toolName) && !computerUseToolCallIdentifiers.contains(toolCall.toolCallIdentifier)
@@ -227,7 +230,7 @@ enum ElfAgentLoop {
             }
             // The round's steps on the screen, in order, each answered (with
             // a fresh screenshot after acting).
-            if let computerUseExecutor, !computerUseToolCalls.isEmpty {
+            if let computerUseExecutor, !computerUseToolCalls.isEmpty, !isFinalRound {
                 try Task.checkCancellation()
                 let wasAlreadyOver = computerUseExecutor.hasEnded
                 let computerUseStepResult = await computerUseExecutor.runStep(computerUseToolCalls)

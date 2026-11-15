@@ -119,6 +119,13 @@ final class ComputerUseSession: ComputerUseStepExecutor {
                 results.append((toolCall, Self.notExecutedAfterRunEndedText, nil, true))
                 continue
             }
+            // The time limit holds within a round too (waits and cards add up).
+            if Date().timeIntervalSince(loopGuard.startedAt) >= ComputerUseLoopGuard.maximumRunDurationInSeconds {
+                let timeLimitReason = "it ran out of time (\(Int(ComputerUseLoopGuard.maximumRunDurationInSeconds / 60)) minutes)"
+                ending = .summarize(reason: timeLimitReason)
+                results.append((toolCall, Self.notExecutedAfterRunEndedText + " the run stopped because \(timeLimitReason). " + Self.runEndedInstruction, nil, true))
+                continue
+            }
 
             let stepCommand = ComputerUseToolCallTranslator.command(
                 for: toolCall,

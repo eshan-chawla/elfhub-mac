@@ -408,6 +408,10 @@ final class ScreenActionCoordinator: ObservableObject {
             // Only cancel if it's still the SAME pending card (the user didn't
             // already confirm/cancel or arm a newer one).
             guard pendingConsent?.id == consentID else { return }
+            // A run waiting on this card stops; say so rather than go quiet.
+            if pendingRunApprovalContinuation != nil {
+                speak?("i didn't hear a yes, so i stopped there.")
+            }
             cancelPendingActions(speakDenial: false)
         }
     }

@@ -213,6 +213,45 @@ struct ComputerUseSessionTests {
         #expect(screen.performedActions.count == ComputerUseLoopGuard.maximumSteps)
     }
 
+    @Test func theTimeLimitStopsARoundBeforeItsNextAction() async {
+        let screen = FakeComputerUseScreen()
+        let session = ComputerUseSession(
+            screen: screen,
+            firstCapture: FakeComputerUseScreen.capture(imageData: FakeComputerUseScreen.jpegData(withBoxAt: nil)),
+            coordinateConvention: .imagePixels,
+            startedAt: Date().addingTimeInterval(-ComputerUseLoopGuard.maximumRunDurationInSeconds - 1)
+        )
+        let stepResult = await session.runStep([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)])
+        #expect(screen.performedActions.isEmpty)
+        guard case .summarize = stepResult.ending else {
+            Issue.record("expected the run to end for time")
+            return
+        }
+        #expect(computerResults(stepResult).first?.resultText.contains(ComputerUseSession.runEndedInstruction) == true)
+    }
+
+    @Test func stepsAskedForInTheLastRoundAreNotCarriedOut() async throws {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)]),
+            ScriptedLanguageModelProvider.toolCalls([toolsetCall("b", "left_click", #"{"coordinate":[300,200]}"#)], text: "one more click."),
+        ])
+        _ = try await ElfAgentLoop.run(
+            initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "click twice"),
+            languageModelProvider: languageModelProvider,
+            toolRegistry: ElfToolRegistry(tools: []),
+            toolContext: nil,
+            guidanceToolNames: GuidanceToolDefinitions.toolNames,
+            maximumRounds: 2,
+            computerUseExecutor: session,
+            onReplyTextDelta: { _ in },
+            onModelRoundEnded: {}
+        )
+        // The model would never see what the second click did.
+        #expect(screen.performedActions.count == 1)
+    }
+
     // MARK: - When a turn acts in steps
 
     @Test func aTurnActsInStepsOnlyWithActionModeToolsAndVision() {
