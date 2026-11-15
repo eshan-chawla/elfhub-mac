@@ -160,6 +160,17 @@ final class OpenAICompatibleLanguageModelProvider: LanguageModelProvider {
                 contentParts.append(["type": "text", "text": image.label])
             case let .toolResult(toolCallIdentifier, _, resultText):
                 toolResultMessages.append(["role": "tool", "tool_call_id": toolCallIdentifier, "content": resultText])
+            case let .computerToolResult(computerToolResult):
+                toolResultMessages.append(["role": "tool", "tool_call_id": computerToolResult.toolCallIdentifier, "content": computerToolResult.resultText])
+                // A "tool" message can only hold text, so the screenshot the
+                // step returned goes in the user message that follows.
+                if includeImages, let image = computerToolResult.image {
+                    includesImage = true
+                    let mediaType = LanguageModelWireFormatSupport.detectImageMediaType(for: image.data)
+                    let dataURI = "data:\(mediaType);base64,\(image.data.base64EncodedString())"
+                    contentParts.append(["type": "image_url", "image_url": ["url": dataURI]])
+                    contentParts.append(["type": "text", "text": image.label])
+                }
             case .toolCall, .anthropicRawBlock, .openAIResponsesRawItem:
                 continue
             }
@@ -188,7 +199,7 @@ final class OpenAICompatibleLanguageModelProvider: LanguageModelProvider {
                     "type": "function",
                     "function": ["name": toolCall.toolName, "arguments": toolCall.argumentsJSON],
                 ])
-            case .image, .toolResult, .anthropicRawBlock, .openAIResponsesRawItem:
+            case .image, .toolResult, .computerToolResult, .anthropicRawBlock, .openAIResponsesRawItem:
                 continue
             }
         }

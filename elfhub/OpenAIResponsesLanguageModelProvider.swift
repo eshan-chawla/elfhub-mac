@@ -291,6 +291,19 @@ final class OpenAIResponsesLanguageModelProvider: LanguageModelProvider {
                     }
                 case let .toolResult(toolCallIdentifier, _, resultText):
                     toolOutputItems.append(["type": "function_call_output", "call_id": toolCallIdentifier, "output": resultText])
+                case let .computerToolResult(computerToolResult):
+                    toolOutputItems.append(["type": "function_call_output", "call_id": computerToolResult.toolCallIdentifier, "output": computerToolResult.resultText])
+                    // The step's screenshot follows in a user message.
+                    if includeImages, let image = computerToolResult.image {
+                        let mediaType = LanguageModelWireFormatSupport.detectImageMediaType(for: image.data)
+                        contentParts.append([
+                            "type": "input_image",
+                            "image_url": "data:\(mediaType);base64,\(image.data.base64EncodedString())",
+                        ])
+                        if !image.label.isEmpty {
+                            contentParts.append(["type": "input_text", "text": image.label])
+                        }
+                    }
                 case .toolCall, .anthropicRawBlock, .openAIResponsesRawItem:
                     continue
                 }

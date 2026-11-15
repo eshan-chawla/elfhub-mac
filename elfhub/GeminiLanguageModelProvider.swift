@@ -176,6 +176,24 @@ final class GeminiLanguageModelProvider: LanguageModelProvider {
                 return [functionCallPart]
             case let .toolResult(_, toolName, resultText):
                 return [["functionResponse": ["name": toolName, "response": ["result": resultText]]]]
+            case let .computerToolResult(computerToolResult):
+                var resultParts: [[String: Any]] = [[
+                    "functionResponse": ["name": computerToolResult.toolName, "response": ["result": computerToolResult.resultText]],
+                ]]
+                // The screenshot the step returned rides along as an image
+                // part right after the function's answer.
+                if includeImages, let image = computerToolResult.image {
+                    resultParts.append([
+                        "inline_data": [
+                            "mime_type": LanguageModelWireFormatSupport.detectImageMediaType(for: image.data),
+                            "data": image.data.base64EncodedString(),
+                        ],
+                    ])
+                    if !image.label.isEmpty {
+                        resultParts.append(["text": image.label])
+                    }
+                }
+                return resultParts
             case .anthropicRawBlock, .openAIResponsesRawItem:
                 return []
             }

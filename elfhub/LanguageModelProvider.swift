@@ -62,6 +62,10 @@ struct LanguageModelToolCall: Equatable {
     /// A provider's signature for the call that must be sent back with it
     /// (Gemini's `thoughtSignature`); nil for providers without one.
     var providerSignature: String? = nil
+    /// The toolset a call belongs to (Claude's computer toolset calls carry
+    /// `toolset_name: "computer"`, which every result must echo); nil for an
+    /// ordinary tool.
+    var toolsetName: String? = nil
 
     /// The arguments as a dictionary, or empty when they aren't valid JSON.
     var argumentsDictionary: [String: Any] {
@@ -81,6 +85,9 @@ enum LanguageModelContentBlock {
     case toolCall(LanguageModelToolCall)
     /// The result elfhub returns for a tool call (only in user messages).
     case toolResult(toolCallIdentifier: String, toolName: String, resultText: String)
+    /// The result of one step on the user's screen during a multi-step run:
+    /// what happened, and usually a fresh screenshot.
+    case computerToolResult(LanguageModelComputerToolResult)
     /// A Claude content block kept verbatim (e.g. a signed thinking block) so a
     /// follow-up request can replay the assistant turn unchanged. Other
     /// providers ignore it.
@@ -90,6 +97,18 @@ enum LanguageModelContentBlock {
     /// items carry encrypted content the model needs back. Other providers
     /// ignore it.
     case openAIResponsesRawItem(String)
+}
+
+/// What one screen step returns to the model: a short text (what was done
+/// and whether the screen changed), optionally a screenshot, whether it
+/// failed, and the toolset to echo (Claude's computer toolset).
+struct LanguageModelComputerToolResult {
+    let toolCallIdentifier: String
+    let toolName: String
+    let resultText: String
+    let image: LanguageModelImage?
+    let isError: Bool
+    let toolsetName: String?
 }
 
 struct LanguageModelMessage {
@@ -130,6 +149,10 @@ struct LanguageModelRequest {
     /// by the provider) — only asked of providers that support it. Nil: no
     /// built-in search.
     var providerWebSearch: LanguageModelProviderWebSearch?
+    /// Offers Claude its computer toolset for a multi-step run on the
+    /// user's screen — only sent where it's accepted (direct to Anthropic,
+    /// on models that take it).
+    var usesAnthropicComputerToolset = false
 
     init(
         systemPrompt: String,

@@ -109,6 +109,33 @@ final class ClaudeAPI {
         return dynamicFilteringModelPrefixes.contains { lowercasedModel.hasPrefix($0) } ? "web_search_20260209" : "web_search_20250305"
     }
 
+    /// Claude's computer toolset (GA, no beta header). Claude 5-family
+    /// models take it — and the newest take only it — so older models use
+    /// elfhub's own perform_screen_action function tool instead.
+    static let computerToolsetType = "computer_toolset_20260801"
+
+    static func supportsComputerToolset(model: String) -> Bool {
+        let lowercasedModel = model.lowercased()
+        let computerToolsetModelPrefixes = [
+            "claude-opus-5", "claude-sonnet-5", "claude-haiku-5", "claude-fable-5", "claude-mythos-5"
+        ]
+        return computerToolsetModelPrefixes.contains { lowercasedModel.hasPrefix($0) }
+    }
+
+    /// Toolset members elfhub doesn't carry out, switched off so Claude
+    /// never asks for them: pressing the left button or a key without
+    /// letting go would leave the user's mouse or keyboard stuck if a run
+    /// stopped halfway, and the middle button has no use on a Mac.
+    static let computerToolsetDisabledMemberNames = ["middle_click", "left_mouse_down", "left_mouse_up", "hold_key"]
+
+    static var computerToolsetEntry: [String: Any] {
+        var configs: [String: Any] = [:]
+        for disabledMemberName in computerToolsetDisabledMemberNames {
+            configs[disabledMemberName] = ["enabled": false]
+        }
+        return ["type": computerToolsetType, "configs": configs]
+    }
+
     /// The `anthropic-beta` header value: every beta this request needs,
     /// comma-separated (setting the header once per beta would keep only the last).
     static func anthropicBetaHeaderValue(forBetas betaNames: [String]) -> String? {
@@ -311,6 +338,11 @@ final class ClaudeAPI {
                 "max_uses": providerWebSearch.maximumSearchesPerRequest,
             ])
         }
+        // The computer toolset for a multi-step run on the user's screen —
+        // only on Anthropic's own API, for models that take it.
+        if isDirectToAnthropic, request.usesAnthropicComputerToolset, supportsComputerToolset(model: model) {
+            toolsJSON.append(computerToolsetEntry)
+        }
         if !toolsJSON.isEmpty {
             body["tools"] = toolsJSON
         }
@@ -359,6 +391,32 @@ final class ClaudeAPI {
                 ]]
             case let .toolResult(toolCallIdentifier, _, resultText):
                 return [["type": "tool_result", "tool_use_id": toolCallIdentifier, "content": resultText]]
+            case let .computerToolResult(computerToolResult):
+                var resultContent: [[String: Any]] = [["type": "text", "text": computerToolResult.resultText]]
+                if let image = computerToolResult.image {
+                    resultContent.append([
+                        "type": "image",
+                        "source": [
+                            "type": "base64",
+                            "media_type": LanguageModelWireFormatSupport.detectImageMediaType(for: image.data),
+                            "data": image.data.base64EncodedString(),
+                        ],
+                    ])
+                }
+                var resultBlock: [String: Any] = [
+                    "type": "tool_result",
+                    "tool_use_id": computerToolResult.toolCallIdentifier,
+                    "content": resultContent,
+                ]
+                // A computer toolset result must name its toolset, or the
+                // API rejects the request.
+                if let toolsetName = computerToolResult.toolsetName {
+                    resultBlock["toolset_name"] = toolsetName
+                }
+                if computerToolResult.isError {
+                    resultBlock["is_error"] = true
+                }
+                return [resultBlock]
             case let .anthropicRawBlock(rawBlockJSON):
                 // Thinking and other blocks replayed exactly as Claude produced them.
                 guard let rawBlockData = rawBlockJSON.data(using: .utf8),
@@ -532,7 +590,8 @@ struct AnthropicStreamAccumulator {
             return LanguageModelToolCall(
                 toolCallIdentifier: toolCallIdentifier,
                 toolName: toolName,
-                argumentsJSON: String(decoding: argumentsData, as: UTF8.self)
+                argumentsJSON: String(decoding: argumentsData, as: UTF8.self),
+                toolsetName: contentBlock["toolset_name"] as? String
             )
         }
     }
