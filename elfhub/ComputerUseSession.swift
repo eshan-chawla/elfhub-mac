@@ -386,8 +386,8 @@ final class ComputerUseSession: ComputerUseStepExecutor {
 final class ComputerUseLiveScreen: ComputerUseScreen {
     /// Wait this long after acting before the first look, then until two
     /// looks this far apart match (at most `maximumSettleSeconds`).
-    static let firstSettleDelaySeconds = 0.35
-    static let settleCheckIntervalSeconds = 0.2
+    static let firstSettleDelaySeconds = 0.25
+    static let settleCheckIntervalSeconds = 0.15
     static let maximumSettleSeconds = 1.5
 
     private let screenActionCoordinator: ScreenActionCoordinator
