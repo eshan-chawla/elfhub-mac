@@ -9,7 +9,7 @@
 // feed at a DMG served from this Mac):
 //   swift scripts/sparkle/make-appcast.swift \
 //     --version 1.0 --build 1 \
-//     --download-url https://github.com/eshan-chawla/elfhub/releases/download/v1.0/elfhub.dmg \
+//     --download-url https://github.com/eshan-chawla/elfhub-mac/releases/download/v1.0/elfhub.dmg \
 //     --ed-signature <from sign_update -p> --length <DMG size in bytes> \
 //     --minimum-system-version 14.2.0 --notes-file notes.md --output appcast.xml
 

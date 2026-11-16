@@ -1,10 +1,10 @@
 # elfhub
 
 <p>
-  <a href="https://github.com/eshan-chawla/elfhub/releases/latest/download/elfhub.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download elfhub for macOS" height="36"></a>
+  <a href="https://github.com/eshan-chawla/elfhub-mac/releases/latest/download/elfhub.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download elfhub for macOS" height="36"></a>
 </p>
 
-<sub>macOS 14.2 or later on Apple silicon (M1 or newer) · free and open source (AGPL-3.0) · signed and notarized by Apple · <a href="https://github.com/eshan-chawla/elfhub/releases">all releases</a></sub>
+<sub>macOS 14.2 or later on Apple silicon (M1 or newer) · free and open source (AGPL-3.0) · signed and notarized by Apple · <a href="https://github.com/eshan-chawla/elfhub-mac/releases">all releases</a></sub>
 
 An AI desktop companion for macOS. elfhub lives in your menu bar — it can see your screen, talk to you, point at and annotate what matters, and take actions on your computer on request. It works alongside the agent you're hacking with: performing real computer use in front of the agent to move your task along, and helping you learn new things as you work.
 
@@ -44,7 +44,7 @@ The **on-device model assistant** (Models → On-device models) finds Ollama, do
 
 ## Install
 
-1. [Download `elfhub.dmg`](https://github.com/eshan-chawla/elfhub/releases/latest/download/elfhub.dmg) (always the latest version).
+1. [Download `elfhub.dmg`](https://github.com/eshan-chawla/elfhub-mac/releases/latest/download/elfhub.dmg) (always the latest version).
 2. Open it and drag **elfhub** into **Applications**.
 3. Open elfhub from Applications. It's signed and notarized, so macOS only asks you to confirm opening an app downloaded from the internet.
 

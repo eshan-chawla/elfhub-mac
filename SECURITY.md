@@ -28,4 +28,4 @@ Out of scope: issues in the third-party model services themselves, and what a mo
 
 ## Supported versions
 
-Only the [latest release](https://github.com/eshan-chawla/elfhub/releases/latest) gets security fixes.
+Only the [latest release](https://github.com/eshan-chawla/elfhub-mac/releases/latest) gets security fixes.
