@@ -985,33 +985,16 @@ private struct ElfModelAndVoiceSummarySection: View {
 
     /// For an elf on the on-device voice model: one of that model's voices,
     /// or the one chosen in Settings › Models.
-    @ViewBuilder
     private var onDeviceModelVoicePicker: some View {
-        let onDeviceVoiceModelStore = OnDeviceVoiceModelLayers.shared.store
-        if let activeModelIdentifier = onDeviceVoiceModelStore.activeTextToSpeechModelIdentifier,
-           onDeviceVoiceModelStore.isInstalled(activeModelIdentifier) {
-            let availableVoices = onDeviceVoiceModelStore.availableVoices(forModelIdentifier: activeModelIdentifier)
-            Picker("Voice", selection: Binding<String>(
-                get: { elfEditor.localSettings.voice?.voiceIdentifier ?? "" },
-                set: { voiceIdentifier in
-                    try? elfEditor.updateLocalSettings { localSettings in
-                        localSettings.voice?.voiceIdentifier = voiceIdentifier.isEmpty ? nil : voiceIdentifier
-                    }
-                }
-            )) {
-                Text("The voice in Settings › Models").tag("")
-                ForEach(availableVoices) { voice in
-                    Text(voice.displayName).tag(voice.id)
+        ElfOnDeviceModelVoicePicker(
+            onDeviceVoiceModelStore: OnDeviceVoiceModelLayers.shared.store,
+            savedVoiceIdentifier: elfEditor.localSettings.voice?.voiceIdentifier,
+            onVoiceChosen: { voiceIdentifier in
+                try? elfEditor.updateLocalSettings { localSettings in
+                    localSettings.voice?.voiceIdentifier = voiceIdentifier
                 }
             }
-            .pickerStyle(.menu)
-            .fixedSize()
-            .pointerCursor()
-        } else {
-            Text("Download and choose a voice model in Settings › Models first.")
-                .font(.system(size: 11))
-                .foregroundColor(DS.Colors.textTertiary)
-        }
+        )
     }
 
     private var voiceRow: some View {
@@ -1762,6 +1745,39 @@ struct ElfImportPreviewSheet: View {
                 .font(.system(size: 12))
                 .foregroundColor(DS.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// An elf's voice from the downloaded voice model; follows downloads and
+/// model changes as they happen. A voice saved for another model shows as
+/// the one in Settings (that's what it speaks with).
+private struct ElfOnDeviceModelVoicePicker: View {
+    @ObservedObject var onDeviceVoiceModelStore: OnDeviceVoiceModelStore
+    let savedVoiceIdentifier: String?
+    let onVoiceChosen: (String?) -> Void
+
+    var body: some View {
+        if let activeModelIdentifier = onDeviceVoiceModelStore.activeTextToSpeechModelIdentifier,
+           onDeviceVoiceModelStore.isInstalled(activeModelIdentifier) {
+            let availableVoices = onDeviceVoiceModelStore.availableVoices(forModelIdentifier: activeModelIdentifier)
+            let shownVoiceIdentifier = savedVoiceIdentifier.flatMap { saved in availableVoices.contains { $0.id == saved } ? saved : nil } ?? ""
+            Picker("Voice", selection: Binding<String>(
+                get: { shownVoiceIdentifier },
+                set: { onVoiceChosen($0.isEmpty ? nil : $0) }
+            )) {
+                Text("The voice in Settings › Models").tag("")
+                ForEach(availableVoices) { voice in
+                    Text(voice.displayName).tag(voice.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+            .pointerCursor()
+        } else {
+            Text("Download and choose a voice model in Settings › Models first.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
         }
     }
 }

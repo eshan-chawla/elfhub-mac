@@ -43,6 +43,14 @@ struct OnDeviceVoiceModelSection: View {
                 .font(.system(size: 11))
                 .foregroundColor(DS.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
+            if store.activeModelIdentifier(forKind: kind) == nil {
+                Text(kind == .speechToText
+                     ? "Until you choose one, push-to-talk uses Apple's on-device speech recognition."
+                     : "Until you choose one, elfhub speaks with Apple's on-device voice.")
+                    .font(.system(size: 11))
+                    .foregroundColor(DS.Colors.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             ForEach(recommendedModels) { recommendedModel in
                 modelRow(
@@ -180,10 +188,7 @@ struct OnDeviceVoiceModelSection: View {
 
     private func choose(_ repositoryIdentifier: String) {
         store.setActiveModel(repositoryIdentifier, kind: kind)
-        let runtime = OnDeviceVoiceModelLayers.shared.runtime
-        let kind = self.kind
-        // The model that was in use is let go, and the new one is loaded now.
-        Task.detached(priority: .utility) { await runtime.unloadModel(ofKind: kind) }
+        // Loading the new model replaces the one that was in use.
         OnDeviceVoiceModelLayers.shared.prepareActiveModel(kind: kind)
         onActiveModelChanged()
     }
@@ -192,6 +197,8 @@ struct OnDeviceVoiceModelSection: View {
         let wasActive = store.activeModelIdentifier(forKind: kind) == repositoryIdentifier
         store.delete(repositoryIdentifier)
         if wasActive {
+            // Its weights leave memory too.
+            OnDeviceVoiceModelLayers.shared.unloadModel(kind: kind)
             onActiveModelChanged()
         }
     }

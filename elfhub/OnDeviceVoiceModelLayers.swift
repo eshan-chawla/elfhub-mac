@@ -50,6 +50,13 @@ final class OnDeviceVoiceModelLayers {
         unavailableExplanation(kind: kind) == nil
     }
 
+    /// Frees a layer's model (the layer moved to another service, or its
+    /// model was deleted).
+    func unloadModel(kind: OnDeviceVoiceModelKind) {
+        let runtime = self.runtime
+        Task.detached(priority: .utility) { await runtime.unloadModel(ofKind: kind) }
+    }
+
     /// Loads the chosen model ahead of time, so the first sentence or
     /// recording doesn't wait for it (loading takes seconds).
     func prepareActiveModel(kind: OnDeviceVoiceModelKind) {
@@ -67,7 +74,10 @@ final class OnDeviceVoiceModelLayers {
     /// for an elf with its own voice), or nil when it isn't ready.
     func makeSpeechProvider(voiceIdentifierOverride: String? = nil) -> SpeechSynthesisProvider? {
         guard isReady(kind: .textToSpeech), let activeModelIdentifier = store.activeTextToSpeechModelIdentifier else { return nil }
-        let voiceIdentifier = voiceIdentifierOverride ?? store.voiceIdentifier(forModelIdentifier: activeModelIdentifier)
+        // An elf's voice saved for another model isn't passed to this one.
+        let availableVoiceIdentifiers = Set(store.availableVoices(forModelIdentifier: activeModelIdentifier).map(\.id))
+        let usableVoiceOverride = voiceIdentifierOverride.flatMap { availableVoiceIdentifiers.contains($0) ? $0 : nil }
+        let voiceIdentifier = usableVoiceOverride ?? store.voiceIdentifier(forModelIdentifier: activeModelIdentifier)
         let runtime = self.runtime
         return NetworkAudioSpeechSynthesisProvider(synthesizeSpeechAudio: { sentence in
             try await runtime.synthesizeWAVData(sentence: sentence, repositoryIdentifier: activeModelIdentifier, voiceIdentifier: voiceIdentifier)

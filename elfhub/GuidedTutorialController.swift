@@ -42,7 +42,7 @@ enum GuidedTutorialStep: String, CaseIterable, Identifiable {
         case .textChat:
             return "Open Chat in the sidebar and send a message. Chats are saved only on this Mac."
         case .screenActions:
-            return "In Modes you can let elfhub click and type for you. It always shows where it will act first, asks before anything risky, and stops the moment you press Esc or touch the mouse."
+            return "In Settings › Controls you can let elfhub click and type for you. It always shows where it will act first, asks before anything risky, and stops the moment you press Esc or touch the mouse."
         }
     }
 

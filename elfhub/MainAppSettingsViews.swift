@@ -171,7 +171,7 @@ private struct ModelsSettingsContent: View {
     }
 }
 
-// MARK: - Modes
+// MARK: - Controls
 
 /// How elfhub is used: input mode, and screen actions with their consent gate.
 private struct ControlsSettingsContent: View {

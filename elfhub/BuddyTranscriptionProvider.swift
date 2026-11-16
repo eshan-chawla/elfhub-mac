@@ -157,7 +157,11 @@ enum BuddyTranscriptionProviderFactory {
                 modelName: WhisperTranscriptionSettings.modelName
             )
         case .onDeviceModel:
-            return OnDeviceModelTranscriptionProvider()
+            // Until a speech model is downloaded and chosen, Apple's
+            // on-device recognition listens (choosing one reloads this).
+            return OnDeviceVoiceModelLayers.shared.isReady(kind: .speechToText)
+                ? OnDeviceModelTranscriptionProvider()
+                : makeAppleOnDeviceProvider()
         }
     }
 

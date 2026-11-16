@@ -45,19 +45,53 @@ actor OnDeviceVoiceModelRuntime {
         HubCache(cacheDirectory: storageDirectory)
     }
 
+    // MARK: One job at a time
+
+    /// An actor lets another call in at every `await`, so without this a
+    /// preload and a push-to-talk could load the same model twice (doubling
+    /// memory) or run two models on the GPU at once. Loads, unloads and
+    /// inference take turns, first come first served.
+    private var isRunningJob = false
+    private var jobsWaitingToRun: [CheckedContinuation<Void, Never>] = []
+
+    private func beginJob() async {
+        guard isRunningJob else {
+            isRunningJob = true
+            return
+        }
+        await withCheckedContinuation { continuation in
+            jobsWaitingToRun.append(continuation)
+        }
+    }
+
+    /// Hands the turn to the next job waiting, if there is one.
+    private func endJob() {
+        if jobsWaitingToRun.isEmpty {
+            isRunningJob = false
+        } else {
+            jobsWaitingToRun.removeFirst().resume()
+        }
+    }
+
     // MARK: Loading
 
     /// Loads a voice model (if it isn't already), e.g. right after it's
     /// chosen so the first reply doesn't wait for it.
     func prepareTextToSpeechModel(repositoryIdentifier: String) async throws {
+        await beginJob()
+        defer { endJob() }
         _ = try await textToSpeechModel(repositoryIdentifier: repositoryIdentifier)
     }
 
     func prepareSpeechToTextModel(repositoryIdentifier: String) async throws {
+        await beginJob()
+        defer { endJob() }
         _ = try await speechToTextModel(repositoryIdentifier: repositoryIdentifier)
     }
 
-    func unloadModel(ofKind kind: OnDeviceVoiceModelKind) {
+    func unloadModel(ofKind kind: OnDeviceVoiceModelKind) async {
+        await beginJob()
+        defer { endJob() }
         switch kind {
         case .textToSpeech: loadedTextToSpeechModel = nil
         case .speechToText: loadedSpeechToTextModel = nil
@@ -103,6 +137,8 @@ actor OnDeviceVoiceModelRuntime {
 
     /// One sentence as WAV audio, ready for `NetworkAudioSpeechSynthesisProvider`.
     func synthesizeWAVData(sentence: String, repositoryIdentifier: String, voiceIdentifier: String?) async throws -> Data {
+        await beginJob()
+        defer { endJob() }
         let model = try await textToSpeechModel(repositoryIdentifier: repositoryIdentifier)
         let generatedAudio = try await model.generate(
             text: sentence,
@@ -123,6 +159,8 @@ actor OnDeviceVoiceModelRuntime {
 
     /// Transcribes a push-to-talk recording (16-bit mono PCM).
     func transcribe(pcm16MonoAudio: Data, sampleRate: Int, repositoryIdentifier: String) async throws -> String {
+        await beginJob()
+        defer { endJob() }
         let model = try await speechToTextModel(repositoryIdentifier: repositoryIdentifier)
         let recordedSamples = OnDeviceVoiceAudioConversion.floatSamples(fromPCM16Data: pcm16MonoAudio)
         let modelSamples = OnDeviceVoiceAudioConversion.resampledSamples(

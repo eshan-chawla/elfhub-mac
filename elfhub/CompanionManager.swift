@@ -587,6 +587,13 @@ final class CompanionManager: ObservableObject {
         speechOutputMode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: "speechOutputMode")
         if mode == .off { stopSpeech() }
+        // A voice model loads as soon as it's chosen (the first reply would
+        // otherwise wait for it) and leaves memory when another voice is.
+        if mode == .onDeviceModel {
+            OnDeviceVoiceModelLayers.shared.prepareActiveModel(kind: .textToSpeech)
+        } else {
+            OnDeviceVoiceModelLayers.shared.unloadModel(kind: .textToSpeech)
+        }
     }
 
     /// The ElevenLabs voice used with the user's own key.
@@ -770,6 +777,11 @@ final class CompanionManager: ObservableObject {
         transcriptionProviderChoice = newTranscriptionProviderChoice
         UserDefaults.standard.set(newTranscriptionProviderChoice.rawValue, forKey: "transcriptionProviderChoice")
         applyTranscriptionProviderChoice()
+        if newTranscriptionProviderChoice == .onDeviceModel {
+            OnDeviceVoiceModelLayers.shared.prepareActiveModel(kind: .speechToText)
+        } else {
+            OnDeviceVoiceModelLayers.shared.unloadModel(kind: .speechToText)
+        }
     }
 
     /// Rebuilds the transcription backend from the current choice and keys.

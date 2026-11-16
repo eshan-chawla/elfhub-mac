@@ -8,7 +8,7 @@
 //  pixels at all (rather than receiving them and being told to ignore them).
 //
 //  Defaults cover password managers and macOS credential stores. The user can
-//  add or remove apps in Settings > Privacy; the list persists in UserDefaults.
+//  add or remove apps in Settings › Privacy & permissions; the list persists in UserDefaults.
 //
 
 import AppKit
@@ -87,7 +87,7 @@ final class ScreenCapturePrivacyBlocklist: ObservableObject {
 
 // MARK: - Settings UI
 
-/// Settings > Privacy editor for the capture blocklist. Shows installed
+/// Settings › Privacy & permissions editor for the capture blocklist. Shows installed
 /// blocked apps (uninstalled defaults are hidden to keep the list short),
 /// lets the user remove any, add an app via an open panel, or reset.
 struct ScreenCaptureBlocklistEditor: View {
