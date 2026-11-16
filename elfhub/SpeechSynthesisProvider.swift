@@ -25,6 +25,8 @@ enum SpeechOutputMode: String, CaseIterable, Identifiable {
     /// builds so a saved choice still loads.
     case elevenLabs = "elevenLabsOwnKey"
     case openAICompatibleSpeech
+    /// A voice model downloaded from Hugging Face, run on this Mac with MLX.
+    case onDeviceModel
     case off
 
     var id: String { rawValue }
@@ -34,6 +36,7 @@ enum SpeechOutputMode: String, CaseIterable, Identifiable {
         case .system: return "On-device (Apple)"
         case .elevenLabs: return "ElevenLabs"
         case .openAICompatibleSpeech: return "OpenAI-compatible"
+        case .onDeviceModel: return "On-device model"
         case .off: return "Off"
         }
     }
@@ -47,6 +50,8 @@ enum SpeechOutputMode: String, CaseIterable, Identifiable {
             return "Natural voices with your ElevenLabs key."
         case .openAICompatibleSpeech:
             return "OpenAI voices, or a speech server running on this Mac (for example Kokoro)."
+        case .onDeviceModel:
+            return "A voice model you download (Kokoro, Qwen3-TTS and others) speaks on this Mac. Private, and works offline."
         case .off:
             return "Silent: replies show as captions only."
         }
@@ -332,6 +337,8 @@ enum ElfSpeechChoice: Equatable {
     case system(voiceIdentifier: String?)
     case elevenLabs(voiceIdentifier: String?)
     case openAICompatible(voiceName: String?)
+    /// The downloaded voice model chosen in Settings › Models, with this voice.
+    case onDeviceModel(voiceIdentifier: String?)
 
     /// `isSystemVoiceInstalled` tells whether an Apple voice is still on this
     /// Mac; one that was removed falls back to the main elf's voice rather
@@ -353,6 +360,7 @@ enum ElfSpeechChoice: Equatable {
             return .system(voiceIdentifier: voiceIdentifier)
         case .elevenLabs: return .elevenLabs(voiceIdentifier: voiceIdentifier)
         case .openAICompatibleSpeech: return .openAICompatible(voiceName: voiceIdentifier)
+        case .onDeviceModel: return .onDeviceModel(voiceIdentifier: voiceIdentifier)
         }
     }
 }

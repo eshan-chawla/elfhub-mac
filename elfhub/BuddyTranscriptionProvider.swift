@@ -42,6 +42,8 @@ enum TranscriptionProviderChoice: String, CaseIterable, Identifiable {
     /// Raw value kept from earlier builds so a saved choice still loads.
     case assemblyAI = "assemblyAIOwnKey"
     case openAICompatibleWhisper
+    /// A speech model downloaded from Hugging Face, run on this Mac with MLX.
+    case onDeviceModel
 
     var id: String { rawValue }
 
@@ -50,6 +52,7 @@ enum TranscriptionProviderChoice: String, CaseIterable, Identifiable {
         case .appleOnDevice: return "On-device (Apple)"
         case .assemblyAI: return "AssemblyAI"
         case .openAICompatibleWhisper: return "Whisper / OpenAI-compatible"
+        case .onDeviceModel: return "On-device model"
         }
     }
 
@@ -62,6 +65,8 @@ enum TranscriptionProviderChoice: String, CaseIterable, Identifiable {
             return "Fast streaming recognition with your AssemblyAI key."
         case .openAICompatibleWhisper:
             return "OpenAI, Groq, or a Whisper server running on this Mac."
+        case .onDeviceModel:
+            return "A speech model you download (Whisper, Parakeet and others) runs on this Mac. Private, and works offline."
         }
     }
 
@@ -151,6 +156,8 @@ enum BuddyTranscriptionProviderFactory {
                 apiKey: KeychainSecretStore.secret(for: .openAICompatibleTranscription),
                 modelName: WhisperTranscriptionSettings.modelName
             )
+        case .onDeviceModel:
+            return OnDeviceModelTranscriptionProvider()
         }
     }
 

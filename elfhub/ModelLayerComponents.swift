@@ -219,6 +219,10 @@ struct SpeechToTextLayerSection: View {
                 )
             case .openAICompatibleWhisper:
                 whisperEndpointFields
+            case .onDeviceModel:
+                OnDeviceVoiceModelSection(kind: .speechToText, onActiveModelChanged: {
+                    companionManager.applyTranscriptionProviderChoice()
+                })
             }
 
             if let transcriptionUnavailableExplanation = companionManager.transcriptionUnavailableExplanation {
@@ -670,6 +674,10 @@ struct TextToSpeechLayerSection: View {
                 elevenLabsFields
             case .openAICompatibleSpeech:
                 openAICompatibleSpeechFields
+            case .onDeviceModel:
+                OnDeviceVoiceModelSection(kind: .textToSpeech, onActiveModelChanged: {
+                    companionManager.objectWillChange.send()
+                })
             case .off:
                 EmptyView()
             }

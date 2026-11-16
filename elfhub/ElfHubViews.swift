@@ -983,6 +983,37 @@ private struct ElfModelAndVoiceSummarySection: View {
         }
     }
 
+    /// For an elf on the on-device voice model: one of that model's voices,
+    /// or the one chosen in Settings › Models.
+    @ViewBuilder
+    private var onDeviceModelVoicePicker: some View {
+        let onDeviceVoiceModelStore = OnDeviceVoiceModelLayers.shared.store
+        if let activeModelIdentifier = onDeviceVoiceModelStore.activeTextToSpeechModelIdentifier,
+           onDeviceVoiceModelStore.isInstalled(activeModelIdentifier) {
+            let availableVoices = onDeviceVoiceModelStore.availableVoices(forModelIdentifier: activeModelIdentifier)
+            Picker("Voice", selection: Binding<String>(
+                get: { elfEditor.localSettings.voice?.voiceIdentifier ?? "" },
+                set: { voiceIdentifier in
+                    try? elfEditor.updateLocalSettings { localSettings in
+                        localSettings.voice?.voiceIdentifier = voiceIdentifier.isEmpty ? nil : voiceIdentifier
+                    }
+                }
+            )) {
+                Text("The voice in Settings › Models").tag("")
+                ForEach(availableVoices) { voice in
+                    Text(voice.displayName).tag(voice.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+            .pointerCursor()
+        } else {
+            Text("Download and choose a voice model in Settings › Models first.")
+                .font(.system(size: 11))
+                .foregroundColor(DS.Colors.textTertiary)
+        }
+    }
+
     private var voiceRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -1032,6 +1063,8 @@ private struct ElfModelAndVoiceSummarySection: View {
                         return elfEditor.localSettings.voice?.voiceIdentifier ?? ""
                     }
                 )
+            case .onDeviceModel:
+                onDeviceModelVoicePicker
             case .off, .none:
                 EmptyView()
             }

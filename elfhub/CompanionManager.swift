@@ -441,6 +441,9 @@ final class CompanionManager: ObservableObject {
         case .system: voiceName = SystemVoiceSettings.selectedVoiceIdentifier
         case .elevenLabs: voiceName = elevenLabsVoiceIdentifier
         case .openAICompatibleSpeech: voiceName = OpenAICompatibleSpeechSettings.voiceName
+        case .onDeviceModel:
+            let onDeviceVoiceModelStore = OnDeviceVoiceModelLayers.shared.store
+            voiceName = onDeviceVoiceModelStore.activeTextToSpeechModelIdentifier.flatMap(onDeviceVoiceModelStore.voiceIdentifier(forModelIdentifier:))
         case .off: voiceName = nil
         }
         return ElfConfiguration.PreferredModels(
@@ -610,6 +613,8 @@ final class CompanionManager: ObservableObject {
             return OpenAICompatibleSpeechSettings.isReady
                 ? nil
                 : "Add your key (or a local speech server URL). Until then elfhub uses the on-device voice."
+        case .onDeviceModel:
+            return OnDeviceVoiceModelLayers.shared.unavailableExplanation(kind: .textToSpeech).map { $0 + " Until then elfhub uses Apple's on-device voice." }
         }
     }
 
@@ -642,6 +647,8 @@ final class CompanionManager: ObservableObject {
             return NetworkAudioSpeechSynthesisProvider(synthesizeSpeechAudio: { sentence in
                 try await openAICompatibleSpeechClient.synthesizeSpeechAudio(for: sentence)
             })
+        case .onDeviceModel:
+            return OnDeviceVoiceModelLayers.shared.makeSpeechProvider() ?? systemSpeechProvider
         }
     }
 
@@ -679,6 +686,8 @@ final class CompanionManager: ObservableObject {
             return NetworkAudioSpeechSynthesisProvider(synthesizeSpeechAudio: { sentence in
                 try await openAICompatibleSpeechClient.synthesizeSpeechAudio(for: sentence)
             })
+        case let .onDeviceModel(voiceIdentifier):
+            return OnDeviceVoiceModelLayers.shared.makeSpeechProvider(voiceIdentifierOverride: voiceIdentifier) ?? systemSpeechProvider
         }
     }
 
@@ -941,6 +950,14 @@ final class CompanionManager: ObservableObject {
     }
 
     func start() {
+        // A downloaded model chosen for either layer loads in the background
+        // now, so the first recording or sentence doesn't wait for it.
+        if transcriptionProviderChoice == .onDeviceModel {
+            OnDeviceVoiceModelLayers.shared.prepareActiveModel(kind: .speechToText)
+        }
+        if speechOutputMode == .onDeviceModel {
+            OnDeviceVoiceModelLayers.shared.prepareActiveModel(kind: .textToSpeech)
+        }
         refreshAllPermissions()
         print("🔑 elfhub start — accessibility: \(hasAccessibilityPermission), screen: \(hasScreenRecordingPermission), mic: \(hasMicrophonePermission), screenContent: \(hasScreenContentPermission), onboarded: \(hasCompletedOnboarding)")
         startPermissionPolling()
