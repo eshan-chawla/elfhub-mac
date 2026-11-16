@@ -815,7 +815,7 @@ struct ChatConversationSidebarList: View {
                     if viewModel.mainConversations.isEmpty {
                         Text(chatConversationStore.isSavingChatsEnabled
                              ? "Everything you ask — typed or spoken — is saved on this Mac and shows up here."
-                             : "Saving chats is off (Settings › Privacy).")
+                             : "Saving chats is off (Settings › Privacy & permissions).")
                             .font(.system(size: 11))
                             .foregroundColor(DS.Colors.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)

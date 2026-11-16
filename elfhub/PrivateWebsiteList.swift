@@ -9,7 +9,7 @@
 //  Accessibility, and any action on it is the user's own step. A site
 //  matches with all its subdomains; patient portals that live on their
 //  hospital's domain (mychart.<hospital>.org) match by name. Editable in
-//  Settings › Privacy; kept in UserDefaults.
+//  Settings › Privacy & permissions; kept in UserDefaults.
 //
 
 import AppKit
@@ -42,7 +42,7 @@ final class PrivateWebsiteList: ObservableObject {
     private static let isGuardEnabledKey = "isPrivateWebsiteGuardEnabled"
 
     @Published private(set) var privateWebsiteDomains: [String]
-    /// The whole guard, on by default (Settings › Privacy). Off: browsers
+    /// The whole guard, on by default (Settings › Privacy & permissions). Off: browsers
     /// aren't left out of screenshots, pages are read, and acting on these
     /// sites isn't the user's step any more.
     @Published private(set) var isGuardEnabled: Bool
@@ -139,7 +139,7 @@ final class PrivateWebsiteList: ObservableObject {
 
 // MARK: - Settings UI
 
-/// Settings › Privacy editor for private websites.
+/// Settings › Privacy & permissions editor for private websites.
 struct PrivateWebsiteListEditor: View {
     @ObservedObject var privateWebsiteList: PrivateWebsiteList
     @State private var newWebsiteEntry = ""

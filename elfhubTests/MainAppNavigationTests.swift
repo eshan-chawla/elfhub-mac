@@ -38,9 +38,15 @@ struct MainAppNavigationTests {
     @Test func switchingCategoriesKeepsTheReturnPoint() {
         var mainAppNavigation = MainAppNavigation()
         mainAppNavigation.open(.settings(.models))
-        mainAppNavigation.open(.settings(.modes))
+        mainAppNavigation.open(.settings(.controls))
         mainAppNavigation.leaveSettings()
         #expect(mainAppNavigation.selectedSection == .chat)
+    }
+
+    @Test func settingsHasFiveFullerPages() {
+        #expect(SettingsCategory.allCases == [.models, .tools, .controls, .privacy, .general])
+        #expect(SettingsCategory.privacy.displayTitle == "Privacy & permissions")
+        #expect(SettingsCategory.controls.displayTitle == "Controls")
     }
 
     @Test func everyCategoryHasATitleAndIcon() {

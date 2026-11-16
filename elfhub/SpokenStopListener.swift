@@ -3,7 +3,7 @@
 //  elfhub
 //
 //  "Stop" said out loud while elfhub acts on the screen — no push-to-talk.
-//  Off by default (Settings › Modes, "Listen for “stop” while acting"),
+//  Off by default (Settings › Controls, "Listen for “stop” while acting"),
 //  because it keeps the microphone on during a run. When on, the
 //  microphone runs only while a run is on the screen; speech is recognized
 //  on this Mac (on-device recognition, never sent anywhere), and the

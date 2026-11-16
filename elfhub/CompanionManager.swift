@@ -62,7 +62,7 @@ final class CompanionManager: ObservableObject {
     /// action) into the local unified log.
     private let turnLatencyTimeline = CompanionTurnLatencyTimeline()
     private var escapeStopActivationCancellable: AnyCancellable?
-    /// "Stop" said out loud while a run acts (Settings › Modes, off by default).
+    /// "Stop" said out loud while a run acts (Settings › Controls, off by default).
     private let spokenStopListener = SpokenStopListener()
     private var spokenStopListeningCancellable: AnyCancellable?
 
@@ -283,7 +283,7 @@ final class CompanionManager: ObservableObject {
     }
 
     /// Whether finished background work is spoken when the user is idle
-    /// (Settings › Modes); on by default.
+    /// (Settings › Controls); on by default.
     static let speaksTaskReportsDefaultsKey = "speaksFinishedTaskReports"
     var speaksTaskReports: Bool {
         get { UserDefaults.standard.object(forKey: Self.speaksTaskReportsDefaultsKey) as? Bool ?? true }

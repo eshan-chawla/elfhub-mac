@@ -10,7 +10,7 @@
 //  Privacy: the log stays in ~/Library/Application Support/elfhub and is
 //  never sent anywhere. Typed text is never written (only its length), and
 //  the file is trimmed so it can't grow without bound. It can be turned off,
-//  revealed and deleted in Settings › Privacy.
+//  revealed and deleted in Settings › Privacy & permissions.
 //
 
 import AppKit

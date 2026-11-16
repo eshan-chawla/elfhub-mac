@@ -16,10 +16,12 @@ import SwiftUI
 enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
     case models
     case tools
-    case modes
-    case shortcuts
-    case permissions
+    /// How you talk to elfhub (input mode, push-to-talk keys, Esc), whether
+    /// and how it acts on your screen, and how background work reports.
+    case controls
+    /// macOS permissions, and everything about what elfhub keeps and sees.
     case privacy
+    /// Startup, sounds, the tutorial and updates.
     case general
 
     var id: Self { self }
@@ -28,10 +30,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .models: return "Models"
         case .tools: return "Tools"
-        case .modes: return "Modes"
-        case .shortcuts: return "Shortcuts"
-        case .permissions: return "Permissions"
-        case .privacy: return "Privacy"
+        case .controls: return "Controls"
+        case .privacy: return "Privacy & permissions"
         case .general: return "General"
         }
     }
@@ -40,10 +40,8 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .models: return "cpu"
         case .tools: return "wrench.and.screwdriver"
-        case .modes: return "slider.horizontal.3"
-        case .shortcuts: return "keyboard"
-        case .permissions: return "lock.shield"
-        case .privacy: return "hand.raised"
+        case .controls: return "slider.horizontal.3"
+        case .privacy: return "lock.shield"
         case .general: return "gearshape"
         }
     }
@@ -54,16 +52,12 @@ enum SettingsCategory: String, CaseIterable, Identifiable, Hashable {
             return "Speech-to-text, the language model and the voice. Requests go straight from this app to the services you pick — or stay on this Mac with local models. Keys are kept in your Keychain."
         case .tools:
             return "What your elves use beyond the model: how they search the web. Whatever you pick, the pages they open are fetched by this Mac."
-        case .modes:
-            return "How you talk to elfhub, and whether it may act on your screen."
-        case .shortcuts:
-            return "The push-to-talk keys, and how to stop elfhub."
-        case .permissions:
-            return "What macOS needs to allow so elfhub can hear you, see your screen and act."
+        case .controls:
+            return "How you talk to elfhub and how to stop it, whether it may act on your screen, and how background work reports back."
         case .privacy:
-            return "Chat history, saved screenshots, apps that are never captured, and what your elves may reach."
+            return "What macOS allows elfhub to do, chat history and screenshots, what's never captured or acted on, and what your elves may reach."
         case .general:
-            return "Startup, sounds and the tutorial."
+            return "Startup, sounds, the tutorial and updates."
         }
     }
 }
@@ -83,18 +77,11 @@ struct SettingsCategoryPage: View {
             case .tools:
                 WebSearchSettingsCard()
                     .mainAppCard()
-            case .modes:
-                ModesSettingsContent(companionManager: companionManager)
-            case .shortcuts:
-                VStack(alignment: .leading, spacing: 12) {
-                    PushToTalkShortcutPicker(companionManager: companionManager)
-                    EscapeShortcutInfoRow()
-                }
-                .mainAppCard()
-            case .permissions:
+            case .controls:
+                ControlsSettingsContent(companionManager: companionManager)
+            case .privacy:
                 PermissionGroupView(companionManager: companionManager)
                     .mainAppCard()
-            case .privacy:
                 ChatHistorySettingsSection(chatConversationStore: companionManager.chatConversationStore)
                     .mainAppCard()
                 ScreenCaptureBlocklistEditor(screenCapturePrivacyBlocklist: ScreenCapturePrivacyBlocklist.shared)
@@ -187,7 +174,7 @@ private struct ModelsSettingsContent: View {
 // MARK: - Modes
 
 /// How elfhub is used: input mode, and screen actions with their consent gate.
-private struct ModesSettingsContent: View {
+private struct ControlsSettingsContent: View {
     @ObservedObject var companionManager: CompanionManager
 
     var body: some View {
@@ -196,6 +183,15 @@ private struct ModesSettingsContent: View {
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundColor(DS.Colors.textTertiary)
             InputModePicker(companionManager: companionManager)
+        }
+        .mainAppCard()
+
+        VStack(alignment: .leading, spacing: 12) {
+            Text("KEYS")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundColor(DS.Colors.textTertiary)
+            PushToTalkShortcutPicker(companionManager: companionManager)
+            EscapeShortcutInfoRow()
         }
         .mainAppCard()
 
@@ -422,7 +418,7 @@ struct ChatHistorySettingsSection: View {
     }
 }
 
-/// Settings › Privacy: the local log of actions elfhub took on screen.
+/// Settings › Privacy & permissions: the local log of actions elfhub took on screen.
 struct ComputerUseAuditLogSettingsSection: View {
     @ObservedObject var computerUseAuditLog: ComputerUseAuditLog
     @State private var isConfirmingDeleteLog = false
@@ -603,7 +599,7 @@ private struct ElvesReachSettingsSection: View {
     }
 }
 
-/// Settings › Privacy: black out personal numbers in screenshots (on by default).
+/// Settings › Privacy & permissions: black out personal numbers in screenshots (on by default).
 struct PersonalNumberMaskingSettingsSection: View {
     @AppStorage(ScreenshotSensitiveContentMasker.isEnabledKey) private var hidesPersonalNumbersInScreenshots = true
 
@@ -617,7 +613,7 @@ struct PersonalNumberMaskingSettingsSection: View {
     }
 }
 
-/// Settings › Modes: saying "stop" while elfhub acts, without push-to-talk.
+/// Settings › Controls: saying "stop" while elfhub acts, without push-to-talk.
 struct SpokenStopSettingsRow: View {
     @AppStorage(SpokenStopListener.isEnabledKey) private var listensForSpokenStopWhileActing = false
     /// Why it can't listen on this Mac, shown under the switch while it's on.
