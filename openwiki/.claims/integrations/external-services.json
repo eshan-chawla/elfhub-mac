@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:399db0b3ed98a73d44741ab91b9270fb6a15ca1a9180cbe16d25933ae943ca79",
+  "claims": [
+    {
+      "id": "claim_ddc5a615a0b6435194800fb25bf2c6f8",
+      "statement": "ClaudeAPI calls the Messages endpoint directly with the user's key in x-api-key plus anthropic-version 2023-06-01, and requests server-side refusal fallbacks (fallbacks: \"default\" with the server-side-fallback beta header) only when talking directly to an anthropic.com host with a fallback-capable model.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ClaudeAPI.swift#L140-L150",
+          "version": "repo-lines-v1:sha256:0ad42db40d597119de3224a7af262c2f000ac71564d19d976f99ad3a82076165:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2MmFhNzMzODczZjcwNTVmZWZlYTY4ZjA4MzUwYTJjMWQ0MGVmYzA0ZTNlZTJjMzMzMzU1YTUwYzIyZDdhYzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNjMDRmNTdkMmFiODQ2ZmUyOTBkZTI1NGUzM2RlYzU4NmQ2MzI1MzA1NzliMTQxZWJhZDdiZjk1NTViY2FlNGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcyYmMyZGQwYjAyNDFlNmNlOTgyMTgyNDM0NzFmOWNmZTA5MTkyZjlmMmI0ZTUzNDFiMDZmMWNhYzhhYTMzYmQifQ"
+        },
+        {
+          "resource": "repo://elfhub/ClaudeAPI.swift#L17-L96",
+          "version": "repo-lines-v1:sha256:327820ed91f6b49103b3dd4999aee217ce20acd04ac11c7bf85e9110f1de7376:eyJzZWxlY3RlZExpbmVDb3VudCI6ODAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI1NzAzODg3M2QxZDhkOWNiYzc0YmMwNmZlMDYyYjJiNDRhYTA2ZjkwOTMyZjVkMGRhN2RjOGQ5NWI5MmYxNzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE5MjUwMjc2OWFhODU0NjkxZDdjZjU0NDA5MWYwYzAwMGFlMWEyYjRiZDEzNTEyZGY2ZTA1MDFlNTJiNmI3YzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYwZGI5ZGVhMjk0NWU0NzY0YjJjNmZiZDdkOTdhZmYzOGIwY2FjYmZkMWZiMDMxYzNjNGMzNDE3NjUwYTE3MGQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_92e47d492534454baf78fb04be8d75ff",
+      "statement": "OpenAI-compatible providers post to <base>/chat/completions with a Bearer Authorization header only when a key is set, so local servers work without a key.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/OpenAICompatibleLanguageModelProvider.swift#L27-L54",
+          "version": "repo-lines-v1:sha256:ff641c2cc974ccb90af4889a9d8ddfb9d6655cd18e0f324a0eff6443fba026a7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1YmI0MGVlYzQ0Y2NiNTYyZDAzYmM2YmY0NTUwMDNkNmI0YWQ3M2RlN2ZiNDU5MDI0NWIzNzlmYWUwOGNkYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViZjNkNTBhN2JkN2VhZGYyYTMxYjc3MjBmODEwOGRlZjQxMjIwYTE4ZjhkOTg0MDg4Njc0NzVjMGIxYjQ0ZjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyNTZiNWY2YmFhNzJlYzM1NmFkNDQ0MjZjNDE5YWIzZjMyNTRjOTJmNTAxN2Q4MWQyYTZjYTdlNDU1MjgxNWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI3MTZlNTkwNDQyMjljMzlhYjAwNTFmYzQzZjdiODczOGE4MTk4YTFiYjgxMzgxNjk2MDVmNTRhYTY4YzgzOGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f67b5dba1fdc4fad95c463ec9f64717a",
+      "statement": "Gemini requests go to <base>/models/<model>:streamGenerateContent?alt=sse authenticated with the x-goog-api-key header.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/GeminiLanguageModelProvider.swift#L33-L54",
+          "version": "repo-lines-v1:sha256:e2b4404c0422157f29f867cea95312993a60ec317d993730f2873687ed3394b3:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMxY2UzODFhMzY0NDgzOGUwYjkwZjczMDc4ZDNlNTRkNDYxMjI3MGRlZDVlNDIyYzlmNjc2NWIxOTg1M2JmMWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhMWU4NThiOGI2YTA0NDg5NTQ0M2UwOGY0YWI4N2Q4NTRiYThhYjdiNDhhYzgzMDUxNWVjM2M1NGQ2ZDVlMTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU2NWVhMTFlOGNiODU3NjIzY2Y2ZDNmODJjOTJkYTQ2ZDNkYzE4Yjg2MTlhOTA0Y2UzMTQxOWU3ZjI0NDA2OWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyYWI1OTIxMThkODllNjJhNDFjOTE5YmM1MmVjZTE2MGU5MzRlNmI3ZDg5NmFlNzkzZDRhNWYwNjA5OGU3M2EifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0056e2c41ca14eeb97f290b1ce1281db",
+      "statement": "AssemblyAI transcription connects directly to wss://streaming.assemblyai.com/v3/ws with the user's key in the websocket Authorization header; there is no token-issuing proxy.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/AssemblyAIStreamingTranscriptionProvider.swift#L141-L144",
+          "version": "repo-lines-v1:sha256:e40a0c0567bd71227215ba3680a54c820cc597ec7ee56b4bf66005d15347abb1:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmUxM2ZjNjdlNDFjZjFkNTczZDE4OThkZDViZDMwYzk3NDUwYmE0MzRmM2I1Nzg5ZTVhNThjN2ZkODFmZmYyNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWNiMDE1OGM2MTRiZjNkMjQ0ZmM3NTZhYTY3NjFlZDI4NjA5ZTVlNDNhMjFlOTg2MDRkYzE4ODczNTIyYTg1OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2RlMjU0ODViYTQ5ZDE0ZWI0YmJkMWJjZTA2Y2ViNGE5ZTU3OTRmYWY4Nzk3MmUzNGMzMTgyYjUxYzJlZWM1MSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmQ5NjFhZWQzNmNhYTBmNzYzM2I5N2NlOWZiMWJhZjc3ODM2MzI0OWJmZDY1M2NhYjYxZDk2NzU0MjkyM2MxMSJ9"
+        },
+        {
+          "resource": "repo://elfhub/AssemblyAIStreamingTranscriptionProvider.swift#L96-L96",
+          "version": "repo-lines-v1:sha256:b2f6dda76040cd6898315bb76c35145540798316cb6fdb0fd7f88eb8b2123ad2:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjJmNmRkYTc2MDQwY2Q2ODk4MzE1YmI3NmMzNTE0NTU0MDc5ODMxNmNiNmZkYjBmZDdmODhlYjhiMjEyM2FkMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjJmNmRkYTc2MDQwY2Q2ODk4MzE1YmI3NmMzNTE0NTU0MDc5ODMxNmNiNmZkYjBmZDdmODhlYjhiMjEyM2FkMiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzc3MzFmNDczMTM4MzQ3YzNiNjZkMWNjYzdjNmU1ZWFiNGE4YmNhYjgxNDljMjhmYmNlN2IyM2ZjZTQ3NWZjMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZmNjN2M2ODdlMDFhNTNkM2ExYjJhZWRmNzgzN2VlMTQ3OTY5NzZlODdlZDlkNDE0YTJiZDUzNjkwZjcxNzFhYSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_98c622b3b9104a12ae0fec2196783914",
+      "statement": "ElevenLabs speech is requested per sentence directly from api.elevenlabs.io with the xi-api-key header, and OpenAI-compatible speech posts to <base>/audio/speech with an optional Bearer key.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ElevenLabsTTSClient.swift#L101-L109",
+          "version": "repo-lines-v1:sha256:0a82e95f37c0ec9bc337725b755819d1bf7cd4d9acf65d7a976db4f80fa2dafd:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGM4YmI2NjY5NDFmYjcyZDg1ZmQzMmMxZjU0Njc3NWZiNDc2ZDFmYzVkZjgwOTExMjZmMDA1MGU3NzBjM2Q3ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTkzYjM2OGUxODg2MTRiYzA2NDdjNjFmNWMyMjRjMmE3MjA3ZGRiMmZmOTk1NDFjZDAwZTgyYzVlNzQ5ODU2MyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmNkYTg4NWVlYTIwMDRmNmRlNTg5ODY4NWI4NjNjMWRmYTEwYTMxOWQ5OGQwZmE2NTM1YTEyZTQ0YTE4OWI3NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDMzOWZhOWZmNzcwMzVjYWE3ZTNkNjBlOWZkYjA5MzE0ZGZjMzk2NWNiMGJiYjYyZGRmNTAzZDU4Y2JiODcwMyJ9"
+        },
+        {
+          "resource": "repo://elfhub/ElevenLabsTTSClient.swift#L53-L58",
+          "version": "repo-lines-v1:sha256:24d68683f30c3c1b9345be75c65857ab13dee309078e721bbd0317e4457b23a9:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTIxYTgyMjRjYWZhZmZkMTY1ODZiZTU4ZjBmMWEzMjg4Zjk0NTllNDM4ZmMzMDgxN2VmNjZmZTdhM2E0OWNjMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTE3ZWE5ZDI1Yzc1ZTQ4YThjNTYxMDI5OTUyY2NiMTlkYmQ1YzI4MTIwOTgxMGZhMDg0MzliYjA2OWI4OTZjMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGU3MDQyNDY1MjA5ZmIwYWZhYThjYjc3ZTgzZmRlMzgxNjM1NzMxOWI3YTAzZTE3Mjk5NGMwOGRjN2NmMjdhOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTkyYWI3N2I2Yzg3YmRmNzQyNzcxMDg2NmQ3ZWY3NWQ1NDRjNDQ1MjdiZTVmNGE2MzViZTQ0OWRkYWViZGVjNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_13b9fdc269f749a08423c25c32237317",
+      "statement": "OpenAI-compatible Whisper transcription uploads audio to <base>/audio/transcriptions with an optional Bearer key, so a local faster-whisper server needs no key.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/OpenAIAudioTranscriptionProvider.swift#L190-L196",
+          "version": "repo-lines-v1:sha256:c85b5731c6382c2679a21c75439f715f2a7290e389349f180b6305b5f11be2ec:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTE1ODllNjQ2MzFiMGY2ZTcwMDMzNGJmYjQyYmE0MTNlZTI5MTllOGY2ZmJmMjU3MmRmYjkwODkzYmZlNDMzMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTk5YmRlZmVlYWNhNjM0MGUwMjkwZGM4NmU4ODljODlkNWUxODlhYTViYTQ0YjU4NWIzYjcwNzM0ZjRhNjJkOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGM0ZDliNGI3NjIxYWFlMjU1ZWFmNDE0Yzg4YTUyZmM1OWFjNjAxODRhMzVhYjUwYTY1MGIwMmQ5Mjk3Yzg4YyJ9"
+        },
+        {
+          "resource": "repo://elfhub/OpenAIAudioTranscriptionProvider.swift#L28-L28",
+          "version": "repo-lines-v1:sha256:6a82fd0db98fcb7990778661fb2b20198d5fcfb38fc35174afba613b57716e10:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmE4MmZkMGRiOThmY2I3OTkwNzc4NjYxZmIyYjIwMTk4ZDVmY2ZiMzhmYzM1MTc0YWZiYTYxM2I1NzcxNmUxMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNmE4MmZkMGRiOThmY2I3OTkwNzc4NjYxZmIyYjIwMTk4ZDVmY2ZiMzhmYzM1MTc0YWZiYTYxM2I1NzcxNmUxMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNWQ1YzNmNGFkMjU2ZDI3YTM0OWNmNGUwZDI1NjAzOWNiNzc5YmQ1NDI3ZTAzMmU2ZmY0ZGE4MjZiOWQ2Y2FiOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDRiYTQwOTM3NGZmYTdlZjUwYTRmM2MyZDc4N2UzY2I2Zjc1YmQyMDYwMjIwNTg0ZTI0ZTQ5M2FkODdkZWE0ZSJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

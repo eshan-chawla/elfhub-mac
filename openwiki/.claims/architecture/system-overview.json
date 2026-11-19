@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:ef571aa27f6bb0adcda1d7bfb01e6ff47302e2f77619c7baa89a04ee00448264",
+  "claims": [
+    {
+      "id": "claim_027b5864f57341e6be2a529f1b2f3aa4",
+      "statement": "elfhub is a single macOS app with no server, account, analytics or update feed; its only network requests are to the model, speech and voice services the user configures with their own keys or to servers on their own Mac.",
+      "evidence": [
+        {
+          "resource": "repo://Config/Shared.xcconfig#L5-L10",
+          "version": "repo-lines-v1:sha256:8927ad09fb92becdb3098427ec9da8db99d45b5c86305b4de6258cf4e13cd185:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzc0MThlYzFhZjUxZjFlYjVhYjBhZTU1ZTc4NGE3OGY0OThlODI4YzVhNWI1MjE1YjRmZjVlMmY4MTNjMGU3OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTAxZWFkOTM2YTIyODFkNTNkY2MwNjRiN2UyYTJhYjBkNTNiOTJlZjNlZjdiMzRiNjY4NjczMDA3ODk1Yzg2MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDI2NmRkM2QxMmU2NjM3MDNhNWQxNDExMTBiZWM5NjEyMDZmNjcxN2M3Yjc0MmU3YWY4OTM2YTAyOWM1M2RjOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWFmYmUzN2ZhMGQ5NzkwZGNjNmIyNzc2MzlhZWEzNGFhZDcyZGRkM2VkMDcyZDkzM2UzNTNjYTQ5NjYwZDFjMyJ9"
+        },
+        {
+          "resource": "repo://elfhub/ProviderConfiguration.swift#L5-L10",
+          "version": "repo-lines-v1:sha256:b5cae395ddbc213be6e14b7e7e2af7e41d9f08dd40802e7037cd2a251ad244b2:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNWUzMDkyZThiNmY0ZjViMjAyMjgyZTk3YzcyODExMzM4NGE1ZmEyYWI1NzA5ZjlmMDgxYmY1ZmJlNTU1NTUzNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTAxZWFkOTM2YTIyODFkNTNkY2MwNjRiN2UyYTJhYjBkNTNiOTJlZjNlZjdiMzRiNjY4NjczMDA3ODk1Yzg2MCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTcwYzk0YzY2NWViMThlZDZmNzVjNzQxODJkOTE3MTIzOGI0MTgyYWI4YTVhOWM5Y2Q1ZjNjYmM4YmRmZGY5ZiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTkyNTAyNzY5YWE4NTQ2OTFkN2NmNTQ0MDkxZjBjMDAwYWUxYTJiNGJkMTM1MTJkZjZlMDUwMWU1MmI2YjdjNiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_12ab8be4aba4450f81ca62e580eae191",
+      "statement": "CompanionTurnPipeline runs one turn for both voice and chat (capture, model with tools or tags, decode, coordinate normalization, consent, placement, history) and returns a TurnResult carrying the spoken text, the original screenshot, the user's ink, the drawn guidance and the notepad.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionTurnPipeline.swift#L5-L43",
+          "version": "repo-lines-v1:sha256:9b9d7112aa77962924d98716f8b2a2101fb7cc0c719d915b9683350e604f270e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg5MTgzNWFkMjEwYmE0YWQ0ZTA5YzUyNDVlNGFiN2UwMDc3MTQxYWU1N2JjNzMzZWQ2N2RmZjBmODI5MWY4ODgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRlZmNiNjk0YWVlZDFhMDQyYzgzODIzNmI4NGQ0MWY5ZDkzZDVjODI1MjJmY2U0NTI1NDcyYTVkMzNlMGM0OGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlmODlkZDBhOThlMzU5OTI1YzJkZjQzODg5ZDBjNzJlMDIyZDAzY2VmYTZiYWUzMDZmOWZlNjkzODQ0ZWE2ZWIifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionTurnPipeline.swift#L88-L271",
+          "version": "repo-lines-v1:sha256:3d63f81bf18e74eb69b50946b8fea7faa7aa5b9ef3f19c407a25e506dea7557e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTg0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyMjEwNmJlMzM5YjNiMzA1ZmU1NzA5OWFjYmViMzU2NmVlMWYxYzc2ZDYxMTIyYjhkMTQ4YjQ4YTM3Y2YyMGQ4IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0ODkzZjQwZTM3ODFlYjg5NmM4MmQwNDZhMDgwNjdhMTFlMzVjZGYyZjFkZmFmMjZmZWE5MGI4ZGI2Njc2NDEzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIxOWJlOTk4Y2ZiODU0OTE5Y2IxNjI5YjJmZDVlZThmOWRlOGYzYTkzZmMyNGU4OGY0NDNjMmYyMDZhMzIyMWRjIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI3NDg3YWY1YmU1NjVkNTUwODExNTk1NGU1Y2M0ZDJiYmIzZTk1ODA2ZDI1NmZkNmEwYmU5YTMxM2MxZTQ2MzIxIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_5504fe3fd8b54433ac5ef35bc54ec513",
+      "statement": "CompanionEventBus is a typed in-process PassthroughSubject channel: the pipeline, reply presenter and action coordinator emit events, and the overlay model, tutorial controller and notepad panel subscribe, so the overlay never reads CompanionManager state directly.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionEventBus.swift#L5-L63",
+          "version": "repo-lines-v1:sha256:134b6cb035355bfa1a57ce7812ff972a982faae47968b2857dfc67273e37f47a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmMjU1OTU1ODdkMDg2OTMwOTdiY2FlYWYwMmJiNmUxNjg4YjQzMjg4OGNkZmU4MWI3N2ZkYmE3N2JiMTAyMzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNhNjc4MDk0MDI0OTAwODU4YzA2OWFhNTU0NmRiY2UzODIzNjI5ZmM5ZjEwYTIyY2YwYjlhNDRiODg0OTkyODEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNkNTIzYjE2NzM5ZDk4NDQxYjY4M2QyYzVjOTU2NmY2ODY1MDgwNmMyZjkwM2M0MDk3NjIwOWVhYzE3YmY3MmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_72788eafff8f42f1af6d07bbd93c64c6",
+      "statement": "A language-model configuration whose base URL host is localhost, 127.0.0.1, ::1 or ends in .local runs locally and needs no API key, so prompts and screenshots never reach a cloud API.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/ProviderConfiguration.swift#L140-L153",
+          "version": "repo-lines-v1:sha256:95ccdf3d43d9bf93299a31faf08a2c19fc5083333c469da91abda9d8b74f181f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk5ZWJmNjE5YmUzMGI1MzlkODM5M2Q4MjFkOTgxYjVkNmU3OTM4MGJmMGJkNDQxMmNiZmZlZGY5Nzg1N2M3OWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmMGQ3NTk1MGRmMGZmOWEzZWU5NjYzOWRjYzhmZjVlYWVkYjQwZDY4MmJlYTkyNjIyYjUyMGRkODg3ZDkzZTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI3ZDIxZjM1NjdlOTc2YjM2MmE5ODIzYWI2YTdmYjY1M2U5ZTNkZGMwOTRjM2UyMDdiYWFmYzE4ZGM4MmIxOTMifQ"
+        },
+        {
+          "resource": "repo://elfhub/ProviderConfiguration.swift#L199-L203",
+          "version": "repo-lines-v1:sha256:65903f0c4b81bffb7a82c897148c14f759bba10ba206cf21d465d01c81db619a:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTU1ODNlNWVhYjIxZTEyMzY5ODFkMjBmNDBlZWVhYWY1ODExZmM0NjQ3NzAyMGMzMDJkZTNjMmNmMmU3Yjc4NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTk5YmRlZmVlYWNhNjM0MGUwMjkwZGM4NmU4ODljODlkNWUxODlhYTViYTQ0YjU4NWIzYjcwNzM0ZjRhNjJkOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjEsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_496d876011784ebd905926d19e2a1895",
+      "statement": "The model's conversation history is capped at the 10 most recent exchanges, and when a reply wrote a notepad its text is appended to the assistant turn because the notepad window never appears in screenshots.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionTurnPipeline.swift#L247-L253",
+          "version": "repo-lines-v1:sha256:c62cc4b26ebcf6cc999477339b97f0bcf1ec92a0d448ddc765d0abe9b4d2b0d3:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjc2M2RiM2FkNjJiN2RjMWViM2JiOTM4YzI5MzU4MTU1MmFmY2JmNzcxYmUwODdkZTE3MDdjYjQ5ZjgyNTY5MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTZiMDQ0OTE0Njk3MjJlODM2M2E5NGU0MDQ0NTM4ZTAxM2EyYTIxN2UzNmIxZTU2OGJhNjBhY2I3YjRjOGYyZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTc2YTE4ODQwYWJiOTM2ZTNiYTZhNGM5OGVjZTI1MzQ1OGQzZTRhMDk5ZjBlYjFhMTdmMjIxZDQ1YjAyMmE5NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmQxMTUyYzllYTg4ODJkNTZmMTdmZjlkMTA3YThhNDlhZWUyYmEzNWJmZTcyMGQ0MTg2ZmMzNDMwM2IwMmI1NiJ9"
+        },
+        {
+          "resource": "repo://elfhub/CompanionTurnPipeline.swift#L49-L51",
+          "version": "repo-lines-v1:sha256:bc1d560453b19d6e85d24866cef3802df12b96b7d1073b76571b88d30b25a26b:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzhlMmI1MTQ4OTA2MTY5MTVkNDFiYWM4YzFhZGQ3OGQ5NmQzNGFlOWQ5MmJmMzg3OWZiZDY2NTM1YWM5ZmU0MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDQ4NTJjNzNlMTc4OTA2ZDQ2MDJhNzVhMzIyYWM1ODFkMDcyZmFmNzVmOWI4MDc1MDFiMDZiYWE3YmE5OWExYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTY2NzNiYTYxYzc3MzA5ZWI1MDViMDcxMDcwNGQyNDljNGQzYTQ4ZWYxNTg0OGYwZmMwODM1MzI2MjhiOGI2OSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTYyNDkyYTY0ZjlhMGE5NzIzNzBiMjlhZDBlN2ZlYjVkNzBlZDIyNTIxOTM4ZjI5MmU2MjJjNjA3YzZmZmQxMyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_d94a6e67942348fcb012a64e361d6d18",
+      "statement": "When a turn fails, CompanionManager plays the failure earcon and speaks a short error with the on-device voice, naming the missing setup step when the error is LanguageModelProviderError.missingConfiguration.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L940-L952",
+          "version": "repo-lines-v1:sha256:08c79523a0934117a325ddcd6c1dd0d2fc471998c64c23df6ed094ded1fe9472:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM0M2ZiMmQyODg1MThkN2RiMzc2YWRlMDkzZDJkZTc5Nzc2NjllZDJkMjAwMWUzZTNiNTk3NDczNmE2NmI3NDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjliODE0OTNhYTE4NzdiYmQ3ZjJiOGEwYTdjZGFhNjZhNTFlNzZkODBiYWQ1ODcxY2I1YWRmN2MwNmE1ZjEwNGIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

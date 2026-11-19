@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:0210890ddcb9aec471ac3801bd4f16206c16d40669da76a96ab9c7b70922c86d",
+  "claims": [
+    {
+      "id": "claim_7f143d0b47244b2d866afd725aa95489",
+      "statement": "The app runs unsandboxed (com.apple.security.app-sandbox = false) with only network-client and audio-input entitlements plus a ScreenCaptureKit picker mach-lookup exception, which is what makes global event taps, synthetic events and arbitrary user-chosen endpoints possible.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/elfhub.entitlements",
+          "version": "repo-file-v1:sha256:ac8f25a19da11b142f0ea4939fad5edc7b8b8e2da192641eb943910125c86a2a"
+        }
+      ]
+    },
+    {
+      "id": "claim_8d9051115dce4d5bb243685acef3407f",
+      "statement": "Builds use the elfhub scheme from Xcode; terminal xcodebuild must not be used for development or testing because it invalidates TCC permission grants and forces Screen Recording/Accessibility to be re-requested, and the known Swift 6 concurrency and deprecated onChange warnings are non-blocking and not to be fixed.",
+      "evidence": [
+        {
+          "resource": "repo://AGENTS.md",
+          "version": "repo-file-v1:sha256:1670b1e5d65c3ca164b569c031dcc42a37e18ef9052e3132e9575bc8f6fa51ef"
+        },
+        {
+          "resource": "repo://README.md#L33-L45",
+          "version": "repo-lines-v1:sha256:14cbbc776b7c777a161b82b2e17b31a51745850ecf01d4d63ccbd2ce9cf32bb4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2ZmYzODhiNjMzN2I4OTUxNWZiM2E3MDFkNWM1N2VmOWVjNDVjOTA5OGFiYjlhNjQ2NDcyOGYyYjFjZTdlN2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwMGMzZTgzOTc2NWJjNTA2NGJiODg3MWEwNWYwMDc5MTFmOTI5MTEzMDI4YWI2MWY2MTI1YTIxMWE4NzEyY2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMyZmJlMjdiOWYwNTczNzZiZWUwMTQzN2I2YTEzNmM2ODAzNjU5NDE2YTNkZWY3MDM3ZWJlZGM0NTY5MDA5OWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmYjYyN2E0ODdmYTVjYjEyYTIzMDQ4ZWIyZjdhOGJkMzBlMzBhOWU2YjA2MWRlN2NhNWYxYTM3N2ZjMjczMmYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_616dfb04dfcf43328c640112b4c6c43e",
+      "statement": "Permission requests follow a one-system-prompt-per-launch rule: permissionRequestPresentationDestination returns alreadyGranted when permission exists, systemPrompt on the first missing-permission attempt, and systemSettings on later attempts, so users never get the prompt and the Settings pane at the same time.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/WindowPositionManager.swift#L138-L151",
+          "version": "repo-lines-v1:sha256:6f3750edaccf296d747cdb758a853946ee4183863c6a8da459d7eb2687d9fdf9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkZWU1Yzc3NzUzOWFkYjU3MTE3YzIyZTNmODA3ZDQ2NzQ0ZmZlNmUwMGNlMzBmNjkxMzM4ZThjNGFiYjQyMjciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0Mzk5Y2I2ZmU5MzgwMzBmODA4ZjU0NzJlZGNlM2IxM2Q1OTVjMjA3ZGI4NThiYmY2NTAzYWMwYWZjYjNjYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRjZWNjZTAzMjkyZWUyNDcxMzhkMjQ0YWU3OGI1MzU0NDdlNjFiOTYwOTZiYjk4NjYyMGUzYTEwYWEyOTRmNTYifQ"
+        },
+        {
+          "resource": "repo://elfhub/WindowPositionManager.swift#L43-L67",
+          "version": "repo-lines-v1:sha256:d738e84323ba3ec2790ecad6d794c2729c6a68d52df94c320d91740ab71b7a8d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI5N2U2NzZjYjk0MDk1M2Y0NmE3NmZkM2JhYWQ2OTEwNzkxMzEzNDg5YjcwMTEyMGZmY2I0YWRkMzA2MTVlODIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ2OGRhYmVmNTFjNmI1YTc4Zjc5ZWY4OTczMDk0M2I0NGM3NWU4ZmE2YjMxMDVlMDhlMDgyNzNiN2JjN2VmMzUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYxODA5NTI1MGQxODU1MGY0NDAzYTc3ODM3Y2RjMGM4OTViMGJmMjVjMDZmZDI3NzZiNjc0NjhmNTU2MWY2YTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_715e55137b464263bfaf34002f184369",
+      "statement": "CompanionManager re-checks permissions every 1.5 seconds so grants made in System Settings appear without relaunch; microphone state comes from AVCaptureDevice authorization, the screen-content grant comes from a one-time 320x240 test capture persisted under hasScreenContentPermission, and the push-to-talk tap is installed only when Accessibility is granted and voice input is enabled.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L189-L199",
+          "version": "repo-lines-v1:sha256:ff92821658d44be2dcd57dfc5acc2bfcb2499f8d554046229c2b333de3ef1ffd:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyZGY1ODE4YWY5MzBlN2JkYjJiN2U1ODkyMmM0NDQxNmIxYTk0Yjg0ODYzNDRiZjE5OTNiZDlmZWJlZDEzODIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiMmQzZjVmZTk2YjI3YTMxNDRhYzY3NmExYzA5ODM5MzNiMWNlOGY4MzU4MDQ2N2Y1OTNkYmM4Njc2MDA1ODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5YTc2YzQ1OTExZDE4ZTVlZmI5NTYwM2YxMmFjNzFlMzMwNmJkOTkzN2I0MGVmNjEzZjgwMjIwZGVlM2QwNDkifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L538-L610",
+          "version": "repo-lines-v1:sha256:c1a6871452cb9ba541c06de3e547a10cf4975874d7e90474cec301e77d373dc3:eyJzZWxlY3RlZExpbmVDb3VudCI6NzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkzNmI1ODZjYzhiYTE2YTNkNjkwM2VjNDBmMGRiODQ4NTNmOTUzOTMxYmNmMDQyN2E2ZTA4Njg2NGNkYzUzM2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjdkYjZlNTJiNGQ0YWM0ZjY1NzI4MzNlODg1MDIxZGU3YzkxNzRlZTZiYzY4MDU5NWUwY2U1MTc2ODFjZDEwNjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFmMjI2ODgwOTY5MjYzNGYyZjE0NDA1M2ViM2JhZTViMTUxZTk0NzAxNmE4ZWYzNjgwODYwYWIxZTZmNzFhZGIifQ"
+        },
+        {
+          "resource": "repo://elfhub/CompanionManager.swift#L628-L634",
+          "version": "repo-lines-v1:sha256:d8f007698538d0ef3111f86017b4e2b0f984b0ca86916c1719e79e5d0b4aba91:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiY2ZjMGVhNmE0YWZlYzhmNzU0OGJkNDMzODczZDc4Y2Q0ZWIzM2FiOTRmZGNkMWU2N2YxYjk4ODc2OGM5NzBiYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDg5M2Y0MGUzNzgxZWI4OTZjODJkMDQ2YTA4MDY3YTExZTM1Y2RmMmYxZGZhZjI2ZmVhOTBiOGRiNjY3NjQxMyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDdmYTk4YjA3NzI3YzA2NjE2YWMxNjFlYmNkODVlYWQ4Yzk3YjQ0YjAxYmI3Njg3NjZmODI0N2ViMGE0ZGNlMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMWU5ZWRiNjM5YjI3MjhlM2ZkOTU3MjZhMDI5MmJjOGFjYTMxYTBjZmQyNjdhYmUwMTAwNGY3Y2VhMGE4NWVhYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_eea989c7f6ff476eab0e2f01cbf0becc",
+      "statement": "Screen Recording takes effect only after an app restart and CGPreflightScreenCaptureAccess can report false negatives, so shouldTreatScreenRecordingPermissionAsGrantedForSessionLaunch OR-falls back to the persisted com.learningbuddy.hasPreviouslyConfirmedScreenRecordingPermission UserDefaults hint, and clearPreviouslyConfirmedScreenRecordingPermission revokes that trust.",
+      "evidence": [
+        {
+          "resource": "repo://elfhub/WindowPositionManager.swift#L23-L107",
+          "version": "repo-lines-v1:sha256:e9de166e59ca66ee9f55741ba381a21119c348e38fcd64d443777ea22c8c7212:eyJzZWxlY3RlZExpbmVDb3VudCI6ODUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyYTNiYjNhOGM2ZDk4NWNkYjZjMDQ0MTNhN2Q5Y2JjODc4ZTYzOTVjN2Y0MTczOTk5Zjk0N2VmZmNhOThhNTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZmZDdkMDRmODVkYjgzZWI0NTJhMThlY2QwOGIyMzYwZTJhY2QyNjAwZjYzYmJjYTQyYTQ0OTM3MWUzOWJlZTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxZmQ0NzNlYmZjOGJlNTk5Yjg3NTYwM2IwYThhMmEzZjVlNWRiZjE1OTRlNzc3OWIwZmQ2MDQ1MjQwYzVjN2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_04a979cbe8374179b192205cb87295da",
+      "statement": "Config/Shared.xcconfig is the committed base configuration (empty DEVELOPMENT_TEAM, default bundle id com.example.elfhub) and optionally includes the gitignored Config/Local.xcconfig where each developer sets their team and a stable bundle id, because macOS ties permissions to the bundle id and signing identity.",
+      "evidence": [
+        {
+          "resource": "repo://Config/Local.xcconfig.example",
+          "version": "repo-file-v1:sha256:5e2b352afd252391469974e0e749191f28c81b7eae814bcfc3d126ed5e48e211"
+        },
+        {
+          "resource": "repo://Config/Shared.xcconfig#L12-L22",
+          "version": "repo-lines-v1:sha256:3fe7fe781ff2bb2eb0736d840f1fc79409ddf9e974c6f58b20b9bb98ae2c3e64:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjODdiN2VhNjc4YTAwOGJlOTVkMmY0NWM2YTA1OTMzODVkMThkY2Y1Nzk5ZDRlOGY4ZDhkNzYyMWFlNDJmNDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlM2RiMmM5YTZiOWVkMWI4ZmEwNmFkOGU2NjQxNzhjOTY0MWZmMTlmZTI0NTI5NzIxN2IyNDcwMTliODgwOTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkyNTI3ODI2MzYzNDA0ZTI5NTc0NzQ4ZmM2M2M4M2YwOTA3ZmE1MWNhNWM0YWU4MDZmNjM5YTE0YzRiZjc4MDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://elfhub.xcodeproj/project.pbxproj#L284-L284",
+          "version": "repo-lines-v1:sha256:633820cd548d8ba5b8554eae07ce9f88ea983c3d41afa00d60a402fd96d2af96:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjMzODIwY2Q1NDhkOGJhNWI4NTU0ZWFlMDdjZTlmODhlYTk4M2MzZDQxYWZhMDBkNjBhNDAyZmQ5NmQyYWY5NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjMzODIwY2Q1NDhkOGJhNWI4NTU0ZWFlMDdjZTlmODhlYTk4M2MzZDQxYWZhMDBkNjBhNDAyZmQ5NmQyYWY5NiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTYzYzcxMzk4YzgwYzkzNjMxNDYyYTkzOTY4MzAwMzQzOGJmYTZkZjY4NzFmMGQ1YmY4MzBjNDI3ZmM4NDA5MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOWZmYzZlYTM1ZjEyNjEyZmRkYzFjNmY3NDdkMTZlOTkwYmU3ZTE4YmZiYWYxODg1YjhlYzVmYjA2ZGRmODYwNSJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

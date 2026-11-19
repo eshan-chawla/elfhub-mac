@@ -1,0 +1,239 @@
+//
+//  MenuBarPanelManager.swift
+//  elfhub
+//
+//  Manages the NSStatusItem (menu bar icon) and a custom borderless NSPanel
+//  that drops down below it when clicked. The panel hosts a SwiftUI view
+//  (CompanionPanelView) via NSHostingView. Uses the same NSPanel pattern as
+//  FloatingSessionButton and GlobalPushToTalkOverlay for consistency.
+//
+//  The panel is non-activating so it does not steal focus from the user's
+//  current app, and auto-dismisses when the user clicks outside.
+//
+
+import AppKit
+import SwiftUI
+
+extension Notification.Name {
+    static let dismissCompanionPanel = Notification.Name("dismissCompanionPanel")
+}
+
+/// Custom NSPanel subclass that can become the key window even with
+/// .nonactivatingPanel style, allowing text fields to receive focus.
+private class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+@MainActor
+final class MenuBarPanelManager: NSObject {
+    private var statusItem: NSStatusItem?
+    private var panel: NSPanel?
+    private var clickOutsideMonitor: Any?
+    private var dismissPanelObserver: NSObjectProtocol?
+
+    private let companionManager: CompanionManager
+    private let panelWidth: CGFloat = 320
+    private let panelHeight: CGFloat = 380
+
+    init(companionManager: CompanionManager) {
+        self.companionManager = companionManager
+        super.init()
+        createStatusItem()
+
+        dismissPanelObserver = NotificationCenter.default.addObserver(
+            forName: .dismissCompanionPanel,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.hidePanel()
+        }
+    }
+
+    deinit {
+        if let monitor = clickOutsideMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        if let observer = dismissPanelObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    // MARK: - Status Item
+
+    private func createStatusItem() {
+        // Sized to the icon (not a square the bar's height) so the wide igloo
+        // is never squeezed.
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+
+        guard let button = statusItem?.button else { return }
+
+        button.image = Self.makeMenuBarIcon()
+        button.toolTip = "elfhub"
+        button.setAccessibilityLabel("elfhub")
+        button.action = #selector(statusItemClicked)
+        button.target = self
+    }
+
+    /// The asset catalog's "MenuBarIcon": the igloo glyph that matches the
+    /// app icon, kept as a vector template image so macOS tints it for light
+    /// and dark menu bars. Rebuilt by scripts/icon/make-menu-bar-icon.swift.
+    static let menuBarIconAssetName = "MenuBarIcon"
+    static let menuBarIconSizeInPoints: CGFloat = 22
+
+    static func makeMenuBarIcon() -> NSImage? {
+        guard let menuBarIcon = NSImage(named: menuBarIconAssetName) else { return nil }
+        menuBarIcon.size = NSSize(width: menuBarIconSizeInPoints, height: menuBarIconSizeInPoints)
+        // Set in the asset catalog too; repeated so the tinting never
+        // depends on how the catalog was compiled.
+        menuBarIcon.isTemplate = true
+        return menuBarIcon
+    }
+
+    @objc private func statusItemClicked() {
+        if let panel, panel.isVisible {
+            hidePanel()
+        } else {
+            showPanel()
+        }
+    }
+
+    // MARK: - Panel Lifecycle
+
+    private func showPanel() {
+        if panel == nil {
+            createPanel()
+        }
+
+        positionPanelBelowStatusItem()
+
+        panel?.makeKeyAndOrderFront(nil)
+        panel?.orderFrontRegardless()
+        installClickOutsideMonitor()
+    }
+
+    private func hidePanel() {
+        panel?.orderOut(nil)
+        removeClickOutsideMonitor()
+    }
+
+    private func createPanel() {
+        let companionPanelView = CompanionPanelView(companionManager: companionManager)
+            .frame(width: panelWidth)
+
+        let hostingView = PanelHostingView(rootView: companionPanelView)
+        // Content that appears while the panel is open (a consent card,
+        // setup finishing) resizes it instead of being cut off.
+        hostingView.onIntrinsicContentSizeChanged = { [weak self] in
+            DispatchQueue.main.async {
+                guard let self, let panel = self.panel, panel.isVisible else { return }
+                let fittingHeight = panel.contentView?.fittingSize.height ?? panel.frame.height
+                guard abs(fittingHeight - panel.frame.height) > 0.5 else { return }
+                self.positionPanelBelowStatusItem()
+            }
+        }
+        hostingView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = .clear
+
+        let menuBarPanel = KeyablePanel(
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+
+        menuBarPanel.isFloatingPanel = true
+        menuBarPanel.level = .floating
+        menuBarPanel.isOpaque = false
+        menuBarPanel.backgroundColor = .clear
+        menuBarPanel.hasShadow = false
+        menuBarPanel.hidesOnDeactivate = false
+        menuBarPanel.isExcludedFromWindowsMenu = true
+        menuBarPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        menuBarPanel.isMovableByWindowBackground = false
+        menuBarPanel.titleVisibility = .hidden
+        menuBarPanel.titlebarAppearsTransparent = true
+
+        menuBarPanel.contentView = hostingView
+        panel = menuBarPanel
+    }
+
+    private func positionPanelBelowStatusItem() {
+        guard let panel else { return }
+        guard let buttonWindow = statusItem?.button?.window else { return }
+
+        let statusItemFrame = buttonWindow.frame
+        let gapBelowMenuBar: CGFloat = 4
+
+        // Calculate the panel's content height from the hosting view's fitting size
+        // so the panel snugly wraps the SwiftUI content instead of using a fixed height.
+        let fittingSize = panel.contentView?.fittingSize ?? CGSize(width: panelWidth, height: panelHeight)
+        let actualPanelHeight = fittingSize.height
+
+        // Horizontally center the panel beneath the status item icon
+        let panelOriginX = statusItemFrame.midX - (panelWidth / 2)
+        let panelOriginY = statusItemFrame.minY - actualPanelHeight - gapBelowMenuBar
+
+        panel.setFrame(
+            NSRect(x: panelOriginX, y: panelOriginY, width: panelWidth, height: actualPanelHeight),
+            display: true
+        )
+    }
+
+    // MARK: - Click Outside Dismissal
+
+    /// Installs a global event monitor that hides the panel when the user clicks
+    /// anywhere outside it — the same transient dismissal behavior as NSPopover.
+    /// Uses a short delay so that system permission dialogs (triggered by Grant
+    /// buttons in the panel) don't immediately dismiss the panel when they appear.
+    private func installClickOutsideMonitor() {
+        removeClickOutsideMonitor()
+
+        clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] event in
+            guard let self, let panel = self.panel else { return }
+
+            // Check if the click is inside the status item button — if so, the
+            // statusItemClicked handler will toggle the panel, so don't also hide.
+            let clickLocation = NSEvent.mouseLocation
+            if panel.frame.contains(clickLocation) {
+                return
+            }
+
+            // Delay dismissal slightly to avoid closing the panel when
+            // a system permission dialog appears (e.g. microphone access).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                guard panel.isVisible else { return }
+
+                // If a permission the chosen modes need is still missing, a
+                // system dialog may have focus — don't dismiss then. (Only
+                // the needed ones: in text-only mode the microphone is never
+                // granted, and the panel must still close.)
+                if !self.companionManager.hasPermissionsRequiredForActiveModes && !NSApp.isActive {
+                    return
+                }
+
+                self.hidePanel()
+            }
+        }
+    }
+
+    private func removeClickOutsideMonitor() {
+        if let monitor = clickOutsideMonitor {
+            NSEvent.removeMonitor(monitor)
+            clickOutsideMonitor = nil
+        }
+    }
+}
+
+/// The panel's hosting view, which says when the SwiftUI content's size
+/// changes so the panel can grow or shrink to fit it.
+private final class PanelHostingView<Content: View>: NSHostingView<Content> {
+    var onIntrinsicContentSizeChanged: (() -> Void)?
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        onIntrinsicContentSizeChanged?()
+    }
+}

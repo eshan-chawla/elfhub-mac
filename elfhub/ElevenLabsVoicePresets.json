@@ -1,0 +1,41 @@
+{
+  "_about": "The ElevenLabs voices elfhub offers before anyone pastes a voice ID. Edit this file to change the defaults: mainElfVoice is the voice the main Elf uses when the user picks none, sideElfVoices is the order side Elfs are given their own voices in (each takes the first one no other Elf has), and voices is the Recommended list in the voice picker. These are ElevenLabs' permanent replacements for its Default (premade) voices, which stop working on 31 December 2026 and are only on accounts made before March 2026; replacesDefaultVoice names the one each replaces, so the picker can suggest a swap. Source: ElevenLabs Help Center, 'What are Default voices?' (checked 17 November 2026).",
+  "mainElfVoice": "l7kNoIfnJKPg7779LI2t",
+  "sideElfVoices": [
+    "OZ0L6eISlOejga3XjDFt",
+    "AaOhDHYJ1XLZk74lXhdE",
+    "g7LVvkPWALzPxOQbF6OE",
+    "ktkP7Nsj67dw2zcplQYt",
+    "QtY3JBOUKEB5xzrRfOKc",
+    "fnYMz3F5gMEDGMWcH1ex",
+    "BFd5oBc2DDna33pSi4Gf",
+    "7QN34D2r3hCNwbOYIeK0",
+    "WQP7cQUF5aAS6Axh5yaa",
+    "FrS6cKLB1wg4WYgPa9GW",
+    "dvbL7qkNGZY1IqPGZAjM",
+    "gOupLcAkjEnguROwi4oS",
+    "jSuBIjxMKhqIfb0wCK1F",
+    "6WwXjDDEMyNmFG95zycZ"
+  ],
+  "voices": [
+    { "voiceIdentifier": "l7kNoIfnJKPg7779LI2t", "name": "Eddie", "description": "Natural and helpful", "replacesDefaultVoiceName": "Eric", "replacesDefaultVoiceIdentifier": "cjVigY5qzO86Huf0OWal" },
+    { "voiceIdentifier": "OZ0L6eISlOejga3XjDFt", "name": "Talia", "description": "Warm, soft guide", "replacesDefaultVoiceName": "Sarah", "replacesDefaultVoiceIdentifier": "EXAVITQu4vr4xnSDxMaL" },
+    { "voiceIdentifier": "AaOhDHYJ1XLZk74lXhdE", "name": "Caleb", "description": "Trusted guide", "replacesDefaultVoiceName": "Chris", "replacesDefaultVoiceIdentifier": "iP95p4xoKVk53GoZ742B" },
+    { "voiceIdentifier": "g7LVvkPWALzPxOQbF6OE", "name": "Jade", "description": "Upbeat and natural", "replacesDefaultVoiceName": "Jessica", "replacesDefaultVoiceIdentifier": "cgSgspJ2msm6clMCkdW9" },
+    { "voiceIdentifier": "ktkP7Nsj67dw2zcplQYt", "name": "Lawrence", "description": "Bright and informative", "replacesDefaultVoiceName": "Liam", "replacesDefaultVoiceIdentifier": "TX3LPaxmHKxFdv7VOQHJ" },
+    { "voiceIdentifier": "QtY3JBOUKEB5xzrRfOKc", "name": "Maisie", "description": "Friendly, casual neighbor", "replacesDefaultVoiceName": "Matilda", "replacesDefaultVoiceIdentifier": "XrExE9yKIg1WjnnlVkGX" },
+    { "voiceIdentifier": "fnYMz3F5gMEDGMWcH1ex", "name": "Finley", "description": "Articulate anchor", "replacesDefaultVoiceName": "Daniel", "replacesDefaultVoiceIdentifier": "onwK4e9ZLuTAKqWW03F9" },
+    { "voiceIdentifier": "BFd5oBc2DDna33pSi4Gf", "name": "Alicia", "description": "Polished global anchor", "replacesDefaultVoiceName": "Alice", "replacesDefaultVoiceIdentifier": "Xb7hH8MSUJpSbSDYk0k2" },
+    { "voiceIdentifier": "7QN34D2r3hCNwbOYIeK0", "name": "Warren", "description": "Effortless and cool", "replacesDefaultVoiceName": "Will", "replacesDefaultVoiceIdentifier": "bIHbv24MWmeRgasZH58o" },
+    { "voiceIdentifier": "WQP7cQUF5aAS6Axh5yaa", "name": "Elara", "description": "Crisp pro narrator", "replacesDefaultVoiceName": "Laura", "replacesDefaultVoiceIdentifier": "FGY2WhTYpPnrIDTdsKH5" },
+    { "voiceIdentifier": "FrS6cKLB1wg4WYgPa9GW", "name": "Wyatt", "description": "Seasoned mentor", "replacesDefaultVoiceName": "Bill", "replacesDefaultVoiceIdentifier": "pqHfZKP75CvOlQylNhV4" },
+    { "voiceIdentifier": "dvbL7qkNGZY1IqPGZAjM", "name": "Elowen", "description": "Upbeat modern narrator", "replacesDefaultVoiceName": "River", "replacesDefaultVoiceIdentifier": "SAz9YHcvj6GT2YYXdXww" },
+    { "voiceIdentifier": "gOupLcAkjEnguROwi4oS", "name": "Darian", "description": "Warm, grounded storyteller", "replacesDefaultVoiceName": "Roger", "replacesDefaultVoiceIdentifier": "CwhRBWXzGAHq8TQ4Fs17" },
+    { "voiceIdentifier": "jSuBIjxMKhqIfb0wCK1F", "name": "Baxter", "description": "Dry, calm Aussie", "replacesDefaultVoiceName": "Charlie", "replacesDefaultVoiceIdentifier": "IKne3meq5aSn9XLyUdCD" },
+    { "voiceIdentifier": "6WwXjDDEMyNmFG95zycZ", "name": "Eldrin", "description": "Crisp British baritone", "replacesDefaultVoiceName": "George", "replacesDefaultVoiceIdentifier": "JBFqnCBsd6RMkjVDRZzb" },
+    { "voiceIdentifier": "8dEUmyPMdDdK91vboYih", "name": "Sawyer", "description": "Midnight storyteller", "replacesDefaultVoiceName": "Brian", "replacesDefaultVoiceIdentifier": "nPczCjzI2devNBz1zQrb" },
+    { "voiceIdentifier": "22N9cF8z0o7y23njdyaY", "name": "Florence", "description": "Atmospheric storyteller", "replacesDefaultVoiceName": "Lily", "replacesDefaultVoiceIdentifier": "pFZP5JQG7iQjIQuC4Bku" },
+    { "voiceIdentifier": "fs2OqxduwXgp9foh2xjK", "name": "Callum", "description": "Husky trickster", "replacesDefaultVoiceName": "Callum", "replacesDefaultVoiceIdentifier": "N2lVS1w4EtoT3dr4eOWO" },
+    { "voiceIdentifier": "10NkTYmU7tSz3Kkl3Lex", "name": "Kaelen", "description": "Amateur warrior", "replacesDefaultVoiceName": "Harry", "replacesDefaultVoiceIdentifier": "SOYHLrjzK2X1ezoPC6cr" }
+  ]
+}

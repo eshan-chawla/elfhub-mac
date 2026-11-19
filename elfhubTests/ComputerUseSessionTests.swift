@@ -1,0 +1,648 @@
+//
+//  ComputerUseSessionTests.swift
+//  elfhubTests
+//
+//  The multi-step run on the user's screen, against a pretend screen: each
+//  model round's steps run in order and stop at the first failure (the rest
+//  answered "Not executed"), a round that acted ends with one fresh
+//  screenshot and whether the screen changed, the user saying no or taking
+//  over ends the run at once, the guard's stop leaves one round to sum up,
+//  and the agent loop sends every result back with the screenshot.
+//
+
+import AppKit
+import CoreGraphics
+import Foundation
+import Testing
+@testable import elfhub
+
+@MainActor
+final class FakeComputerUseScreen: ComputerUseScreen {
+    var performedActions: [CompanionScreenAction] = []
+    var performedStepDescriptions: [String] = []
+    /// Outcomes handed out in order; once used up, every action is performed.
+    var scriptedOutcomes: [ComputerUseActionOutcome] = []
+    var screenChangesWhenActing = true
+    var captureCount = 0
+    var waitedSeconds: [Double] = []
+    private var screenVersion = 0
+
+    static func jpegData(withBoxAt boxOrigin: CGPoint?) -> Data {
+        let context = CGContext(data: nil, width: 1280, height: 800, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 1280, height: 800))
+        if let boxOrigin {
+            context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+            context.fill(CGRect(origin: boxOrigin, size: CGSize(width: 120, height: 120)))
+        }
+        return NSBitmapImageRep(cgImage: context.makeImage()!).representation(using: .jpeg, properties: [:])!
+    }
+
+    static func capture(imageData: Data) -> CompanionScreenCapture {
+        CompanionScreenCapture(
+            imageData: imageData,
+            label: "user's screen",
+            isCursorScreen: true,
+            displayWidthInPoints: 1440,
+            displayHeightInPoints: 900,
+            displayFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            screenshotWidthInPixels: 1280,
+            screenshotHeightInPixels: 800,
+            displayID: 1
+        )
+    }
+
+    private func currentCapture() -> CompanionScreenCapture {
+        captureCount += 1
+        let boxOrigin = screenVersion == 0 ? nil : CGPoint(x: (screenVersion * 130) % 1100, y: 300)
+        return Self.capture(imageData: Self.jpegData(withBoxAt: boxOrigin))
+    }
+
+    func captureScreen() async throws -> CompanionScreenCapture { currentCapture() }
+
+    func captureScreenAfterSettling(previousCapture: CompanionScreenCapture) async throws -> CompanionScreenCapture {
+        currentCapture()
+    }
+
+    func captureZoomedRegion(_ regionInScreenshotPixels: CGRect, of capture: CompanionScreenCapture) async throws -> Data {
+        Self.jpegData(withBoxAt: nil)
+    }
+
+    func perform(_ action: CompanionScreenAction, on capture: CompanionScreenCapture, stepDescription: String) async -> ComputerUseActionOutcome {
+        let outcome = scriptedOutcomes.isEmpty ? .performed : scriptedOutcomes.removeFirst()
+        if outcome == .performed {
+            performedActions.append(action)
+            performedStepDescriptions.append(stepDescription)
+            if screenChangesWhenActing { screenVersion += 1 }
+        }
+        return outcome
+    }
+
+    func pointerLocationInScreenshotPixels(on capture: CompanionScreenCapture) -> CGPoint? { CGPoint(x: 12, y: 34) }
+
+    /// Waits really take time (to stop a run in the middle of one).
+    var waitTakesRealTime = false
+    func wait(seconds: Double) async throws {
+        waitedSeconds.append(seconds)
+        if waitTakesRealTime {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        }
+    }
+
+    /// Whether the target's part of the screen changed since the
+    /// screenshot the model saw.
+    var targetRegionHasChanged = false
+    func targetRegionChanged(since capture: CompanionScreenCapture, aroundScreenshotPixel screenshotPixel: CGPoint) async -> Bool {
+        targetRegionHasChanged
+    }
+
+    var performedDescriptionToReport: String?
+    var lastPerformedStepDescription: String? { performedDescriptionToReport }
+    var lastPerformedStepApplicationBundleIdentifier: String? { nil }
+
+    var interfaceDescriptionToReturn: String?
+    func describeInterface(on capture: CompanionScreenCapture) async -> String? { interfaceDescriptionToReturn }
+}
+
+@MainActor
+struct ComputerUseSessionTests {
+
+    private func toolsetCall(_ identifier: String, _ memberName: String, _ argumentsJSON: String = "{}") -> LanguageModelToolCall {
+        LanguageModelToolCall(toolCallIdentifier: identifier, toolName: memberName, argumentsJSON: argumentsJSON, toolsetName: "computer")
+    }
+
+    private func makeSession(screen: FakeComputerUseScreen) -> ComputerUseSession {
+        ComputerUseSession(
+            screen: screen,
+            firstCapture: FakeComputerUseScreen.capture(imageData: FakeComputerUseScreen.jpegData(withBoxAt: nil)),
+            coordinateConvention: .imagePixels,
+            limits: .standard
+        )
+    }
+
+    private func computerResults(_ stepResult: ComputerUseStepResult) -> [LanguageModelComputerToolResult] {
+        stepResult.resultBlocks.compactMap { resultBlock in
+            if case let .computerToolResult(computerToolResult) = resultBlock { return computerToolResult }
+            return nil
+        }
+    }
+
+    @Test func aRoundActsInOrderAndEndsWithOneFreshScreenshot() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+            toolsetCall("b", "type", #"{"text":"hello"}"#),
+            toolsetCall("c", "key", #"{"text":"return"}"#),
+        ])
+        #expect(screen.performedActions.count == 3)
+        #expect(screen.performedStepDescriptions.first?.hasPrefix("step 1 of \(ComputerUseRunLimits.standard.maximumSteps)") == true)
+        let results = computerResults(stepResult)
+        #expect(results.map(\.toolCallIdentifier) == ["a", "b", "c"])
+        #expect(results.allSatisfy { $0.toolsetName == "computer" && !$0.isError })
+        #expect(results.map { $0.image != nil } == [false, false, true])
+        #expect(results.last?.resultText.contains("the screen changed") == true)
+        #expect(stepResult.ending == nil)
+        #expect(screen.captureCount == 1)
+    }
+
+    @Test func theWindowsControlsGoBesideEachFreshScreenshot() async {
+        let screen = FakeComputerUseScreen()
+        screen.interfaceDescriptionToReturn = "- button “Export” at (124, 98)"
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)])
+        #expect(computerResults(stepResult).last?.resultText.hasSuffix("- button “Export” at (124, 98)") == true)
+    }
+
+    @Test func aClickWhoseTargetChangedSinceTheScreenshotIsntFired() async {
+        let screen = FakeComputerUseScreen()
+        screen.targetRegionHasChanged = true
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+            toolsetCall("b", "type", #"{"text":"hello"}"#),
+        ])
+        #expect(screen.performedActions.isEmpty)
+        let results = computerResults(stepResult)
+        #expect(results.first?.isError == true)
+        #expect(results.first?.resultText.contains("changed since") == true)
+        #expect(results.last?.image != nil)
+        // Typing has no target on screen, so it isn't held back by this.
+        screen.targetRegionHasChanged = true
+        _ = await makeSession(screen: screen).runStep([toolsetCall("c", "type", #"{"text":"hi"}"#)])
+        #expect(screen.performedActions.count == 1)
+    }
+
+    @Test func eachStepIsReportedAsItRunsSoAStoppedRunStillShowsIt() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        var reportedSteps: [String] = []
+        session.onStepPerformed = { stepDescription in reportedSteps.append(stepDescription) }
+        _ = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+            toolsetCall("b", "key", #"{"text":"tab","repeat":2}"#),
+        ])
+        #expect(reportedSteps == ["click here", "press tab ×2"])
+        #expect(reportedSteps == session.performedStepDescriptions)
+    }
+
+    @Test func whatARunDidIsRememberedInTheConversation() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        _ = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+            toolsetCall("b", "key", #"{"text":"tab","repeat":2}"#),
+        ])
+        #expect(session.performedStepDescriptions == ["click here", "press tab ×2"])
+        let historyText = CompanionTurnPipeline.assistantTextForHistory(
+            spokenText: "done.",
+            notepad: nil,
+            fileChanges: [],
+            screenStepDescriptions: session.performedStepDescriptions
+        )
+        #expect(historyText == "done.\n\n(on the screen you did: click here; press tab ×2)")
+    }
+
+    @Test func theRoundStopsAtTheFirstFailure() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[9000,200]}"#),
+            toolsetCall("b", "type", #"{"text":"hello"}"#),
+        ])
+        #expect(screen.performedActions.isEmpty)
+        let results = computerResults(stepResult)
+        #expect(results.map(\.isError) == [true, true])
+        #expect(results.last?.resultText == ComputerUseSession.notExecutedAfterFailureText)
+        #expect(stepResult.ending == nil)
+    }
+
+    @Test func lookingSteps() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([
+            toolsetCall("a", "screenshot"),
+            toolsetCall("b", "zoom", #"{"region":[0,0,640,400]}"#),
+            toolsetCall("c", "cursor_position"),
+            toolsetCall("d", "wait", #"{"duration":2}"#),
+        ])
+        let results = computerResults(stepResult)
+        #expect(results.map { $0.image != nil } == [true, true, false, true])
+        #expect(results[2].resultText.contains("12") && results[2].resultText.contains("34"))
+        #expect(screen.waitedSeconds == [2])
+        #expect(screen.performedActions.isEmpty)
+    }
+
+    @Test func theUserSayingNoOrTakingOverEndsTheRunAtOnce() async {
+        for (endingOutcome, expectedSpokenReason) in [
+            (ComputerUseActionOutcome.declinedByUser, String?.none),
+            (.stoppedByUser, nil),
+            (.handedToUser(reason: "that's a password field, so please fill it in yourself."), "that's a password field, so please fill it in yourself."),
+        ] {
+            let screen = FakeComputerUseScreen()
+            screen.scriptedOutcomes = [endingOutcome]
+            let session = makeSession(screen: screen)
+            let stepResult = await session.runStep([
+                toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+                toolsetCall("b", "key", #"{"text":"return"}"#),
+            ])
+            #expect(stepResult.ending == .stopNow(spokenReason: expectedSpokenReason))
+            #expect(screen.performedActions.isEmpty)
+            #expect(session.hasEnded)
+        }
+    }
+
+    /// A run stopped at an unanswered approval used to leave nothing in the
+    /// history, so a later "continue" had nothing to go on.
+    @Test func aStepLeftWaitingForTheUsersOkayIsRememberedForContinue() async {
+        let screen = FakeComputerUseScreen()
+        screen.scriptedOutcomes = [.performed, .declinedByUser]
+        let session = makeSession(screen: screen)
+        _ = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+            toolsetCall("b", "type", #"{"text":"secret plans"}"#),
+        ])
+        #expect(session.stepLeftWaitingForApproval == "type 12 characters", "typed text only as its length")
+        let historyText = CompanionTurnPipeline.assistantTextForHistory(
+            spokenText: "",
+            notepad: nil,
+            fileChanges: [],
+            screenStepDescriptions: session.performedStepDescriptions,
+            screenStepLeftWaitingForApproval: session.stepLeftWaitingForApproval
+        )
+        #expect(historyText.contains("(on the screen you did: click here)"))
+        #expect(historyText.contains("(you stopped before: type 12 characters — the user didn't okay it."))
+        #expect(!historyText.contains("secret plans"))
+
+        let stoppedScreen = FakeComputerUseScreen()
+        stoppedScreen.scriptedOutcomes = [.stoppedByUser]
+        let stoppedSession = makeSession(screen: stoppedScreen)
+        _ = await stoppedSession.runStep([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)])
+        #expect(stoppedSession.stepLeftWaitingForApproval == nil, "Esc isn't a step waiting to continue")
+    }
+
+    @Test func aNotPerformedStepGoesBackToTheModelAsAnError() async {
+        let screen = FakeComputerUseScreen()
+        screen.scriptedOutcomes = [.notPerformed(reason: "the screen changed while waiting for the user's okay")]
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)])
+        let results = computerResults(stepResult)
+        #expect(results.first?.isError == true)
+        #expect(results.first?.resultText.contains("screen changed") == true)
+        #expect(stepResult.ending == nil)
+    }
+
+    /// The 400 seen in the real app: a step that didn't go through came
+    /// back marked as an error *and* carrying the fresh screenshot, which
+    /// Claude refuses ("all content must be type `text` if `is_error` is
+    /// true"). What the run sends must always be a request Claude accepts.
+    @Test func aFailedStepsScreenshotNeverGoesToClaudeMarkedAsAnError() async throws {
+        let screen = FakeComputerUseScreen()
+        screen.scriptedOutcomes = [.performed, .notPerformed(reason: "couldn't press that key")]
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([
+            toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+            toolsetCall("b", "key", #"{"text":"cmd+shift+9"}"#),
+        ])
+        let results = computerResults(stepResult)
+        #expect(results.last?.isError == true)
+        #expect(results.last?.image != nil, "the model still gets to see the screen after the failed step")
+
+        let toolCalls = [
+            LanguageModelToolCall(toolCallIdentifier: "a", toolName: "left_click", argumentsJSON: "{}"),
+            LanguageModelToolCall(toolCallIdentifier: "b", toolName: "key", argumentsJSON: "{}"),
+        ]
+        let followUpRequest = LanguageModelRequest(
+            systemPrompt: "system",
+            messages: [
+                LanguageModelMessage(role: .user, content: [.text("do it")]),
+                LanguageModelMessage(role: .assistant, content: toolCalls.map { .toolCall($0) }),
+                LanguageModelMessage(role: .user, content: stepResult.resultBlocks),
+            ]
+        )
+        let body = ClaudeAPI.buildRequestBody(model: "claude-opus-5-5", request: followUpRequest)
+        let resultBlocks = try #require((body["messages"] as? [[String: Any]])?.last?["content"] as? [[String: Any]])
+        #expect(resultBlocks.count == 2)
+        for resultBlock in resultBlocks where resultBlock["is_error"] as? Bool == true {
+            let content = resultBlock["content"] as? [[String: Any]] ?? []
+            #expect(content.allSatisfy { $0["type"] as? String == "text" }, "is_error only on text-only results")
+        }
+        let failedStepBlock = try #require(resultBlocks.last)
+        let failedStepText = ((failedStepBlock["content"] as? [[String: Any]])?.first?["text"] as? String) ?? ""
+        #expect(failedStepText.hasPrefix("Error:"), "the failure is still said in words")
+    }
+
+    @Test func theGuardsStopLeavesOneRoundToSumUp() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        var lastStepResult: ComputerUseStepResult?
+        for stepNumber in 1...ComputerUseRunLimits.standard.maximumSteps {
+            lastStepResult = await session.runStep([toolsetCall("s\(stepNumber)", "left_click", "{\"coordinate\":[\(stepNumber * 50),100]}")])
+        }
+        guard case .summarize = lastStepResult?.ending else {
+            Issue.record("expected the last step to end the run")
+            return
+        }
+        #expect(computerResults(lastStepResult!).last?.resultText.contains(ComputerUseSession.runEndedInstruction) == true)
+        let afterTheEnd = await session.runStep([toolsetCall("late", "left_click", #"{"coordinate":[10,10]}"#)])
+        #expect(computerResults(afterTheEnd).first?.resultText == ComputerUseSession.notExecutedAfterRunEndedText)
+        #expect(screen.performedActions.count == ComputerUseRunLimits.standard.maximumSteps)
+    }
+
+    /// Waiting for something to load or finish uses no step: a run can
+    /// wait many times and still act afterwards.
+    @Test func roundsThatOnlyWaitUseNoSteps() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        for waitNumber in 1...(ComputerUseRunLimits.standard.maximumSteps + 5) {
+            // A minute each: 20 minutes in all, within the run's half hour.
+            let waitResult = await session.runStep([toolsetCall("w\(waitNumber)", "wait", #"{"duration":60}"#)])
+            #expect(waitResult.ending == nil, "wait \(waitNumber) didn't end the run")
+        }
+        #expect(screen.waitedSeconds.count == ComputerUseRunLimits.standard.maximumSteps + 5)
+        let clickResult = await session.runStep([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)])
+        #expect(clickResult.ending == nil)
+        #expect(screen.performedActions.count == 1)
+        #expect(screen.performedStepDescriptions.first?.hasPrefix("step 1 of \(ComputerUseRunLimits.standard.maximumSteps)") == true,
+                "the click is still step 1")
+    }
+
+    @Test func aWaitLongerThanFiveMinutesIsRefusedAndTheModelIsTold() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let stepResult = await session.runStep([toolsetCall("a", "wait", #"{"duration":900}"#)])
+        let results = computerResults(stepResult)
+        #expect(screen.waitedSeconds.isEmpty)
+        #expect(results.first?.isError == true)
+        #expect(results.first?.resultText.contains("300") == true)
+    }
+
+    @Test func aRunCanWaitHalfAnHourInAll() async {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        // Six five-minute waits use the half hour…
+        for waitNumber in 1...6 {
+            _ = await session.runStep([toolsetCall("w\(waitNumber)", "wait", #"{"duration":300}"#)])
+        }
+        // …so one more is refused, with how much is left.
+        let refusedResult = await session.runStep([toolsetCall("x", "wait", #"{"duration":60}"#)])
+        #expect(screen.waitedSeconds.count == 6)
+        #expect(computerResults(refusedResult).first?.resultText.contains("waiting left") == true)
+    }
+
+    @Test func aLongerStepLimitLetsTheRunGoPastFifteen() async {
+        let screen = FakeComputerUseScreen()
+        let session = ComputerUseSession(
+            screen: screen,
+            firstCapture: FakeComputerUseScreen.capture(imageData: FakeComputerUseScreen.jpegData(withBoxAt: nil)),
+            coordinateConvention: .imagePixels,
+            limits: ComputerUseRunLimits(maximumSteps: 50)
+        )
+        for stepNumber in 1...20 {
+            let stepResult = await session.runStep([toolsetCall("s\(stepNumber)", "left_click", "{\"coordinate\":[\(stepNumber * 50),200]}")])
+            #expect(stepResult.ending == nil, "step \(stepNumber) of 50 didn't end the run")
+        }
+        #expect(screen.performedActions.count == 20)
+        #expect(screen.performedStepDescriptions.last?.hasPrefix("step 20 of 50") == true)
+    }
+
+    @Test func theWaitingPillSaysHowLong() {
+        #expect(ComputerUseLiveScreen.waitingSummary(seconds: 45) == "waiting 45 s for the screen")
+        #expect(ComputerUseLiveScreen.waitingSummary(seconds: 120) == "waiting 2 min for the screen")
+        #expect(ComputerUseLiveScreen.waitingSummary(seconds: 90) == "waiting 1.5 min for the screen")
+    }
+
+    @Test func theTimeLimitStopsARoundBeforeItsNextAction() async {
+        let screen = FakeComputerUseScreen()
+        let session = ComputerUseSession(
+            screen: screen,
+            firstCapture: FakeComputerUseScreen.capture(imageData: FakeComputerUseScreen.jpegData(withBoxAt: nil)),
+            coordinateConvention: .imagePixels,
+            startedAt: Date().addingTimeInterval(-ComputerUseRunLimits.standard.maximumActiveDurationInSeconds - 1),
+            limits: .standard
+        )
+        let stepResult = await session.runStep([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)])
+        #expect(screen.performedActions.isEmpty)
+        guard case .summarize = stepResult.ending else {
+            Issue.record("expected the run to end for time")
+            return
+        }
+        #expect(computerResults(stepResult).first?.resultText.contains(ComputerUseSession.runEndedInstruction) == true)
+    }
+
+    @Test func stepsAskedForInTheLastRoundAreNotCarriedOut() async throws {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)]),
+            ScriptedLanguageModelProvider.toolCalls([toolsetCall("b", "left_click", #"{"coordinate":[300,200]}"#)], text: "one more click."),
+        ])
+        let loopResult = try await ElfAgentLoop.run(
+            initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "click twice"),
+            languageModelProvider: languageModelProvider,
+            toolRegistry: ElfToolRegistry(tools: []),
+            toolContext: nil,
+            guidanceToolNames: GuidanceToolDefinitions.toolNames,
+            maximumRounds: 2,
+            computerUseExecutor: session,
+            onReplyTextDelta: { _ in },
+            onModelRoundEnded: {}
+        )
+        // The model would never see what the second click did.
+        #expect(screen.performedActions.count == 1)
+        #expect(loopResult.replyText.hasSuffix(ElfAgentLoop.skippedFinalStepsNote))
+    }
+
+    // MARK: - When a turn acts in steps
+
+    @Test func aTurnActsInStepsOnlyWithActionModeToolsAndVision() {
+        #expect(CompanionTurnPipeline.actsInSteps(isActionModeEnabled: true, supportsToolCalling: true, supportsVision: true, hasScreenCapture: true))
+        #expect(!CompanionTurnPipeline.actsInSteps(isActionModeEnabled: false, supportsToolCalling: true, supportsVision: true, hasScreenCapture: true))
+        #expect(!CompanionTurnPipeline.actsInSteps(isActionModeEnabled: true, supportsToolCalling: false, supportsVision: true, hasScreenCapture: true))
+        #expect(!CompanionTurnPipeline.actsInSteps(isActionModeEnabled: true, supportsToolCalling: true, supportsVision: false, hasScreenCapture: true))
+        #expect(!CompanionTurnPipeline.actsInSteps(isActionModeEnabled: true, supportsToolCalling: true, supportsVision: true, hasScreenCapture: false))
+    }
+
+    @Test func theStepByStepPromptGivesTheStepLimitAndSaysToWaitInsteadOfPolling() {
+        let prompt = CompanionPromptBuilder.stepByStepActionInstructions(limits: ComputerUseRunLimits(maximumSteps: 100))
+        #expect(prompt.contains("you have up to 100 steps"))
+        #expect(prompt.contains("use wait with about how long it should take"))
+        #expect(prompt.contains("instead of taking screenshot after screenshot"))
+        #expect(prompt.contains("waiting doesn't use up your steps"))
+    }
+
+    @Test func theStepByStepPromptReplacesTheOneShotActionInstructions() {
+        let stepPrompt = CompanionPromptBuilder.systemPrompt(
+            coordinateConvention: .imagePixels, guidanceEncoding: .nativeTools, includesScreenActions: true, actsInSteps: true
+        )
+        let oneShotPrompt = CompanionPromptBuilder.systemPrompt(
+            coordinateConvention: .imagePixels, guidanceEncoding: .nativeTools, includesScreenActions: true
+        )
+        #expect(stepPrompt.contains(CompanionPromptBuilder.stepByStepActionInstructions))
+        #expect(!oneShotPrompt.contains(CompanionPromptBuilder.stepByStepActionInstructions))
+    }
+
+    // MARK: - In the agent loop
+
+    @Test func theAgentLoopSendsStepResultsBackUntilTheModelAnswers() async throws {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)], text: "opening it."),
+            ScriptedLanguageModelProvider.toolCalls([toolsetCall("b", "type", #"{"text":"hi"}"#)]),
+            ScriptedLanguageModelProvider.reply("done, it's open."),
+        ])
+        var initialRequest = LanguageModelRequest(systemPrompt: "system", userText: "open it and say hi")
+        initialRequest.usesAnthropicComputerToolset = true
+        let loopResult = try await ElfAgentLoop.run(
+            initialRequest: initialRequest,
+            languageModelProvider: languageModelProvider,
+            toolRegistry: ElfToolRegistry(tools: []),
+            toolContext: nil,
+            guidanceToolNames: GuidanceToolDefinitions.toolNames,
+            maximumRounds: 3 + ComputerUseRunLimits.standard.maximumSteps,
+            computerUseExecutor: session,
+            onReplyTextDelta: { _ in },
+            onModelRoundEnded: {}
+        )
+        #expect(loopResult.replyText == "opening it. done, it's open.")
+        #expect(screen.performedActions.count == 2)
+        #expect(languageModelProvider.receivedRequests.count == 3)
+        let everyRoundOfferedTheToolset = languageModelProvider.receivedRequests.allSatisfy { $0.usesAnthropicComputerToolset }
+        #expect(everyRoundOfferedTheToolset)
+        let secondRequestLastMessage = try #require(languageModelProvider.receivedRequests[1].messages.last)
+        guard case let .computerToolResult(firstStepResult) = secondRequestLastMessage.content.first else {
+            Issue.record("expected the step's result in the next request")
+            return
+        }
+        #expect(firstStepResult.toolCallIdentifier == "a")
+        #expect(firstStepResult.image != nil)
+        #expect(loopResult.guidanceToolCalls.isEmpty)
+    }
+
+    @Test func stepsStartWhileTheReplyIsStillArriving() async throws {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([
+                toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#),
+                toolsetCall("b", "type", #"{"text":"hi"}"#),
+            ]),
+            ScriptedLanguageModelProvider.reply("done."),
+        ])
+        languageModelProvider.announcesComputerCallsWhileStreaming = true
+        languageModelProvider.streamingTimeAfterAnnouncedCallsInSeconds = 0.2
+        var stepsDoneWhenEachReplyEnded: [Int] = []
+        languageModelProvider.onReplyEnded = { stepsDoneWhenEachReplyEnded.append(screen.performedActions.count) }
+
+        let loopResult = try await ElfAgentLoop.run(
+            initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "click and type"),
+            languageModelProvider: languageModelProvider,
+            toolRegistry: ElfToolRegistry(tools: []),
+            toolContext: nil,
+            guidanceToolNames: GuidanceToolDefinitions.toolNames,
+            maximumRounds: 3 + ComputerUseRunLimits.standard.maximumSteps,
+            computerUseExecutor: session,
+            onReplyTextDelta: { _ in },
+            onModelRoundEnded: {}
+        )
+        // Both steps were done before the first reply had even finished...
+        #expect(stepsDoneWhenEachReplyEnded.first == 2)
+        // ...each exactly once, and both answered in the next request, in order.
+        #expect(screen.performedActions.count == 2)
+        let secondRequestResults = languageModelProvider.receivedRequests[1].messages.last?.content.compactMap { block -> String? in
+            if case let .computerToolResult(result) = block { return result.toolCallIdentifier }
+            return nil
+        }
+        #expect(secondRequestResults == ["a", "b"])
+        #expect(loopResult.replyText == "done.")
+    }
+
+    @Test func stoppingTheTurnStopsStepsThatStartedWhileTheReplyArrived() async throws {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([
+                toolsetCall("a", "wait", #"{"duration":1}"#),
+                toolsetCall("b", "left_click", #"{"coordinate":[100,200]}"#),
+            ]),
+        ])
+        languageModelProvider.announcesComputerCallsWhileStreaming = true
+        screen.waitTakesRealTime = true
+        let loopTask = Task { @MainActor in
+            try await ElfAgentLoop.run(
+                initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "wait then click"),
+                languageModelProvider: languageModelProvider,
+                toolRegistry: ElfToolRegistry(tools: []),
+                toolContext: nil,
+                guidanceToolNames: GuidanceToolDefinitions.toolNames,
+                maximumRounds: 3 + ComputerUseRunLimits.standard.maximumSteps,
+                computerUseExecutor: session,
+                onReplyTextDelta: { _ in },
+                onModelRoundEnded: {}
+            )
+        }
+        // Stop while the first step (the wait) is still going, after the reply ended.
+        try await Task.sleep(nanoseconds: 300_000_000)
+        loopTask.cancel()
+        _ = try? await loopTask.value
+        try await Task.sleep(nanoseconds: 1_200_000_000)
+        #expect(screen.performedActions.isEmpty)
+    }
+
+    @Test func theAgentLoopStopsWithoutAskingTheModelAgainWhenTheUserStops() async throws {
+        let screen = FakeComputerUseScreen()
+        screen.scriptedOutcomes = [.handedToUser(reason: "that's a password field, so please fill it in yourself.")]
+        let session = makeSession(screen: screen)
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: [
+            ScriptedLanguageModelProvider.toolCalls([toolsetCall("a", "left_click", #"{"coordinate":[100,200]}"#)], text: "logging in."),
+            ScriptedLanguageModelProvider.reply("should never be asked"),
+        ])
+        var spokenText = ""
+        let loopResult = try await ElfAgentLoop.run(
+            initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "log me in"),
+            languageModelProvider: languageModelProvider,
+            toolRegistry: ElfToolRegistry(tools: []),
+            toolContext: nil,
+            guidanceToolNames: GuidanceToolDefinitions.toolNames,
+            maximumRounds: 3 + ComputerUseRunLimits.standard.maximumSteps,
+            computerUseExecutor: session,
+            onReplyTextDelta: { textDelta in spokenText += textDelta },
+            onModelRoundEnded: {}
+        )
+        #expect(languageModelProvider.receivedRequests.count == 1)
+        #expect(loopResult.replyText.hasSuffix("that's a password field, so please fill it in yourself."))
+        #expect(spokenText.hasSuffix("that's a password field, so please fill it in yourself."))
+    }
+
+    @Test func afterTheGuardStopsTheModelGetsOneRoundToSumUp() async throws {
+        let screen = FakeComputerUseScreen()
+        let session = makeSession(screen: screen)
+        var scriptedResponses = (1...ComputerUseRunLimits.standard.maximumSteps).map { stepNumber in
+            ScriptedLanguageModelProvider.toolCalls([toolsetCall("s\(stepNumber)", "left_click", "{\"coordinate\":[\(stepNumber * 50),100]}")])
+        }
+        // It tries once more anyway; that call isn't carried out and the loop ends.
+        scriptedResponses.append(ScriptedLanguageModelProvider.toolCalls([toolsetCall("extra", "left_click", #"{"coordinate":[5,5]}"#)], text: "i got most of the way."))
+        let languageModelProvider = ScriptedLanguageModelProvider(scriptedResponses: scriptedResponses)
+        let loopResult = try await ElfAgentLoop.run(
+            initialRequest: LanguageModelRequest(systemPrompt: "system", userText: "do the long thing"),
+            languageModelProvider: languageModelProvider,
+            toolRegistry: ElfToolRegistry(tools: []),
+            toolContext: nil,
+            guidanceToolNames: GuidanceToolDefinitions.toolNames,
+            maximumRounds: 3 + ComputerUseRunLimits.standard.maximumSteps,
+            computerUseExecutor: session,
+            onReplyTextDelta: { _ in },
+            onModelRoundEnded: {}
+        )
+        #expect(languageModelProvider.receivedRequests.count == ComputerUseRunLimits.standard.maximumSteps + 1)
+        let summaryRoundText = languageModelProvider.receivedRequests.last?.messages.last?.content.compactMap { block -> String? in
+            if case let .text(text) = block { return text }
+            return nil
+        }.joined() ?? ""
+        #expect(summaryRoundText.contains(ComputerUseSession.runEndedInstruction))
+        #expect(screen.performedActions.count == ComputerUseRunLimits.standard.maximumSteps)
+        #expect(loopResult.replyText == "i got most of the way.")
+    }
+}

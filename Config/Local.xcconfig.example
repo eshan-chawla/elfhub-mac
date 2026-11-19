@@ -1,0 +1,14 @@
+//
+//  Local.xcconfig.example
+//  elfhub
+//
+//  Copy to Config/Local.xcconfig (gitignored) and fill in what you need.
+//  Every value is optional; anything left out falls back to Shared.xcconfig.
+//
+
+// Your Apple Developer team id (Xcode > Settings > Accounts). A free
+// Personal Team is enough to build and run locally.
+// DEVELOPMENT_TEAM = ABCDE12345
+
+// Use a bundle id you own. Changing it later means re-granting macOS permissions.
+// ELFHUB_BUNDLE_IDENTIFIER = com.yourname.elfhub

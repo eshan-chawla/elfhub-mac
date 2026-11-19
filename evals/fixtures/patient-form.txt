@@ -1,0 +1,9 @@
+Patient intake form (TEST DATA — not a real person)
+
+Name: Test Patient
+Date of birth: 1984-03-12
+MRN: 00482913
+Health card 1234-567-897-AB
+Allergies: none known
+Payment card: 4111 1111 1111 1111
+Reason for visit: annual check-up

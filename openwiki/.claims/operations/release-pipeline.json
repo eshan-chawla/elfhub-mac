@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:163b4cc5165fe52978f27fc7cd595c409e58b1a48f74131ef885317ebb254606",
+  "claims": [
+    {
+      "id": "claim_a6ec133728894f9490b6fcfd761683c7",
+      "statement": "Version derivation uses the latest GitHub release tag (v-stripped) with the build number approximated as the release count; no argument bumps minor by 0.1 with carry, one argument sets the marketing version, and two set both; a duplicate computed tag aborts with error and an interactive y/N confirm follows before any changes.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/release.sh#L109-L130",
+          "version": "repo-lines-v1:sha256:d027cf333246ab7adff080d5787c775af9cc1b603a07c510bdcc35f5e76050e5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiZDRhYmIwOTc0ZjkwMmU4ODZiZWIzNjljODg3NjBiZDBmZjcyZTY4N2Y3OGY1NzQ5NDI4YTNiMjQ0ZDk1NGMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFkZjUyNTZhNjdiYzliYmY2ZmM4ODI1MDMwYmI5OTc4OTQ2NTRjM2U1YzJlYTUwNDUzOTQxNWVhNWMxYjlhNDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZhZWMzMTc1MzljNjIxNTBkMDliOWMwYTY4NWVkMTZmYTU4OWZjNjNiMjkxYzNjMWFiMDg0Y2YwODUyMTFlNGYifQ"
+        },
+        {
+          "resource": "repo://scripts/release.sh#L61-L134",
+          "version": "repo-lines-v1:sha256:d473dba96cafd7b90f9674070b277cdf29da1b5f0708404fe273245842ff807c:eyJzZWxlY3RlZExpbmVDb3VudCI6NzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0ZDBhYTM3MDEwMjdiNjdhMjY4MDdmYTcyZTAyYzM5MGM3OTI2YTFmY2RjMzA4MTRjYWVmNDg4YTA3ODYzNTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJkZTQ5ZjMwOTdiYjY5M2M1Y2E0YTUxNjhmYTI4ZDA0NTFlMDNkODcxZmZiOTJiZGQ2MmIxMzk1ZjcxMjNjMjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI4MzM0YjhmY2E0OWNlYjRhMjJlNjFhNjA0YzA5ZWEzNjQ1YWYxOGNmNjgzOTFlZTZiN2VjOTZiOTM1YzI4MmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3dc12f66c10f4485837579b50874a033",
+      "statement": "The clean stage removes the build directory, leftover create-dmg rw.*.dmg temp files and the previous same-named DMG in releases/, so anything to keep must be moved out of releases/ before re-running.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/release.sh#L137-L144",
+          "version": "repo-lines-v1:sha256:9abb9522eb1b6e1d4cf1b6685675cc0324c7324c70f55eac49769f5e4d8da749:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGZmMzg1NTliYzJkZTE1MjA2NmQ5NjJkMDkwNWM1YTBmNGZkM2VhZjllMWQ5MGExMTJjNDQwODgwMzc2ZDg1ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMTY0MTAzYzU1NjU0NDM0NzFiZDIxNGE4MzQ4MTViZGJhZGUzZjYyOWI5OTE5ZDI1Yzc5N2U0NmE4OTI1ZjBmZiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzg1YmVmZmNkMzM4ZTMwZjc3ODFlMjkzNjYyNTJkOWNkZDZmOGM4OGM4NjI4YmNiOGY0MDY3MTY4YzNhZDU4ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDEzN2FhMTlkODUwNzk3YjVlNDdhZWFjOTNlOTlkY2M3YzZlYzYzMTFiMGU4ZTExMDMxZWUyMjdmODgzM2UzNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_19ca9d8f2c2c43f1ad8c9c416f910e1c",
+      "statement": "release.sh has no auto-update or appcast step: it auto-bumps the version from the latest GitHub Release, archives and exports with a developer-id ExportOptions plist (signing and notarizing the app), builds a DMG with create-dmg, notarizes and staples the DMG with notarytool and stapler, and publishes it with gh release create --latest.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/release.sh#L146-L229",
+          "version": "repo-lines-v1:sha256:d138e42304824d0a0f776a9117d509fbdbd2248e6fd4f5d77bf26fb8bd83f342:eyJzZWxlY3RlZExpbmVDb3VudCI6ODQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYzODEwYmNhN2QxNGE3MTA0MGRmMGVmYTZjOGE1ZTllOWMyNDc3ZGEyNjZmZTFmZWFjYjNiYTkzYTQ2ZGM3ZTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQwYjE5MGVlNmFkMjI3NTlmYzc4MjJlZWI3YjdiYTU3Mjc1NmMwZjdjNDZiYTg3YzRjYTA1ZTIzMTg5NDg5OWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFjOTllYTk1YzE3YTQ3NWYzNGIzNjkwY2NiYmM1MmE5YmZmNzk5NGNkNWRmZmE4M2Y3ODQzZGQyYjkxNTU1ZDUifQ"
+        },
+        {
+          "resource": "repo://scripts/release.sh#L7-L19",
+          "version": "repo-lines-v1:sha256:9a414605cf36227fb5eb194cb7d1644780bbe6365e6b180e888a142520b9f7eb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2OTNiZjc3MGM0MDFhNWMzYmU3MzRlMWUxOTg4Mjg4MmIzMjRhNjlhNGQxMzdmMTljYTljMjliNTZiODRkN2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkyZTYzOTAyMGZhMWRjNjY1MWY4MGVjZTEwNjc3MWMzMTE5YmZlNzg5NjQ2ZWMxZjIwNTEzYTcxNzA1ZTgyZDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRjYzNkMTJlODRlMzE1ZjU5OTNmMzIzYTVlNTRmZjVkZWI4YjkyMGIxYmFjNjM0MmNkZTE2MWJkMWVkZTVmMzMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMzNmQzNjU1ZWI1ZDI5MTM3ZDJhYzM1ZTAxY2ExYTJmZTRjNjg4ZWU0MWI5Y2JiNWU1YjRjY2Y5ZDAwZjI0ZmMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f9ecf6d9ef914cab9934ece31cae4789",
+      "statement": "The release repository is not hard-coded: ELFHUB_RELEASE_GITHUB_REPO is required (the script fails immediately without it), while ELFHUB_RELEASE_APP_NAME defaults to elfhub and ELFHUB_NOTARY_KEYCHAIN_PROFILE defaults to AC_PASSWORD.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/release.sh#L34-L54",
+          "version": "repo-lines-v1:sha256:9d2196d83aaf2ec2a6d5adaba673d4e2c336bca76f655171dc8c2ee1ff4ed7c0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4YjFlMTBhNWNkNjM1MDE5NzdlNzM0NWU5OGNkZTA0MzVlNjdhODE0OGRiZGRhNDJkMzgyNTgzYWMzMzgwMGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNkMGZlZjkzZTM4NDNlZGFhMGE5MGRlODcxNWIwYjBlZDk1MWZhMzA2ZTliYWVlZTg1Yzc5ZDcyYzM4MDk1NDgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk0NGVmNTllZDdhZDQ3YzAxNTUwMmI2ZTdiNWIyMWRkMDU4NjFhMWQ0NjgxMTc2OGZmMjIzOTE2M2IxY2UzNmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcwMzY5YTM3OGQ5NjcwZjMzZTZjNjk3ZDc0YjA2MWMwY2MzNThkZWFjNTY5ZTRiZDZiOGI2OWU1YmMxNTQ4OGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_26f86b7524144e5cae753215272bb873",
+      "statement": "The DMG step passes dmg-background.png from the repository root to create-dmg, but that file is not tracked in the repository, so it must be restored (or the flag removed) before a release succeeds.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/release.sh#L186-L201",
+          "version": "repo-lines-v1:sha256:82c4d58b273f17e6a2775c5b0d00b0848a262bcba789323e086307f06fd041b1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc4MmQzOTcwNmI0NzlmNmExZmFjYmNhMWUxYjhhZTQ5OWU5Mjg4ZThlMDI4ODI5MjdkNTFkOTRlYmQ2NDhlYTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyZTNjMjI0OGFkZTg1YzhmNjk4MWU4ZjNmNmQzOTQ1YzFkMzIzOTFjYTY5YjUyNDE5ZTUwYjE0Zjg1ZDEwMmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhiNzc4ZjU0NjEyNTRmZTc3NmY2MjgzMTU3NzgxOThlMjc3ZThkNDRhZTZlY2NlNzMwYzRmNjY5OWIzNDQyOGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVlMDZjMGIwZTYyMDU4YmIxNGZiZjVkMTJkNDM3M2QyYzNiNTdiNTU5M2JhMGJkZjJkY2VkYmViNDFmNGEyMGQifQ"
+        },
+        {
+          "resource": "repo://scripts/release.sh#L51-L51",
+          "version": "repo-lines-v1:sha256:32bd3572ac7c92abcf4c7deb41cabe95effcca37101c9f46b5a718c819b53789:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzJiZDM1NzJhYzdjOTJhYmNmNGM3ZGViNDFjYWJlOTVlZmZjY2EzNzEwMWM5ZjQ2YjVhNzE4YzgxOWI1Mzc4OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzJiZDM1NzJhYzdjOTJhYmNmNGM3ZGViNDFjYWJlOTVlZmZjY2EzNzEwMWM5ZjQ2YjVhNzE4YzgxOWI1Mzc4OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiM2RmMDk3YTFkYzQ0ZmYxNTkyOGQ5MmJiNTM1ZjBjNGFhOGE5ZTNlZDMyMWE5MTg1YjAwZmNkYWIwZTM5NDgyMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjlhMzViZmQ0NzdkYWU1YTA5ZDE4NzZjZWQ4MDkyNTIzZDQ3ODAxYWFmMWNlOGI0YTAyMDZlY2IzZTBjNjM5MSJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.6.1",
+    "at": "2026-11-04T04:23:07.759Z"
+  }
+}

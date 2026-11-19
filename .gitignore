@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+
+# Xcode user state and build output
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# Release output from scripts/release.sh
+releases/
+*.dmg
+
+# Per-developer signing team and bundle id (see Config/Local.xcconfig.example)
+Config/Local.xcconfig
+
+# Private notes — research, session docs and plans. Never published.
+private-notes/
+
+# Agent and tool working files. docs/superpowers/ is where planning tools
+# write new plans by default; move anything worth keeping into private-notes/.
+.claude/
+.superpowers/
+docs/superpowers/
+coding-plans/
+
+# Signing material and secrets — never commit certificates, keys,
+# signing requests, provisioning profiles or environment files.
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
+# Exported Sparkle update-signing keys (generate_keys -x). Keep the backup offline.
+*.ed25519
+sparkle-private-key*
+.env
+.env.*
