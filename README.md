@@ -1,120 +1,135 @@
-# elfhub
+<p align="center">
+  <img src="brand/elfhub-icon-1024.png" alt="elfhub" width="112">
+</p>
 
-<p>
+<h1 align="center">elfhub</h1>
+
+<p align="center"><b>AI agents that live on your Mac — they see your screen, talk with you, point at what matters, and act when you ask.</b></p>
+
+<p align="center">
   <a href="https://github.com/eshan-chawla/elfhub-mac/releases/latest/download/elfhub.dmg"><img src="https://img.shields.io/badge/Download_for_macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download elfhub for macOS" height="36"></a>
 </p>
 
-<sub>Public beta · macOS 14.2 or later on Apple silicon (M1 or newer) · free and open source (AGPL-3.0) · signed and notarized by Apple · <a href="https://github.com/eshan-chawla/elfhub-mac/releases">all releases</a></sub>
+<p align="center"><sub>Public beta · macOS 14.2 or later on Apple silicon (M1 or newer) · free and open source (AGPL-3.0) · signed and notarized by Apple · <a href="https://github.com/eshan-chawla/elfhub-mac/releases">all releases</a> · <a href="https://discord.gg/ZGVzhv4ggS">Discord</a></sub></p>
 
-An AI desktop companion for macOS. elfhub lives in your menu bar — it can see your screen, talk to you, point at and annotate what matters, and take actions on your computer on request. It works alongside the agent you're hacking with: performing real computer use in front of the agent to move your task along, and helping you learn new things as you work.
+---
 
-elfhub is **desktop-first and bring-your-own-key**: there is no elfhub server, account or analytics. You choose each model layer yourself — a cloud API with your own key, or a model running on your Mac — and the only requests that leave the app are the API calls to the services you picked, plus a once-a-day check on GitHub for a newer version of elfhub (it sends only the app's version; turn it off in Settings › General), and on-device speech and voice models downloaded from Hugging Face when you press Download (anonymously). Already pay for ChatGPT? **Continue with ChatGPT** lets elfhub answer with OpenAI models included in your plan, no API key needed. Keys and sign-ins live in your Keychain; chats are saved only on your Mac. Elfs you let use the web (your other Elfs by default) also send their search words to the search service you pick and open the pages they're led to — straight from this app, never through an elfhub server. Two things are sent to your chosen language model in the background, and both can be switched off in Settings › Privacy & permissions: a quiet chat's text, to build your main Elf's memory, and a chat's first question and answer, to give it a short title.
+Hold **Control + Option**, ask about whatever is on your screen, and let go. Your **Elf** — an AI agent you name and shape — answers out loud, points right at the button you need, circles what matters, writes the steps into a notepad, and, if you let it, does the clicking and typing for you, one checked step at a time.
 
-## What it does
+elfhub is **desktop-first and bring-your-own-key**. There is no elfhub server, account or analytics: you pick the models (your ChatGPT plan, a cloud API with your own key, or models running on your Mac), and everything you say, type and save stays between you, your Mac and the services you chose.
 
-- **Sees your screen** — takes a screenshot of the display your mouse is on, only when you press the hotkey or send a chat message — or, for a background task, after you say yes to letting it use the screen.
-- **Hears you** — hold the push-to-talk shortcut (`Control + Option` by default) anywhere to speak. While holding it, press and drag the mouse to circle or underline what you mean — a blue line follows your cursor (your Elf draws in orange, so the two never mix), and the model sees your marks on the screenshot. Press **Esc** anytime to stop elfhub — while it listens, thinks, talks or acts.
-- **Thinks and answers** — your transcript (+ a screenshot, if your model can see images) goes to the language model you configure. Replies stream as text, and optionally as voice.
-- **Points and annotates** — a pointer appears right at the UI element the model refers to, and marks (highlights, circles, arrows, notes) are drawn on screen, on any monitor.
-- **Writes it down** — when an explanation is easier to follow written (steps, a command, some code), elfhub opens a notepad window at the top right of your screen and writes it line by line as it talks. It stays until you close it, the text is selectable, and its copy button gives plain text (or Markdown from its menu). Every notepad is saved with the reply in Chat.
-- **Acts on your machine (with consent)** — click, type, scroll, or press shortcuts. Every action goes through a per-turn consent gate: only your own words asking elfhub to *do* something count as consent, and Esc stops it instantly.
-- **Text chat too** — type instead of talking whenever you want. Everything you ask, typed or spoken, is saved on your Mac and shows up in Chat (turn it off or delete it in Settings). Optionally, the screenshot each question sent can be kept too (off by default): it sits in a collapsible row under the message, opens in an in-app viewer, and when you or elfhub drew on it you can switch Before / After between the original and the marked-up version — the drawing and marks are redrawn from saved data, so only one image is stored.
+## What elfhub can do
 
-## Your Elf
+### Talk, and be heard
 
-The assistant is your **Elf**. You name it when you set elfhub up, and it lives in a folder on your Mac (its page at the top of the sidebar, or `~/Library/Application Support/elfhub/Elfs/main`):
+- **Push-to-talk anywhere.** Hold the shortcut (`Control + Option` by default, or pick your own), speak, let go. Or just type — every question, spoken or typed, lands in the same chat.
+- **Draw while you talk.** With the shortcut held, drag the mouse to circle or underline what you mean. Your blue marks go to the model on the screenshot.
+- **Answers you can hear.** Replies stream as text and are spoken sentence by sentence — in the most natural Apple voice on your Mac, a natural voice that runs on your Mac (Kokoro and others), ElevenLabs, or any OpenAI-compatible voice. Optional **live captions** follow the voice word by word.
+- **Stop anything, instantly.** Esc stops listening, thinking, talking and acting. During a screen task you can also just say "stop".
 
-- **`soul.md`** — instructions it follows in every reply. You write it; the Elf can only suggest changes.
-- **`user.md`** — what it knows about you and what you've talked about, as the Elf noted it (your main Elf also folds quiet chats into it — its memory). Edit or clear it anytime.
-- **`skills/`** — working knowledge, one folder per skill with a `SKILL.md` (the same layout Hermes and other agentskills.io agents use, so their skills can be dropped in).
-- **`elf.json`** — its name, how it answers (reply length, tone, language) and the setup it was used with (never your keys).
-- **`files/`** — its own working files.
+### See and show
 
-The soul, notes and skills go to your language model with each question, like the rest of the conversation. You can add more Elfs from the **+** next to Elfs in the sidebar (or the Researcher and Writer starters); each has its own page, folder, soul and skills, and can take on longer work as a background task. **Export Elf…** on an Elf's page saves a `.elf` file with its config, soul, skills and `files/`; `user.md` is included unless you switch it off, and its chats only if you switch them on. Keys and folder access are never included.
+- **It sees what you see — when you ask.** A screenshot of the display under your mouse is taken only when you talk or send a message.
+- **Points and annotates.** A pointer appears right on the element it means; highlights, circles, arrows, underlines and notes are drawn on screen in the Elf's orange, on any monitor.
+- **Writes it down.** Steps, commands and code go into a floating notepad, line by line as it talks — selectable, copyable as text or Markdown, and saved with the chat.
 
-## The three model layers
+### Act on your Mac — with your say-so
+
+- **Real computer use, step by step.** With action mode on, your Elf clicks, types, scrolls, presses shortcuts, opens apps and websites — taking a fresh look at the screen after every step, reading the window's controls through Accessibility, and waiting for pages, downloads or builds to finish instead of guessing.
+- **You choose how much it asks.** *Ask first* (a popup before each new task and each new app), *Auto* (asks only before sending, deleting, buying or anything else that can't be undone), or *Allow all* for when you're watching (never remembered after you quit). Pick 15 to 250 steps per task.
+- **Guardrails that don't move.** Only your own words count as permission — never text on the screen. Passwords, secure fields, password managers and private websites (banks, payment pages, patient portals) are always your step. Quit, log out, delete and force-quit shortcuts always ask. Touching the mouse or keyboard takes over at once, and every decision is written to a local action log.
+
+### A team of Elfs
+
+- **Your main Elf runs the show.** It keeps a **memory** of you and of what you've talked about (`user.md`), which you can read, edit and undo any time.
+- **Add more Elfs** — your own, or the Researcher and Writer starters. Talk to one by name ("Juniper, …") or pick it in the chat box; each has its own chat, voice, model, instructions and skills.
+- **Background tasks.** Hand an Elf something long and keep working. It reports back when it's done, asks if it's stuck, and can ask to borrow the screen — only with your yes.
+- **Skills, files and folders.** Elfs keep working notes and files in their own folder, learn skills when you ask (the agentskills.io `SKILL.md` layout, so Hermes-style skills drop right in), and can work in folders you grant them. Every change they make is listed with **Undo**.
+- **Web search** for Elfs you allow: DuckDuckGo by default, or Brave, Tavily, Exa, Firecrawl, your own SearXNG — or Claude's own web search.
+- **Share an Elf** as a `.elf` file: its personality, skills and files — never your keys or folder access.
+
+### Chat, history and costs
+
+- **Every chat saved on your Mac**, searchable, renamable, named for you after the first reply (optional), with a fresh chat after a quiet half hour.
+- **Screenshots in context** (optional): see the screenshot each question sent, with a Before / After switch for your drawing and the Elf's marks.
+- **Usage and cost**: tokens and an estimated cost per model and kind of work, kept only on your Mac.
+- **Built to stay affordable on long sessions**: prompt caching, a trimmed history, and only the newest screenshots of a long screen run are sent.
+
+## Your models, your choice
 
 | Layer | Options |
 |-------|---------|
-| **Speech-to-text** | On-device Apple recognition (default, private), AssemblyAI (your key), or any Whisper / OpenAI-compatible endpoint — OpenAI, Groq, or a local faster-whisper server |
-| **Language model** | Your ChatGPT plan (Continue with ChatGPT — no key; pick a fallback model for when the plan's usage limit is reached), or Anthropic, OpenAI, Google Gemini, OpenRouter, Mistral, xAI, Groq, DeepSeek, Together AI (your key) — or Ollama, LM Studio, llama.cpp on your Mac, or any other OpenAI-compatible endpoint. **Multimodal is optional:** a model that sees images can look at your screen and point; a text-only model still talks and chats |
-| **Text-to-speech** | On-device Apple voices (default), ElevenLabs (your key), any OpenAI-compatible speech endpoint — OpenAI, or a local Kokoro server — or off |
+| **Speech-to-text** | Apple on-device recognition (default), on-device models you download (Whisper, Parakeet and more, run with MLX), AssemblyAI, or any OpenAI-compatible endpoint (OpenAI, Groq, a local faster-whisper server) |
+| **Language model** | **Continue with ChatGPT** (uses your ChatGPT plan, no key — with a fallback model for when the plan's limit is reached) · Anthropic, OpenAI, Google Gemini, OpenRouter, Mistral, xAI, Groq, DeepSeek, Together AI with your key · Ollama, LM Studio or llama.cpp on your Mac · any OpenAI-compatible endpoint |
+| **Voice** | Apple voices (default), natural voices that run on your Mac (Kokoro and more), ElevenLabs, any OpenAI-compatible speech endpoint, or off |
 
-The **on-device model assistant** (Models → On-device models) finds Ollama, downloads recommended vision models with live progress, and switches elfhub to them in a click. It can also pre-download Apple's on-device speech model (macOS 26+).
+A model that can see images looks at your screen, points and acts; a text-only model still talks and chats. The on-device model assistant finds Ollama, downloads recommended models with live progress, and switches to them in a click.
+
+## Privacy
+
+There's no elfhub server, account or analytics. What leaves your Mac:
+
+- **Your questions** go only to the language model you chose — straight from the app, with your key from the Keychain or your ChatGPT sign-in.
+- **Screenshots** leave only when you ask something, and only if your model can see images. Password managers and private websites are left out, and card, insurance, health and ID numbers are blacked out before a screenshot is sent.
+- **Two small background requests** go to that same model, both switchable in Settings › Privacy & permissions: a quiet chat's text, to build your main Elf's memory, and a new chat's first exchange, to name it.
+- **Web searches and pages** — only for Elfs you let use the web, never anything on your own network.
+- **Model downloads** from Hugging Face — only when you press Download, without an account.
+- **A daily update check** with GitHub (turn it off in Settings › General).
+
+Keys and sign-ins live in your Keychain. Chats, memory, files and the action log stay in your Library folder. When something unexpected breaks, elfhub can draft a GitHub issue for you, with keys and personal details taken out — nothing is sent unless you submit it yourself.
 
 ## Install
 
 1. [Download `elfhub.dmg`](https://github.com/eshan-chawla/elfhub-mac/releases/latest/download/elfhub.dmg) (always the latest version).
 2. Open it and drag **elfhub** into **Applications**.
-3. Open elfhub from Applications. It's signed and notarized, so macOS only asks you to confirm opening an app downloaded from the internet.
+3. Open elfhub. It's signed and notarized, so macOS only asks you to confirm opening an app from the internet.
 
-elfhub keeps itself up to date: once a day it checks GitHub Releases, and when a new version is out it shows what's new with **Install**, **Remind me later** and **Skip**. Nothing is installed until you click Install (or switch on automatic installs). Every update is signed, so only real elfhub releases can install. Change this in Settings › General, or use **elfhub › Check for Updates…**. Your settings, keys and chats stay where they are.
+Setup takes six short steps — name your Elf, pick a model, choose how it hears and sounds, set the shortcut and permissions, and decide what stays on your Mac — then an optional hands-on tutorial.
 
-## First launch
+**Updates:** once a day elfhub checks GitHub Releases and shows what's new with Install, Remind me later and Skip. Updates are signed, so only real elfhub releases install. Your settings, keys, chats and Elfs carry over.
 
-Setup is six short steps, one decision each:
+### Permissions
 
-1. **Welcome.**
-2. **Your Elf** — keep the suggested name or pick your own; optionally add the Researcher and Writer starter Elfs.
-3. **Model** — Continue with ChatGPT, use an API key, or run a model on your Mac.
-4. **Voice** — how your Elf hears you, and an optional natural voice that runs on your Mac.
-5. **Shortcut and permissions** — keep or change the push-to-talk shortcut and grant permissions. Screen Recording takes effect after elfhub restarts; setup picks up where you left it.
-6. **Your data** — what stays on your Mac (saving chats is on, screenshots off, the action log on — change them later in Settings › Privacy & permissions), and whether to start the tutorial: a short hands-on walkthrough you can skip or replay from Settings › General.
+| Permission | Why |
+|---|---|
+| **Microphone** | Push-to-talk (not needed if you only type) |
+| **Speech Recognition** | Apple's on-device speech-to-text, and saying "stop" during screen actions |
+| **Accessibility** | The global shortcut, reading on-screen controls, and acting for you |
+| **Screen Recording** | Screenshots when you ask (takes effect after a restart; setup has a Quit & reopen button) |
 
-## Build and run
+## Build from source
 
-Prerequisites: an Apple silicon Mac with macOS 14.2+, and Xcode 26+ with its Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`), which the on-device speech engine (MLX) needs.
+You need an Apple silicon Mac with macOS 14.2+, and Xcode 26+ with its Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`) for the on-device speech engine (MLX).
 
-```bash
-open elfhub.xcodeproj
-```
+1. `open elfhub.xcodeproj`
+2. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM` and `ELFHUB_BUNDLE_IDENTIFIER` (a free Personal Team works).
+3. Select the `elfhub` scheme and press **⌘R**.
 
-1. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set `DEVELOPMENT_TEAM` and `ELFHUB_BUNDLE_IDENTIFIER` (a free Personal Team works).
-2. Select the `elfhub` scheme.
-3. Hit **Cmd + R** to build and run.
+Build from Xcode rather than `xcodebuild` in a terminal — terminal builds reset macOS privacy permissions (Screen Recording, Accessibility, …). The unit tests (`elfhubTests/`, around 970 of them) run with the `elfhub-OnlyUnitTest` scheme.
 
-Build from Xcode rather than `xcodebuild` in a terminal — terminal builds reset macOS privacy permissions (Screen Recording, Accessibility, …).
+### How it fits together
 
-### Permissions the app needs
+A native SwiftUI app with AppKit where it needs it: a chat-first main window (your Elfs and chats in the sidebar, Settings at the bottom), a menu bar panel for quick access, and a click-through overlay on every screen for the pointer, marks and status pill. One turn pipeline serves voice and chat alike: capture → model (with tools for the Elf's files, screen steps and pointing) → speech, marks and actions → history. Provider-agnostic model clients speak Anthropic, OpenAI-compatible, Gemini and the ChatGPT plan's Responses API.
 
-- **Microphone** — for push-to-talk voice capture (not needed in text-only mode)
-- **Speech Recognition** — for Apple's on-device speech-to-text and saying "stop" during screen actions
-- **Accessibility** — for the global keyboard shortcut and screen actions
-- **Screen Recording** — for taking screenshots when you use the hotkey
-- **Screen Content** — for ScreenCaptureKit access
-
-## Architecture (short version)
-
-A macOS app with three main pieces: a chat-first main window (your Elfs and chats in the sidebar; Settings — General, Models, Tools & capabilities, Controls, Privacy & permissions — at the bottom of it), a floating menu-bar control panel, and a full-screen click-through guidance overlay. Push-to-talk captures audio and transcribes it with the chosen speech-to-text layer, sends the transcript + screenshot to the active language model via streaming, and speaks the reply sentence by sentence with the chosen voice. On multiple monitors only the screen under your mouse is captured, and pointing lands on that screen.
-
-Full technical breakdown: `CLAUDE.md` / `AGENTS.md` (agents read this).
-
-## Project structure
+The full technical map — every file, decision and convention — is in [`AGENTS.md`](AGENTS.md) (also `CLAUDE.md`), written so a coding agent can work on elfhub from day one.
 
 ```
-elfhub/          # Swift source
-  elfhubApp.swift                    App entry
-  MainAppView.swift                  Main window, onboarding, tutorial
-  CompanionManager.swift             Central state machine
-  ModelLayerComponents.swift         Speech-to-text / language model / voice setup UI
-  LanguageModelProviderCatalog.swift Provider presets
-  OnDeviceModelAssistant.swift       Ollama + Apple speech model downloads
-  ChatConversationStore.swift        Chats saved on this Mac
-  GuidedTutorialController.swift     The optional walkthrough
-  CompanionPanelView.swift           Menu bar panel UI
-  OverlayWindow.swift                Guidance overlay (pointer, annotations, status pill)
-  BuddyDictation*.swift              Push-to-talk pipeline
-  AppUpdateController.swift          Sparkle updates (published app only)
-elfhubTests/     # Unit tests
-elfhubUITests/   # UI tests
-brand/           # App icon artwork (all rights reserved, not AGPL — see brand/LICENSE.md)
-scripts/         # Release, DMG and icon scripts
+elfhub/          Swift source (flat; see the Key Files table in AGENTS.md)
+elfhubTests/     Unit tests
+brand/           App icon artwork (all rights reserved, not AGPL — see brand/LICENSE.md)
+evals/           Computer-use evaluation tasks
+scripts/         Release, DMG, appcast and icon scripts
+release-notes/   Notes for each release
 ```
 
-## Contributing
+## Feedback and contributing
 
-elfhub is licensed under the [GNU AGPL v3.0](LICENSE) — fork it, hack on it, build your own version. PRs welcome.
+elfhub is in public beta, so tell us what breaks:
+
+- **[Discord](https://discord.gg/ZGVzhv4ggS)** — the quickest way in for questions and help.
+- **[GitHub issues](https://github.com/eshan-chawla/elfhub-mac/issues)** — bug reports and feature requests (or use **Support** at the bottom of the app's sidebar).
+- **Security issues** — please report privately, as described in [SECURITY.md](SECURITY.md).
+
+elfhub is licensed under the [GNU AGPL v3.0](LICENSE) — fork it, hack on it, build your own version. Pull requests are welcome. Parts of the code began in [Clicky](https://github.com/farzaa/clicky) (MIT); see [NOTICE](NOTICE).
 
 The app icon is the exception: the igloo icon, menu bar icon and artwork (`brand/` and the app's icon images) are all rights reserved and not part of the open-source licence. If you ship your own build, give it your own icon — see [brand/LICENSE.md](brand/LICENSE.md).
-
-If you're using Claude Code (or another agent), point it at `CLAUDE.md` — it already knows the codebase.
